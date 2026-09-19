@@ -1,5 +1,6 @@
 //! One module per command group. `run` is the only place that knows which module handles what.
 
+mod auth;
 mod config;
 #[cfg(feature = "internal-test-hooks")]
 pub(crate) mod debug;
@@ -12,12 +13,12 @@ mod version;
 
 use std::io::Write;
 
-use crate::cli::{AuthCommand, BatchCommand, Command, McpCommand, ModelsCommand, SchemaCommand};
+use crate::cli::{BatchCommand, Command, McpCommand, ModelsCommand, SchemaCommand};
 use jev_client::HttpTransport;
 
 use crate::client::{self, Connection};
 use crate::config::{ConfigFile, ConfigStore, Flags, Settings};
-use crate::credentials::{CredentialStore, EnvCredentials};
+use crate::credentials::{CredentialStore, Credentials};
 use crate::env::Env;
 use crate::error::CliError;
 use crate::exit::Exit;
@@ -87,7 +88,8 @@ impl Context<'_> {
     ///
     /// An authentication error when there is no usable key, or a usage error for a bad base URL.
     pub(crate) fn transport(&self, settings: &Settings) -> Result<HttpTransport, CliError> {
-        let (api_key, _source) = EnvCredentials(&self.env).api_key(settings.profile_name())?;
+        let credentials = Credentials::new(&self.env, self.store()?.dir());
+        let (api_key, _source) = credentials.api_key(settings.profile_name())?;
         let (transport, notices) = client::transport(settings, self.connection, api_key)?;
         for notice in &notices {
             self.notify(notice);
@@ -133,6 +135,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Choice(arguments) => return shortcut::choice(arguments, context),
         Command::Score(arguments) => return shortcut::score(arguments, context),
         Command::Version => version::run(context),
+        Command::Auth(command) => auth::run(command, context),
         Command::Config(command) => config::run(command, context),
         Command::Profile(command) => profile::run(command, context),
         Command::Validate(arguments) => validate::run(arguments, context),
@@ -140,9 +143,6 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         #[cfg(feature = "internal-test-hooks")]
         Command::Debug(command) => debug::run(command, context),
         Command::Batch(BatchCommand::Run(_)) => pending("batch run", 13),
-        Command::Auth(AuthCommand::Login(_)) => pending("auth login", 10),
-        Command::Auth(AuthCommand::Status(_)) => pending("auth status", 10),
-        Command::Auth(AuthCommand::Logout(_)) => pending("auth logout", 10),
         Command::Schema(SchemaCommand::Request(_)) => pending("schema request", 16),
         Command::Schema(SchemaCommand::Questions(_)) => pending("schema questions", 16),
         Command::Schema(SchemaCommand::BatchRecord(_)) => pending("schema batch-record", 16),

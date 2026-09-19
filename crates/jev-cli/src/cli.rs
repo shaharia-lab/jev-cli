@@ -399,6 +399,51 @@ pub(crate) struct ValidateArgs {
     pub(crate) skip_size_check: bool,
 }
 
+const LOGIN_EXAMPLES: &str = "\
+The key is never accepted as a flag value, so that it cannot end up in shell history or a process list.
+
+Examples:
+  # Interactive: type or paste the key at a prompt that does not echo
+  jev auth login
+
+  # Automation: read the key from stdin
+  printf %s \"$TYPESAFE_KEY\" | jev auth login --with-token --profile ci
+
+jev looks for a key in TYPESAFE_API_KEY first, then in the keychain, then in the credentials file.";
+
+/// Arguments of `jev auth login`.
+#[derive(Debug, Args)]
+#[command(after_help = LOGIN_EXAMPLES)]
+pub(crate) struct LoginArgs {
+    /// Read the key from stdin instead of prompting (for scripts and agents)
+    #[arg(long)]
+    pub(crate) with_token: bool,
+
+    /// Store the key without checking it against the API first
+    #[arg(long)]
+    pub(crate) skip_verify: bool,
+
+    /// Store the key in the credentials file (clear text, readable only by you) instead of the keychain
+    #[arg(long)]
+    pub(crate) insecure_storage: bool,
+}
+
+/// Arguments of `jev auth status`.
+#[derive(Debug, Args)]
+pub(crate) struct StatusArgs {
+    /// Do not check the key against the API
+    #[arg(long)]
+    pub(crate) offline: bool,
+}
+
+/// Arguments of `jev auth logout`.
+#[derive(Debug, Args)]
+pub(crate) struct LogoutArgs {
+    /// Remove the stored keys of every profile, not only the selected one
+    #[arg(long)]
+    pub(crate) all: bool,
+}
+
 /// Arguments of a command whose behaviour has not been written yet. Everything is accepted so
 /// that the answer is always "not implemented", never a complaint about a flag.
 #[derive(Debug, Args)]
@@ -472,12 +517,12 @@ pub(crate) enum ModelsCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum AuthCommand {
-    /// Store an API key for the profile
-    Login(Pending),
-    /// Show whether a key is configured, and where it comes from
-    Status(Pending),
+    /// Store an API key for the profile, after checking it against the API
+    Login(LoginArgs),
+    /// Show whether a key is configured, where it comes from, and whether the API accepts it
+    Status(StatusArgs),
     /// Remove the stored API key
-    Logout(Pending),
+    Logout(LogoutArgs),
 }
 
 #[derive(Debug, Subcommand)]
