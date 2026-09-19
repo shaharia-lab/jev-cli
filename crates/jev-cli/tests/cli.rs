@@ -182,7 +182,11 @@ fn asked_for_help_and_version_go_to_stdout_and_succeed() {
 fn help_names_the_program_jev_whatever_the_file_is_called() {
     // On Windows the file is `jev.exe`, and clap would otherwise name the program after it.
     let renamed = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("renamed-jev.exe");
-    std::fs::copy(assert_cmd::cargo::cargo_bin("jev"), &renamed).unwrap();
+    // A hard link, not a copy. Copying opens the new file for writing, and if another test forks
+    // at that moment its child inherits the handle; running the copy then fails on Linux with
+    // "Text file busy". A link never opens the file for writing, so there is nothing to race.
+    let _ = std::fs::remove_file(&renamed);
+    std::fs::hard_link(assert_cmd::cargo::cargo_bin("jev"), &renamed).unwrap();
 
     let output = std::process::Command::new(&renamed)
         .args(["batch", "run", "--help"])
