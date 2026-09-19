@@ -90,8 +90,9 @@ versions or `CHANGELOG.md` by hand.
    The `PR title` check rejects a pull request whose title does not follow the format.
 2. Merging the release pull request tags `vX.Y.Z` and creates a **draft** GitHub Release. The
    tag starts `.github/workflows/release.yml`. release-please works through the
-   `jev-release-bot` GitHub App (`RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`), so its pull
-   request gets CI and its tag triggers the release.
+   `jev-release-bot` GitHub App (`RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, held in the
+   `release-please` environment, which admits `main` only), so its pull request gets CI and its
+   tag triggers the release.
 3. That workflow builds all six targets (x86_64 and aarch64 of static-musl Linux, macOS and
    Windows) on native runners, checks each binary's size, version and (on Linux) static linking,
    packs `jev-<version>-<triple>.tar.gz` (`.zip` on Windows) with the licences, man pages and
@@ -101,7 +102,8 @@ versions or `CHANGELOG.md` by hand.
    provenance is attested for every asset and binary. The assets are then downloaded again and
    verified (checksums, signatures against `crates/jev-cli/keys/release-primary.pub` with the
    standard minisign CLI, and attestations), and only then is the release published.
-4. A stable release then goes to the Homebrew tap and to crates.io: `jev-client` first, then
+4. A stable release then goes to the Homebrew tap, using the tap App's credentials from the
+   `publish` environment, which admits `v*` tags only, and to crates.io: `jev-client` first, then
    `jev-cli` once the index has `jev-client`, through `scripts/release/crates-publish.sh` with the
    `CARGO_REGISTRY_TOKEN` of the `release` environment (so the owner approves that job as well).
    A crates.io version can never be replaced, so the script skips a crate whose version is

@@ -28,6 +28,9 @@ jobs:
   release-please:
     name: Release pull request and tag
     runs-on: ubuntu-latest
+    # The jev-release-bot credentials live in this environment (main only), not
+    # in repository secrets, which any branch's workflow could read (#81).
+    environment: release-please
     steps:
       - name: Mint a token for jev-release-bot, limited to this repository
         id: app-token
