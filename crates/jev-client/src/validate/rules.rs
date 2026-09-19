@@ -21,7 +21,8 @@ const OVER_BUDGET_PERCENT: u64 = 120;
 
 /// The parts of a well-enough-formed request that the lints and the size estimate work on.
 pub(super) struct RequestView<'a> {
-    pub(super) state: &'a Value,
+    /// `None` when `state` is missing or has the wrong type, which has already been reported.
+    pub(super) state: Option<&'a Value>,
     pub(super) questions: Vec<QuestionView<'a>>,
 }
 
@@ -34,7 +35,7 @@ pub(super) struct QuestionView<'a> {
     pub(super) fields: &'a Map<String, Value>,
 }
 
-/// Checks shape and limits. Returns a view of the request when there is enough of one to lint.
+/// Checks shape and limits. Returns a view of the request unless it is not even an object.
 pub(super) fn check_shape<'a>(
     document: &'a Document,
     options: &Options,
@@ -78,10 +79,7 @@ pub(super) fn check_shape<'a>(
     let questions = check_questions(root, findings);
     check_duplicates(document, &questions, findings);
 
-    Some(RequestView {
-        state: state?,
-        questions,
-    })
+    Some(RequestView { state, questions })
 }
 
 fn check_state<'a>(root: &'a Map<String, Value>, findings: &mut Vec<Finding>) -> Option<&'a Value> {

@@ -110,11 +110,13 @@ pub fn check_document(document: &Document, options: &Options) -> Report {
 
     if let Some(request) = rules::check_shape(document, options, &mut findings) {
         lints::check(&request, &mut findings);
-        if !options.skip_size_check {
-            let estimate = SizeEstimate::of(
-                request.state,
-                request.questions.iter().map(|q| (q.id, q.value)),
-            );
+        // Without a usable `state` there is nothing to measure; its absence is already an error.
+        if let (false, Some(state)) = (options.skip_size_check, request.state) {
+            let questions = request
+                .questions
+                .iter()
+                .map(|question| (question.id, question.value));
+            let estimate = SizeEstimate::of(state, questions);
             rules::check_size(&estimate, &mut findings);
             size = Some(estimate);
         }

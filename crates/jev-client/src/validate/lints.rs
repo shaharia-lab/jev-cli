@@ -74,7 +74,9 @@ pub(super) fn check(request: &RequestView<'_>, findings: &mut Vec<Finding>) {
             }
             _ => {}
         }
-        check_indexed_paths(question, request.state, findings);
+        if let Some(state) = request.state {
+            check_indexed_paths(question, state, findings);
+        }
     }
 }
 

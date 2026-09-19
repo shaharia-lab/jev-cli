@@ -381,7 +381,8 @@ fn every_problem_is_reported_at_once() {
         r#"{"state": 1, "questions": {
             "a": {"type": "score", "instructions": "?", "criteria": ["only"]},
             "b": {"type": "choise", "instructions": "?"},
-            "c": {"type": "noul"}
+            "c": {"type": "noul"},
+            "d": {"type": "choice", "instructions": "?", "criteria": {"yes": null, "no": null}}
         }}"#,
     );
 
@@ -393,8 +394,11 @@ fn every_problem_is_reported_at_once() {
             Rule::ModelMissing,
             Rule::ScoreTooFewLevels,
             Rule::TypeUnknown,
-            Rule::InstructionsMissing
-        ]
+            Rule::InstructionsMissing,
+            Rule::ChoiceNoEscapeOption,
+            Rule::ChoiceYesNo,
+        ],
+        "lints still run when `state` is unusable"
     );
     assert_eq!(
         only(&report, Rule::TypeUnknown).suggestion.as_deref(),
