@@ -8,7 +8,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::exit::Exit;
-use crate::output::Ui;
+use crate::output::{Ui, printable};
 
 /// Where bugs are reported.
 pub(crate) const ISSUES_URL: &str = "https://github.com/shaharia-lab/jev-cli/issues";
@@ -120,17 +120,23 @@ impl CliError {
         .unwrap_or_else(|_| json!({ "error": { "code": self.code, "message": self.message } }))
     }
 
-    /// The text printed on stderr for a person.
+    /// The text printed on stderr for a person. What it quotes, such as a server's message, cannot
+    /// drive the terminal.
     pub(crate) fn to_human(&self, ui: Ui) -> String {
-        let mut text = format!("{} {}", ui.error_label("error:"), self.message);
+        let mut text = format!("{} {}", ui.error_label("error:"), printable(&self.message));
         for line in &self.lines {
-            let _ = write!(text, "\n  {line}");
+            let _ = write!(text, "\n  {}", printable(line));
         }
         if let Some(hint) = &self.hint {
-            let _ = write!(text, "\n  {} {hint}", ui.dim("hint:"));
+            let _ = write!(text, "\n  {} {}", ui.dim("hint:"), printable(hint));
         }
         if let Some(request_id) = &self.request_id {
-            let _ = write!(text, "\n  {} {request_id}", ui.dim("request id:"));
+            let _ = write!(
+                text,
+                "\n  {} {}",
+                ui.dim("request id:"),
+                printable(request_id)
+            );
         }
         text
     }
@@ -385,6 +391,33 @@ mod tests {
         assert_eq!(
             error.to_human(Ui::plain()),
             "error: Invalid API key.\n  hint: check the API key: set TYPESAFE_API_KEY, or run `jev auth login`\n  request id: req_9"
+        );
+    }
+
+    #[test]
+    fn a_server_message_cannot_drive_the_terminal() {
+        let error = CliError::from(
+            Error::new(
+                ErrorKind::InvalidRequest,
+                "bad \u{1b}]0;owned\u{7}\u{1b}[2J",
+            )
+            .with_request_id(Some("req_\u{1b}[8m".to_owned())),
+        );
+
+        let text = error.to_human(Ui::new(true, true));
+
+        assert!(
+            text.contains("bad \\u{1b}]0;owned\\u{7}\\u{1b}[2J"),
+            "{text:?}"
+        );
+        assert!(text.contains("req_\\u{1b}[8m"), "{text:?}");
+        for raw in ["\u{1b}]", "\u{7}", "\u{1b}[2J", "\u{1b}[8m"] {
+            assert!(!text.contains(raw), "{raw:?} in {text:?}");
+        }
+        assert_eq!(
+            error.to_json()["error"]["message"],
+            "bad \u{1b}]0;owned\u{7}\u{1b}[2J",
+            "JSON escapes it already, and a program gets the message as sent"
         );
     }
 

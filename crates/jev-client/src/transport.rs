@@ -63,11 +63,14 @@ pub struct Reply<T> {
     pub body: T,
     /// Facts about the exchange that are not part of the body.
     pub meta: ReplyMeta,
-    /// The response body exactly as the server sent it, when the transport kept it.
+    /// The response body as the server sent it, when the transport kept it.
     ///
     /// `body` is the typed view, which drops fields this crate does not know. A caller that must
     /// pass the API's answer on untouched reads it from here. [`HttpTransport`](crate::HttpTransport)
     /// always fills it in; a fake transport usually does not.
+    ///
+    /// The one change made to it: a server that echoes the API key back gets `[REDACTED]` in its
+    /// place, because the key must not reach anything a caller prints.
     pub raw_body: Option<String>,
 }
 

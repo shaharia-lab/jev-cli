@@ -64,6 +64,27 @@ impl ApiKey {
     pub(crate) fn scrub(&self, text: &str) -> String {
         text.replace(self.0.as_str(), REDACTED)
     }
+
+    /// [`ApiKey::scrub`] for a body that may not be UTF-8. Bytes are returned unchanged unless the
+    /// key is among them.
+    pub(crate) fn scrub_bytes(&self, bytes: Vec<u8>) -> Vec<u8> {
+        let key = self.0.as_bytes();
+        if !bytes.windows(key.len()).any(|window| window == key) {
+            return bytes;
+        }
+        let mut scrubbed = Vec::with_capacity(bytes.len());
+        let mut rest = bytes.as_slice();
+        while !rest.is_empty() {
+            if rest.starts_with(key) {
+                scrubbed.extend_from_slice(REDACTED.as_bytes());
+                rest = rest.get(key.len()..).unwrap_or_default();
+            } else if let Some((first, tail)) = rest.split_first() {
+                scrubbed.push(*first);
+                rest = tail;
+            }
+        }
+        scrubbed
+    }
 }
 
 impl fmt::Debug for ApiKey {
@@ -137,5 +158,21 @@ mod tests {
         let scrubbed = key.scrub(&format!("bad header: Bearer {SENTINEL} ({SENTINEL})"));
 
         assert_eq!(scrubbed, "bad header: Bearer [REDACTED] ([REDACTED])");
+    }
+
+    #[test]
+    fn scrubs_the_key_out_of_bytes_and_leaves_other_bytes_alone() {
+        let key = ApiKey::new(SENTINEL.to_owned()).unwrap();
+        let mut body = format!("{{\"echo\":\"Bearer {SENTINEL}\",\"k\":\"{SENTINEL}").into_bytes();
+        body.extend_from_slice(b"\xff\"}");
+
+        let scrubbed = key.scrub_bytes(body);
+
+        assert_eq!(
+            scrubbed,
+            b"{\"echo\":\"Bearer [REDACTED]\",\"k\":\"[REDACTED]\xff\"}".to_vec()
+        );
+        let untouched = b"no key here \xfe".to_vec();
+        assert_eq!(key.scrub_bytes(untouched.clone()), untouched);
     }
 }

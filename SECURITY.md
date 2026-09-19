@@ -32,8 +32,9 @@ the latest release only, and the built-in updater brings self-managed installs t
 
 ## Security design
 
-These are the rules the project is built to. Each is enforced by tests or continuous integration
-as the corresponding feature lands.
+These are the rules the project is built to, each enforced by tests or continuous integration.
+[`docs/threat-model.md`](docs/threat-model.md) is the long form: what is worth protecting, which
+inputs are not trusted, where each protection lives, and the findings of the last review.
 
 - **The API key never travels through command-line arguments.** It comes from the
   `TYPESAFE_API_KEY` environment variable, or from the `credentials` file that `jev auth login`
@@ -50,6 +51,8 @@ as the corresponding feature lands.
   downgrade. See [Release signing](#release-signing) below.
 - **The MCP server cannot touch files by default.** File access must be granted per directory when
   the server is started.
+- **Nothing an endpoint sends is trusted.** A response body that echoes the key back is scrubbed
+  before anything reads it, and a message shown to a person cannot drive the terminal.
 - **No `unsafe` code**: both crates use `#![forbid(unsafe_code)]`.
 
 ## Verifying a release
