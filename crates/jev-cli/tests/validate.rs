@@ -41,8 +41,6 @@ fn jev() -> Command {
         "JEV_CONFIG_DIR",
         Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-config"),
     );
-    // Never the real keychain of whoever runs the tests.
-    command.env("JEV_NO_KEYCHAIN", "1");
     command.env("TYPESAFE_BASE_URL", "http://127.0.0.1:9");
     command
 }

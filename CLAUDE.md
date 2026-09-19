@@ -127,12 +127,13 @@ gate that could never be decided costs nothing. The shortcuts flatten their one 
 level so `--field noul|choice|score` works; `jev eval` adds `gate` to its envelope only when
 `--assert` was used.
 
-The API key is looked for in `TYPESAFE_API_KEY`, then the OS keychain (`keyring`, pure-Rust Secret
-Service on Linux), then the `credentials` file (`0600` in a `0700` directory, refused if others can
-read it). All of that is `credentials.rs`; commands get a key through `Context::transport`. Never
-format a `keyring::Error`: two of its variants carry the secret. Only the last four characters of a
-key are ever shown (`fingerprint`). **Every integration test helper sets `JEV_NO_KEYCHAIN=1`**, so no
-test can read or write the real keychain of whoever runs the suite; keep that when adding a helper.
+TypeSafe has one way to authenticate a developer: a bearer API key. `jev` finds it in exactly two
+places: **`TYPESAFE_API_KEY`**, which always wins, or the **`credentials` file** that `jev auth login`
+writes once (`0600` from its first byte, in a `0700` directory, refused with the exact `chmod` when
+others can read it). That is all of `credentials.rs`. **There is no OS keychain, by the owner's
+decision (PRD D9): do not add one back**, and do not add OAuth, SSO or any browser flow. Only the last
+four characters of a key are ever shown (`fingerprint`), and a parse error of the credentials file is
+never shown, because it would quote a line that holds a key.
 
 Settings come from one resolver, `config::Settings::resolve`: **flag > environment > profile >
 default**, each value carrying its `Source`. A command reads `context.settings()?`; it never reads a
@@ -209,7 +210,7 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
 - Every third-party GitHub Action is pinned to a full commit SHA with the version in a comment.
 - Tests run against a local mock server (`wiremock`); CLI behaviour is asserted with `assert_cmd` and
   snapshot tests on stdout, stderr **and** exit code. Live API tests are opt-in only.
-- Isolate all test state with `JEV_CONFIG_DIR`; never touch the real user config or keychain.
+- Isolate all test state with `JEV_CONFIG_DIR`; never touch the real user config or credentials.
 - Match the surrounding code's naming, idiom and comment density. Document public items in `jev-client`.
 
 ## Distribution

@@ -32,7 +32,7 @@ Planned for the first version:
 - Human output on a terminal, JSON when piped, and stable exit codes
 - For AI agents: intent-oriented help, a machine-readable command spec, JSON Schemas, and an MCP
   server mode
-- API key in the operating system keychain, no telemetry, signed and verified self-updates
+- API key from `TYPESAFE_API_KEY` or a private credentials file, no telemetry, signed and verified self-updates
 
 ## Contributing
 

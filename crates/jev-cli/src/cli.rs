@@ -409,7 +409,8 @@ Examples:
   # Automation: read the key from stdin
   printf %s \"$TYPESAFE_KEY\" | jev auth login --with-token --profile ci
 
-jev looks for a key in TYPESAFE_API_KEY first, then in the keychain, then in the credentials file.";
+jev looks for a key in TYPESAFE_API_KEY first, then in the credentials file this command writes\n\
+(next to config.toml, readable only by you). Set the variable, or log in once: that is all there is.";
 
 /// Arguments of `jev auth login`.
 #[derive(Debug, Args)]
@@ -422,10 +423,6 @@ pub(crate) struct LoginArgs {
     /// Store the key without checking it against the API first
     #[arg(long)]
     pub(crate) skip_verify: bool,
-
-    /// Store the key in the credentials file (clear text, readable only by you) instead of the keychain
-    #[arg(long)]
-    pub(crate) insecure_storage: bool,
 }
 
 /// Arguments of `jev auth status`.
@@ -517,7 +514,7 @@ pub(crate) enum ModelsCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum AuthCommand {
-    /// Store an API key for the profile, after checking it against the API
+    /// Store an API key for the profile, once, after checking it against the API
     Login(LoginArgs),
     /// Show whether a key is configured, where it comes from, and whether the API accepts it
     Status(StatusArgs),

@@ -33,7 +33,6 @@ anstyle.workspace = true
 clap.workspace = true
 indexmap.workspace = true
 jev-client.workspace = true
-keyring.workspace = true
 rpassword.workspace = true
 schemars.workspace = true
 serde.workspace = true

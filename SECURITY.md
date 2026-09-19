@@ -36,8 +36,9 @@ These are the rules the project is built to. Each is enforced by tests or contin
 as the corresponding feature lands.
 
 - **The API key never travels through command-line arguments.** It comes from the
-  `TYPESAFE_API_KEY` environment variable or the operating system keychain, and is never written
-  to configuration files, logs, error messages or dry-run output.
+  `TYPESAFE_API_KEY` environment variable, or from the `credentials` file that `jev auth login`
+  writes (readable only by you; `jev` refuses to use it once anyone else can read it). It is never
+  written to `config.toml`, logs, error messages or dry-run output.
 - **Request and response bodies are never logged** unless you explicitly ask for it, because the
   `state` you send often contains customer data.
 - **HTTPS only**, through `rustls`. Certificate verification cannot be turned off. Plain HTTP is
