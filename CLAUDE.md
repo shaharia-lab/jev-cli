@@ -74,7 +74,8 @@ Cargo workspace, one-way dependency `jev-cli → jev-client`:
 
 The `jev-client` types follow three rules. Requests are sent as written (key order, explicit `null`
 and unknown fields are all preserved). Responses parse tolerantly (unknown fields ignored; an unknown or
-reshaped answer becomes `Answer::Unknown` with its raw JSON). Every type derives `JsonSchema`, and a
+reshaped answer becomes `Answer::Unknown` with its raw JSON). Every type derives `JsonSchema`; the
+request schemas are deliberately stricter than the parser and reject unknown fields outright. A
 type whose doc comment has rustdoc links or examples sets `#[schemars(description = "...")]`, because
 agents read those descriptions (a test enforces this). Public structs are `#[non_exhaustive]` with
 constructors, so adding a field is not a breaking change.

@@ -22,6 +22,11 @@ use crate::de;
 ///     r#"{"type":"noul","instructions":"Does this convey urgency?"}"#
 /// );
 /// ```
+// The schemas are stricter than the parser on purpose. Parsing keeps unknown fields so validation
+// can report them; the schema is the authoring contract, so it rejects them outright and an editor
+// or an agent sees a misspelt `criteria` immediately. `unevaluatedProperties` is used on the
+// variants, rather than `additionalProperties` on the structs, because it sees through the `$ref`
+// that sits beside the `type` tag.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "lowercase")]
 #[schemars(
@@ -30,10 +35,13 @@ use crate::de;
 #[non_exhaustive]
 pub enum Question {
     /// A yes/no question, answered with the probability of yes.
+    #[schemars(extend("unevaluatedProperties" = false))]
     Noul(Noul),
     /// Pick one option from a set, answered with a probability per option.
+    #[schemars(extend("unevaluatedProperties" = false))]
     Choice(Choice),
     /// Rate along an ordered rubric, answered with a probability per level.
+    #[schemars(extend("unevaluatedProperties" = false))]
     Score(Score),
 }
 
@@ -114,6 +122,7 @@ pub struct Noul {
 
     /// Fields this version of the crate does not know, sent to the API unchanged.
     #[serde(flatten)]
+    #[schemars(skip)]
     pub extra: IndexMap<String, Value>,
 }
 
@@ -137,7 +146,10 @@ impl Noul {
 
 /// What a yes and a no mean for a [`Noul`]. Either side may be omitted.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[schemars(description = "What a yes and a no mean for a noul. Either side may be omitted.")]
+#[schemars(
+    description = "What a yes and a no mean for a noul. Either side may be omitted.",
+    extend("additionalProperties" = false)
+)]
 #[non_exhaustive]
 pub struct NoulCriteria {
     /// What a yes (a value near 1) means.
@@ -162,6 +174,7 @@ pub struct NoulCriteria {
     ///
     /// The API accepts them without complaint; validation reports them.
     #[serde(flatten)]
+    #[schemars(skip)]
     pub extra: IndexMap<String, Value>,
 }
 
@@ -201,6 +214,7 @@ pub struct Choice {
 
     /// Fields this version of the crate does not know, sent to the API unchanged.
     #[serde(flatten)]
+    #[schemars(skip)]
     pub extra: IndexMap<String, Value>,
 }
 
@@ -214,7 +228,7 @@ impl Choice {
         }
     }
 
-    /// Adds an option with a description.
+    /// Adds an option with a description, replacing any option already using that name.
     #[must_use]
     pub fn option(mut self, name: impl Into<String>, description: impl Into<Content>) -> Self {
         self.criteria.insert(name.into(), description.into());
@@ -251,6 +265,7 @@ pub struct Score {
 
     /// Fields this version of the crate does not know, sent to the API unchanged.
     #[serde(flatten)]
+    #[schemars(skip)]
     pub extra: IndexMap<String, Value>,
 }
 

@@ -99,6 +99,22 @@ fn the_request_schema_rejects_malformed_requests() {
             request_with(&json!({ "type": "noul" })),
         ),
         (
+            "an unknown top-level field",
+            json!({ "state": "s", "model": "m", "questions": { "q": noul }, "temperature": 0 }),
+        ),
+        (
+            "a misspelt criteria key",
+            request_with(&json!({
+                "type": "choice", "instructions": "?", "criteria": { "a": null }, "critera": {}
+            })),
+        ),
+        (
+            "a noul criteria side other than true or false",
+            request_with(&json!({
+                "type": "noul", "instructions": "?", "criteria": { "true": "y", "maybe": "m" }
+            })),
+        ),
+        (
             "a null state",
             json!({ "state": null, "model": "m", "questions": { "q": noul } }),
         ),

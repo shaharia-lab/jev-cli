@@ -28,7 +28,8 @@ use crate::question::Question;
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[schemars(
-    description = "An evaluation request: one `state`, judged by every question independently and in parallel."
+    description = "An evaluation request: one `state`, judged by every question independently and in parallel.",
+    extend("additionalProperties" = false)
 )]
 #[non_exhaustive]
 pub struct Request {
@@ -55,6 +56,7 @@ pub struct Request {
     /// The API currently rejects any unknown top-level field with an uninformative
     /// `400 Invalid request.`, so validation reports these before a request is spent.
     #[serde(flatten)]
+    #[schemars(skip)]
     pub extra: IndexMap<String, Value>,
 }
 
