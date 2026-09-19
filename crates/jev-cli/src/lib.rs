@@ -6,11 +6,16 @@
 
 mod cli;
 mod commands;
+mod config;
+mod duration;
+mod env;
 mod error;
 mod exit;
 mod interaction;
 mod logging;
+mod notice;
 mod output;
+mod suggest;
 
 use std::io::{self, IsTerminal, Write};
 use std::panic::{self, AssertUnwindSafe};
@@ -20,7 +25,9 @@ use clap::error::ErrorKind as ClapErrorKind;
 use clap::{CommandFactory, Parser};
 
 use crate::cli::Cli;
-use crate::commands::Context;
+use crate::commands::{Configuration, Context};
+use crate::config::{ConfigStore, Flags, Settings};
+use crate::env::Env;
 use crate::error::CliError;
 use crate::exit::Exit;
 use crate::interaction::Interaction;
@@ -89,27 +96,47 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
     let cli =
         Cli::try_parse_from(arguments).map_err(|error| parse_failure(&error, early_format))?;
     let global = &cli.global;
+    let env = Env::from_process();
 
-    let format = Format::resolve(
-        global.output.or_else(|| Format::scan(arguments)),
-        terminal.stdout,
-    );
+    let flags = Flags {
+        profile: global.profile.clone(),
+        base_url: global.base_url.clone(),
+        model: global.model.clone(),
+        output: global.output.or_else(|| Format::scan(arguments)),
+        timeout: global.timeout,
+        max_retries: global.max_retries,
+    };
+    let store = config::config_dir(&env).map(ConfigStore::new);
+    let loaded = store.clone().and_then(|store| {
+        let file = store.load()?;
+        let settings =
+            Settings::resolve(&flags, &env, file.active_profile.as_deref(), &file.profiles)?;
+        Ok((file, settings))
+    });
+
+    // The profile may set the format. When the configuration is broken, what was worked out
+    // before parsing still stands, so the error about it is printed the way the caller asked.
+    let format = match &loaded {
+        Ok((_, settings)) => Format::resolve(settings.output(), terminal.stdout),
+        Err(_) => early_format,
+    };
     let fail = |error: CliError| Failure {
         exit: error.exit,
         error: Some(Box::new(error)),
         format,
     };
 
+    let stderr_ui = terminal.ui(terminal.stderr, global.no_color, global.ascii);
     logging::init(
-        logging::filter(
-            global.verbose,
-            global.quiet,
-            env("TYPESAFE_LOG_LEVEL").as_deref(),
-        ),
-        terminal
-            .ui(terminal.stderr, global.no_color, global.ascii)
-            .has_color(),
+        logging::filter(global.verbose, global.quiet, env.get("TYPESAFE_LOG_LEVEL")),
+        stderr_ui.has_color(),
     );
+    if let (false, Ok((file, _))) = (global.quiet, &loaded) {
+        let mut stderr = io::stderr().lock();
+        for warning in &file.warnings {
+            warning.emit(format, stderr_ui, &mut stderr);
+        }
+    }
 
     let stdout = io::stdout();
     let stdin = io::stdin();
@@ -119,7 +146,12 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
             field: global.field.clone(),
             ui: terminal.ui(terminal.stdout, global.no_color, global.ascii),
         },
-        interaction: Interaction::new(terminal.stdin, global.no_input, env("CI").as_deref()),
+        interaction: Interaction::new(terminal.stdin, global.no_input, env.get("CI")),
+        configuration: Configuration {
+            store,
+            loaded,
+            flags,
+        },
         stdout: &mut stdout.lock(),
         stdin: &mut stdin.lock(),
     };

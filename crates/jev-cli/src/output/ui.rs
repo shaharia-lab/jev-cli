@@ -46,6 +46,13 @@ impl Ui {
         self.paint(Style::new().fg_color(Some(AnsiColor::Cyan.into())), text)
     }
 
+    pub(crate) fn warning_label(self, text: &str) -> String {
+        self.paint(
+            Style::new().bold().fg_color(Some(AnsiColor::Yellow.into())),
+            text,
+        )
+    }
+
     pub(crate) fn error_label(self, text: &str) -> String {
         self.paint(
             Style::new().bold().fg_color(Some(AnsiColor::Red.into())),

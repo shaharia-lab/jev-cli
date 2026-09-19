@@ -105,6 +105,17 @@ printed once, in `lib.rs`: text for a person, one JSON object for a program. `In
 code that decides whether a prompt is allowed. To give a pending command its behaviour, replace its
 `Pending` arguments in `cli.rs`, add a module under `commands/`, and route it in `commands::run`.
 
+Settings come from one resolver, `config::Settings::resolve`: **flag > environment > profile >
+default**, each value carrying its `Source`. A command reads `context.settings()?`; it never reads a
+flag or an environment variable for a setting itself. Adding a setting means adding a `Key` (name,
+parser, default, flag, env var) and a row in the precedence table test. The configuration is loaded
+lazily as a `Result`, so a broken `config.toml` stops only the commands that need it (`jev version` and
+`jev config path` must keep working). `ConfigStore::update` is the only way to write: lock, re-read,
+change, temp file, rename. Edits go through `toml_edit` and must preserve a person's comments; an
+existing file is never given keys nobody asked for. Warnings are `Notice`s on stderr: text for a
+person, one JSON line for a program, nothing under `--quiet`. Read the environment through `Env`, not
+`std::env`, so it can be tested.
+
 Test hooks live behind the `internal-test-hooks` cargo feature (`jev debug render|error|prompt|panic`).
 CI turns it on with `--all-features`; a second, default-features test run proves that release builds
 do not contain them. Tests must isolate the environment (`CI`, `NO_COLOR`, `TERM`, `LANG`, `JEV_*`,

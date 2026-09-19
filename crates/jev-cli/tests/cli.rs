@@ -26,6 +26,11 @@ fn jev() -> Command {
     ] {
         command.env_remove(variable);
     }
+    // Never the real user configuration: an empty directory nothing writes to.
+    command.env(
+        "JEV_CONFIG_DIR",
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-config"),
+    );
     command
 }
 
@@ -245,11 +250,6 @@ fn commands_without_behaviour_say_so_whatever_flags_follow() {
             13,
         ),
         (vec!["auth", "login"], "auth login", 10),
-        (
-            vec!["config", "set", "model", "jev-1.13.0"],
-            "config set",
-            8,
-        ),
         (vec!["schema", "batch-record"], "schema batch-record", 16),
         (vec!["mcp", "serve", "--allow-dir", "."], "mcp serve", 18),
         (vec!["completion", "zsh"], "completion", 17),

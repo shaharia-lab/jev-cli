@@ -36,6 +36,16 @@ pub(crate) enum Format {
 }
 
 impl Format {
+    /// The name used on the command line and in `config.toml`.
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Self::Table => "table",
+            Self::Json => "json",
+            Self::Yaml => "yaml",
+            Self::Jsonl => "jsonl",
+        }
+    }
+
     /// The format to use: what was asked for, and otherwise readable text on a terminal and JSON
     /// everywhere else.
     pub(crate) fn resolve(requested: Option<Self>, stdout_is_terminal: bool) -> Self {

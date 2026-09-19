@@ -12,6 +12,9 @@ use std::process::Stdio;
 use pty_process::Size;
 use pty_process::blocking::{Command, open};
 
+/// Never the real user configuration: a directory that does not exist and that nothing writes to.
+const NO_CONFIG: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/no-config");
+
 const ISOLATED: [&str; 8] = [
     "CI",
     "NO_COLOR",
@@ -38,6 +41,7 @@ fn on_a_terminal(arguments: &[&str], environment: &[(&str, &str)]) -> String {
     for (name, value) in environment {
         command = command.env(name, value);
     }
+    command = command.env("JEV_CONFIG_DIR", NO_CONFIG);
     let mut child = command.spawn(pts).unwrap();
 
     // Reading ends with an error (EIO on Linux) once the child has exited and closed its side.
@@ -60,6 +64,7 @@ fn piped(arguments: &[&str]) -> String {
         command.env_remove(variable);
     }
     let output = command
+        .env("JEV_CONFIG_DIR", NO_CONFIG)
         .args(arguments)
         .stdin(Stdio::null())
         .output()
