@@ -123,7 +123,25 @@ pub struct Error {
 }
 
 impl Error {
-    pub(crate) fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+    /// An error of the given kind.
+    ///
+    /// [`HttpTransport`](crate::HttpTransport) builds its own errors; this constructor and the
+    /// `with_*` methods exist so that a fake [`Transport`](crate::Transport) in a test can return
+    /// the same errors the real one would.
+    ///
+    /// ```
+    /// use jev_client::{Error, ErrorKind};
+    ///
+    /// let error = Error::new(ErrorKind::RateLimit, "Slow down.")
+    ///     .with_status(429)
+    ///     .with_error_type("rate_limit_error")
+    ///     .with_request_id(Some("req_123".to_owned()));
+    ///
+    /// assert!(error.is_retryable());
+    /// assert_eq!(error.request_id(), Some("req_123"));
+    /// ```
+    #[must_use]
+    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
@@ -159,22 +177,37 @@ impl Error {
         self
     }
 
-    pub(crate) fn with_status(mut self, status: u16) -> Self {
+    /// Sets the HTTP status.
+    #[must_use]
+    pub fn with_status(mut self, status: u16) -> Self {
         self.status = Some(status);
         self
     }
 
-    pub(crate) fn with_request_id(mut self, request_id: Option<String>) -> Self {
+    /// Sets the API's machine-readable error type, such as `rate_limit_error`.
+    #[must_use]
+    pub fn with_error_type(mut self, error_type: impl Into<String>) -> Self {
+        self.api_type = Some(error_type.into());
+        self
+    }
+
+    /// Sets the `x-typesafe-request-id`.
+    #[must_use]
+    pub fn with_request_id(mut self, request_id: Option<String>) -> Self {
         self.request_id = request_id;
         self
     }
 
-    pub(crate) const fn with_retry_after(mut self, retry_after: Option<Duration>) -> Self {
+    /// Sets the delay the server asked for.
+    #[must_use]
+    pub const fn with_retry_after(mut self, retry_after: Option<Duration>) -> Self {
         self.retry_after = retry_after;
         self
     }
 
-    pub(crate) const fn with_attempts(mut self, attempts: u32) -> Self {
+    /// Sets how many attempts were made.
+    #[must_use]
+    pub const fn with_attempts(mut self, attempts: u32) -> Self {
         self.attempts = attempts;
         self
     }
