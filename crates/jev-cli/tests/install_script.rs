@@ -636,7 +636,10 @@ mod end_to_end {
             Run {
                 code: output.status.code().unwrap_or(-1),
                 stdout: String::from_utf8(output.stdout).unwrap(),
-                stderr: String::from_utf8(output.stderr).unwrap(),
+                // PowerShell ends lines with CRLF on Windows.
+                stderr: String::from_utf8(output.stderr)
+                    .unwrap()
+                    .replace("\r\n", "\n"),
             }
         }
     }
