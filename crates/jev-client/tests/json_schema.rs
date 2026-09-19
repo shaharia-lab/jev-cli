@@ -130,6 +130,34 @@ fn the_request_schema_rejects_malformed_requests() {
             "a missing questions map",
             json!({ "state": "s", "model": "m" }),
         ),
+        (
+            "an empty questions map",
+            json!({ "state": "s", "model": "m", "questions": {} }),
+        ),
+        (
+            "a score with one level",
+            request_with(&json!({ "type": "score", "instructions": "?", "criteria": ["only"] })),
+        ),
+        (
+            "a score with eleven levels",
+            request_with(&json!({
+                "type": "score", "instructions": "?",
+                "criteria": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+            })),
+        ),
+        (
+            "a choice with no options",
+            request_with(&json!({ "type": "choice", "instructions": "?", "criteria": {} })),
+        ),
+        (
+            "a choice with 256 options",
+            request_with(&json!({
+                "type": "choice", "instructions": "?",
+                "criteria": (0..256)
+                    .map(|n| (format!("o{n}"), Value::Null))
+                    .collect::<serde_json::Map<_, _>>()
+            })),
+        ),
     ];
 
     for (what, instance) in rejected {
@@ -148,6 +176,28 @@ fn the_request_schema_accepts_null_where_the_api_does() {
         request_with(
             &json!({ "type": "noul", "instructions": null, "criteria": { "true": "yes" } }),
         ),
+    ];
+
+    for instance in accepted {
+        let errors = errors(&validator, &instance);
+        assert!(errors.is_empty(), "{instance} was rejected: {errors:?}");
+    }
+}
+
+#[test]
+fn the_request_schema_accepts_the_documented_limits_exactly() {
+    let validator = validator_for::<Request>();
+    let options = |count: usize| {
+        (0..count)
+            .map(|n| (format!("o{n}"), Value::Null))
+            .collect::<serde_json::Map<_, _>>()
+    };
+    let levels = |count: usize| (0..count).map(|n| n.to_string()).collect::<Vec<_>>();
+    let accepted = [
+        request_with(&json!({ "type": "score", "instructions": "?", "criteria": levels(2) })),
+        request_with(&json!({ "type": "score", "instructions": "?", "criteria": levels(10) })),
+        request_with(&json!({ "type": "choice", "instructions": "?", "criteria": options(1) })),
+        request_with(&json!({ "type": "choice", "instructions": "?", "criteria": options(255) })),
     ];
 
     for instance in accepted {

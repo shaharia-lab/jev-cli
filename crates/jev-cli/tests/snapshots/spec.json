@@ -2383,67 +2383,167 @@
     {
       "path": "schema request",
       "usage": "jev schema request [OPTIONS]",
-      "about": "Schema of a request file",
-      "implemented": false,
-      "when_to_use": null,
-      "input": null,
-      "output": null,
+      "about": "JSON Schema of a complete request: `state`, `model` and `questions`, as the API takes it",
+      "implemented": true,
+      "when_to_use": "Use `jev schema request` to author or check a file that carries everything an evaluation needs: `state`, `model` and `questions`, exactly the body the API takes. Use `jev schema questions` for a file whose state comes from elsewhere, and `jev validate` to check a file offline with jev's own rules, which explain each problem and suggest the fix.",
+      "input": "Nothing. It needs no API key and no configuration, and never uses the network.",
+      "output": "A JSON Schema (draft 2020-12) with every definition inlined, generated from the types jev reads. It holds the limits: 1 to 255 choice options, 2 to 10 score levels, at least one question, and no unknown fields. JSON on a terminal too; -o yaml gives YAML.",
       "arguments": [],
       "flags": [],
-      "exit_codes": [],
-      "examples": []
+      "exit_codes": [
+        {
+          "code": 0,
+          "name": "success",
+          "meaning": "success, and any gate condition holds"
+        },
+        {
+          "code": 2,
+          "name": "usage",
+          "meaning": "usage or validation error; nothing was sent"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Save it for an editor or a JSON Schema validator",
+          "command": "jev schema request -o json > jev-request.schema.json"
+        },
+        {
+          "description": "The fields a question may have",
+          "command": "jev schema request | jq '.properties.questions.additionalProperties'"
+        }
+      ]
     },
     {
       "path": "schema questions",
       "usage": "jev schema questions [OPTIONS]",
-      "about": "Schema of a questions file",
-      "implemented": false,
-      "when_to_use": null,
-      "input": null,
-      "output": null,
+      "about": "JSON Schema of a question set: a request file in which only `questions` is required",
+      "implemented": true,
+      "when_to_use": "Use `jev schema questions` to author or check a question set: a request file in which only `questions` is required, as given to `jev eval -f` with --state-file, to `jev validate` and to `jev batch run -f`. Use `jev schema request` for a file that must carry its own `state` and `model`.",
+      "input": "Nothing. It needs no API key and no configuration, and never uses the network.",
+      "output": "A JSON Schema (draft 2020-12) with every definition inlined: the request schema with only `questions` required. JSON on a terminal too; -o yaml gives YAML.",
       "arguments": [],
       "flags": [],
-      "exit_codes": [],
-      "examples": []
+      "exit_codes": [
+        {
+          "code": 0,
+          "name": "success",
+          "meaning": "success, and any gate condition holds"
+        },
+        {
+          "code": 2,
+          "name": "usage",
+          "meaning": "usage or validation error; nothing was sent"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Save it for an editor, then check a file offline",
+          "command": "jev schema questions -o json > questions.schema.json\njev validate -f triage.yaml"
+        },
+        {
+          "description": "The question types",
+          "command": "jev schema questions \\\n    | jq '.properties.questions.additionalProperties.oneOf[].properties.type'"
+        }
+      ]
     },
     {
       "path": "schema batch-record",
       "usage": "jev schema batch-record [OPTIONS]",
-      "about": "Schema of one batch output record",
-      "implemented": false,
-      "when_to_use": null,
-      "input": null,
-      "output": null,
+      "about": "JSON Schema of one line of `jev batch run` output",
+      "implemented": true,
+      "when_to_use": "Use `jev schema batch-record` before writing code that reads the JSONL of `jev batch run`: every line is one record. Use `jev schema output` for the result of a single evaluation, and `jev schema questions` for the question set a batch reads.",
+      "input": "Nothing. It needs no API key and no configuration, and never uses the network.",
+      "output": "A JSON Schema (draft 2020-12) of one record: `anyOf` an `ok` record (`id`, `status`, `model`, `answers`, `usage`, `cost_usd`, `request_id`, `latency_ms`) and an `error` record (`id`, `status`, and an `error` object shaped like the JSON error on stderr). JSON on a terminal too; -o yaml gives YAML.",
       "arguments": [],
       "flags": [],
-      "exit_codes": [],
-      "examples": []
+      "exit_codes": [
+        {
+          "code": 0,
+          "name": "success",
+          "meaning": "success, and any gate condition holds"
+        },
+        {
+          "code": 2,
+          "name": "usage",
+          "meaning": "usage or validation error; nothing was sent"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Save it to check a results file",
+          "command": "jev schema batch-record -o json > jev-batch-record.schema.json"
+        },
+        {
+          "description": "The fields of a failed row",
+          "command": "jev schema batch-record | jq '.anyOf[1].properties | keys'"
+        }
+      ]
     },
     {
       "path": "schema output",
       "usage": "jev schema output [OPTIONS]",
-      "about": "Schema of the result envelope",
-      "implemented": false,
-      "when_to_use": null,
-      "input": null,
-      "output": null,
+      "about": "JSON Schema of the result that `jev eval`, `jev noul`, `jev choice` and `jev score` print",
+      "implemented": true,
+      "when_to_use": "Use `jev schema output` before writing code that reads the JSON of `jev eval`, `jev noul`, `jev choice` or `jev score`. Use `jev schema error` for what they print on stderr when they fail.",
+      "input": "Nothing. It needs no API key and no configuration, and never uses the network.",
+      "output": "A JSON Schema (draft 2020-12) of the result: `anyOf` the `jev eval` form, with every answer under `answers`, and the one-question form, with the answer's fields at the top level. Both have `model`, `requested_model`, `usage`, `cost_usd`, `request_id` and `latency_ms`, and `gate` when a gating flag was used. JSON on a terminal too; -o yaml gives YAML.",
       "arguments": [],
       "flags": [],
-      "exit_codes": [],
-      "examples": []
+      "exit_codes": [
+        {
+          "code": 0,
+          "name": "success",
+          "meaning": "success, and any gate condition holds"
+        },
+        {
+          "code": 2,
+          "name": "usage",
+          "meaning": "usage or validation error; nothing was sent"
+        }
+      ],
+      "examples": [
+        {
+          "description": "The fields every result has",
+          "command": "jev schema output | jq '.anyOf[0].required'"
+        },
+        {
+          "description": "Save it to check results in a test suite",
+          "command": "jev schema output -o json > jev-result.schema.json"
+        }
+      ]
     },
     {
       "path": "schema error",
       "usage": "jev schema error [OPTIONS]",
-      "about": "Schema of a JSON error",
-      "implemented": false,
-      "when_to_use": null,
-      "input": null,
-      "output": null,
+      "about": "JSON Schema of the error object printed on stderr for a program",
+      "implemented": true,
+      "when_to_use": "Use `jev schema error` before writing code that handles jev's failures: branch on `code` or `exit_code`, show `message` and follow `hint`. Use `jev schema output` for what a successful command prints on stdout.",
+      "input": "Nothing. It needs no API key and no configuration, and never uses the network.",
+      "output": "A JSON Schema (draft 2020-12) of the one JSON object a failing command prints on stderr when its output format is machine-readable, and that an MCP tool error carries: `{error: {code, exit_code, error_type, message, hint, request_id, http_status, retryable, details}}`, every field always present. JSON on a terminal too; -o yaml gives YAML.",
       "arguments": [],
       "flags": [],
-      "exit_codes": [],
-      "examples": []
+      "exit_codes": [
+        {
+          "code": 0,
+          "name": "success",
+          "meaning": "success, and any gate condition holds"
+        },
+        {
+          "code": 2,
+          "name": "usage",
+          "meaning": "usage or validation error; nothing was sent"
+        }
+      ],
+      "examples": [
+        {
+          "description": "The error fields",
+          "command": "jev schema error | jq '.properties.error.required'"
+        },
+        {
+          "description": "As YAML",
+          "command": "jev schema error -o yaml"
+        }
+      ]
     },
     {
       "path": "spec",

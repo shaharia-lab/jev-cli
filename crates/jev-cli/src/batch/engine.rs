@@ -6,10 +6,11 @@ use std::time::Instant;
 
 use jev_client::Transport;
 use jev_client::validate::Document;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
+use super::record::Record;
 use super::summary::{StopReason, Summary};
 use super::{Ids, Keyed, Mapping, Row, RowProblem, Rows};
 use crate::config::Settings;
@@ -176,25 +177,18 @@ fn settle(summary: &mut Summary, id: &Value, result: Result<Evaluation, CliError
             if !summary.models.contains(&envelope.model) {
                 summary.models.push(envelope.model.clone());
             }
-            json!({
-                "id": id,
-                "status": "ok",
-                "model": envelope.model,
-                "answers": envelope.answers,
-                "usage": envelope.usage,
-                "cost_usd": envelope.cost_usd,
-                "request_id": envelope.request_id,
-                "latency_ms": envelope.latency_ms,
-            })
+            encode(&Record::ok(id, &envelope))
         }
         Err(error) => {
             summary.failed += 1;
             summary.retries += u64::from(error.attempts.saturating_sub(1));
-            let mut body = error.to_json();
-            let error = body.get_mut("error").map(Value::take);
-            json!({ "id": id, "status": "error", "error": error })
+            encode(&Record::failed(id, &error))
         }
     }
+}
+
+fn encode(record: &Record<'_>) -> Value {
+    serde_json::to_value(record).unwrap_or(Value::Null)
 }
 
 fn stop_after_failure(job: &Job<'_>, summary: &mut Summary) {

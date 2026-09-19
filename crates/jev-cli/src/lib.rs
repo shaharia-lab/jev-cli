@@ -22,6 +22,7 @@ mod interaction;
 mod logging;
 mod notice;
 mod output;
+mod schemas;
 mod suggest;
 
 use std::io::{self, IsTerminal, Write};

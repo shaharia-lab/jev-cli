@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`, `jev batch run`,
-`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -146,6 +146,14 @@ A file is read twice: once to check every row (mapping, repeated ids) before any
 to send. Piped rows can be read only once, so they are checked as they arrive. Like `jev mcp serve`,
 `jev batch run` writes to stdout as it goes: one record per row, flushed at once, in completion
 order. A row that fails is a record, not an error; the run exits 7 when any did.
+
+JSON Schemas come from one place, `schemas.rs`, which generates them from the types that read and
+write the data (`Request`, `ResultEnvelope`, `batch::Record`, `ErrorDocument`); `jev schema` prints them and the MCP
+tool input schemas are built from the same generator. Never write a schema by hand. `schemas/` at
+the repository root holds the published copies and doubles as their snapshot: after an intended
+change run `make schemas` and review the diff (a test fails when they are stale). Schema-only
+constraints (limits, `required` on fields serialized as `null`) go on the type with
+`#[schemars(extend(...))]`; `#[schemars(required)]` on an `Option` drops `null` from the type.
 
 Gates (`gate.rs`) turn an answer into an exit code. **Exit 10 means exactly one thing: evaluated
 successfully, condition false.** It is returned as `Ok(Exit::GateFalse)`, never as an error: the

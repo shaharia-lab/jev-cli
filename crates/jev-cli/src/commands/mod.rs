@@ -9,6 +9,7 @@ mod eval;
 mod mcp;
 mod models;
 mod profile;
+mod schema;
 mod shortcut;
 mod spec;
 mod validate;
@@ -16,7 +17,7 @@ mod version;
 
 use std::io::Write;
 
-use crate::cli::{BatchCommand, Command, McpCommand, ModelsCommand, SchemaCommand};
+use crate::cli::{BatchCommand, Command, McpCommand, ModelsCommand};
 use jev_client::HttpTransport;
 
 use crate::client::{self, Connection};
@@ -148,11 +149,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Models(ModelsCommand::List) => models::list(context),
         #[cfg(feature = "internal-test-hooks")]
         Command::Debug(command) => debug::run(command, context),
-        Command::Schema(SchemaCommand::Request(_)) => pending("schema request", 16),
-        Command::Schema(SchemaCommand::Questions(_)) => pending("schema questions", 16),
-        Command::Schema(SchemaCommand::BatchRecord(_)) => pending("schema batch-record", 16),
-        Command::Schema(SchemaCommand::Output(_)) => pending("schema output", 16),
-        Command::Schema(SchemaCommand::Error(_)) => pending("schema error", 16),
+        Command::Schema(command) => schema::run(command, context),
         Command::Mcp(McpCommand::Serve(arguments)) => mcp::serve(arguments, context),
         Command::Update(_) => pending("update", 25),
         Command::Completion(_) => pending("completion", 17),

@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use crate::content::{Content, non_null_schema};
 use crate::de;
+use crate::validate::{MAX_CHOICE_OPTIONS, MAX_SCORE_LEVELS, MIN_SCORE_LEVELS};
 
 /// One typed question. The `type` field selects the variant.
 ///
@@ -210,6 +211,7 @@ pub struct Choice {
     /// Options keep the order they were written in. The API allows up to 255 of them. A repeated
     /// option is a parse error when reading JSON or YAML text directly.
     #[serde(deserialize_with = "de::unique_map")]
+    #[schemars(extend("minProperties" = 1, "maxProperties" = MAX_CHOICE_OPTIONS))]
     pub criteria: IndexMap<String, Content>,
 
     /// Fields this version of the crate does not know, sent to the API unchanged.
@@ -289,7 +291,12 @@ impl Score {
 
 /// Schema for [`Score::criteria`]: an array whose entries may not be `null`.
 fn levels_schema(generator: &mut SchemaGenerator) -> Schema {
-    json_schema!({ "type": "array", "items": non_null_schema(generator) })
+    json_schema!({
+        "type": "array",
+        "items": non_null_schema(generator),
+        "minItems": MIN_SCORE_LEVELS,
+        "maxItems": MAX_SCORE_LEVELS
+    })
 }
 
 #[cfg(test)]

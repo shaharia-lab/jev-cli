@@ -1,4 +1,18 @@
-Schema of a request file
+JSON Schema of a complete request: `state`, `model` and `questions`, as the API takes it
+
+When to use:
+Use `jev schema request` to author or check a file that carries everything an evaluation needs:
+`state`, `model` and `questions`, exactly the body the API takes. Use `jev schema questions` for a
+file whose state comes from elsewhere, and `jev validate` to check a file offline with jev's own
+rules, which explain each problem and suggest the fix.
+
+Input:
+Nothing. It needs no API key and no configuration, and never uses the network.
+
+Output:
+A JSON Schema (draft 2020-12) with every definition inlined, generated from the types jev reads. It
+holds the limits: 1 to 255 choice options, 2 to 10 score levels, at least one question, and no
+unknown fields. JSON on a terminal too; -o yaml gives YAML.
 
 Usage: jev schema request [OPTIONS]
 
@@ -57,3 +71,14 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    usage or validation error; nothing was sent
+
+Examples:
+  # Save it for an editor or a JSON Schema validator
+  jev schema request -o json > jev-request.schema.json
+
+  # The fields a question may have
+  jev schema request | jq '.properties.questions.additionalProperties'

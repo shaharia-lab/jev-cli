@@ -594,16 +594,16 @@ pub(crate) enum ProfileCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum SchemaCommand {
-    /// Schema of a request file
-    Request(Pending),
-    /// Schema of a questions file
-    Questions(Pending),
-    /// Schema of one batch output record
-    BatchRecord(Pending),
-    /// Schema of the result envelope
-    Output(Pending),
-    /// Schema of a JSON error
-    Error(Pending),
+    /// JSON Schema of a complete request: `state`, `model` and `questions`, as the API takes it
+    Request,
+    /// JSON Schema of a question set: a request file in which only `questions` is required
+    Questions,
+    /// JSON Schema of one line of `jev batch run` output
+    BatchRecord,
+    /// JSON Schema of the result that `jev eval`, `jev noul`, `jev choice` and `jev score` print
+    Output,
+    /// JSON Schema of the error object printed on stderr for a program
+    Error,
 }
 
 /// Arguments of `jev mcp serve`.

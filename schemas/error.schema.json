@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jev error",
+  "description": "The single JSON object `jev` prints on stderr when a command fails and the output format is machine-readable (`-o json`, `-o yaml`, `-o jsonl`, or stdout not a terminal), and the error a `jev mcp serve` tool call returns. `code` is a stable name; `exit_code` is the process exit code. Every field is always present.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "A stable, machine-readable name for the failure, such as `usage`, `authentication`,\n`api_rejected`, `rate_limited`, `timeout` or `not_implemented`."
+        },
+        "exit_code": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "The process exit code: 1 internal, 2 usage or validation, 3 auth, 4 API rejected, 5 rate\nlimited or overloaded, 6 network or timeout, 7 batch partial failure, 130 interrupted.\nNever 10 or 11: those mean an evaluation succeeded and a gate decided."
+        },
+        "error_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The API's own `error_type` when it sent one, passed through unchanged."
+        },
+        "message": {
+          "type": "string",
+          "description": "What went wrong, in one sentence."
+        },
+        "hint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The next action to take, such as the flag or command that fixes it."
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The `x-typesafe-request-id` of the failed call, to quote when asking TypeSafe about it."
+        },
+        "http_status": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "The HTTP status the API answered with, when the failure came from the API."
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Whether trying the same thing again later may succeed."
+        },
+        "details": {
+          "description": "Structured detail, such as the findings of a failed validation, or `null`."
+        }
+      },
+      "required": [
+        "code",
+        "exit_code",
+        "error_type",
+        "message",
+        "hint",
+        "request_id",
+        "http_status",
+        "retryable",
+        "details"
+      ],
+      "description": "What went wrong, and what to do next."
+    }
+  },
+  "required": [
+    "error"
+  ]
+}

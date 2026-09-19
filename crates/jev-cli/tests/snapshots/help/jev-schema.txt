@@ -3,11 +3,13 @@ Print JSON Schemas for request files and for jev's own output
 Usage: jev schema [OPTIONS] <COMMAND>
 
 Commands:
-  request       Schema of a request file
-  questions     Schema of a questions file
-  batch-record  Schema of one batch output record
-  output        Schema of the result envelope
-  error         Schema of a JSON error
+  request       JSON Schema of a complete request: `state`, `model` and `questions`, as the API
+                takes it
+  questions     JSON Schema of a question set: a request file in which only `questions` is required
+  batch-record  JSON Schema of one line of `jev batch run` output
+  output        JSON Schema of the result that `jev eval`, `jev noul`, `jev choice` and `jev score`
+                print
+  error         JSON Schema of the error object printed on stderr for a program
 
 Options:
   -h, --help

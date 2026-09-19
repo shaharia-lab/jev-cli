@@ -281,6 +281,7 @@ fn unknown_option<'a>(
 pub(crate) struct Decision {
     /// The condition, as it was understood.
     pub(crate) condition: String,
+    /// Whether the condition holds.
     pub(crate) passed: bool,
     /// The value the condition was compared with.
     pub(crate) actual: Value,

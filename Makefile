@@ -1,7 +1,7 @@
 # Local equivalents of the CI jobs. `make check` runs everything a pull request must pass.
 # On Windows without make, run the cargo commands below directly.
 
-.PHONY: check hooks fmt fmt-check lint test msrv doc deny audit policy
+.PHONY: check hooks fmt fmt-check lint test msrv doc deny audit policy schemas
 
 MSRV := $(shell sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
 
@@ -42,3 +42,10 @@ policy:
 	scripts/ci/check-action-pins.sh
 	scripts/ci/check-client-deps.sh
 	SKIP=no-commit-to-branch,cargo-fmt,cargo-clippy pre-commit run --all-files
+
+# Regenerates the published JSON Schemas in schemas/ from this build. A test fails when they are
+# out of date, and releases attach them for editor integration.
+schemas:
+	for name in request questions batch-record output error; do \
+		cargo run --quiet --locked -p jev-cli -- schema $$name -o json > schemas/$$name.schema.json || exit 1; \
+	done

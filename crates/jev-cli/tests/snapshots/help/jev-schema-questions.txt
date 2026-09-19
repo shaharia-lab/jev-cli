@@ -1,4 +1,16 @@
-Schema of a questions file
+JSON Schema of a question set: a request file in which only `questions` is required
+
+When to use:
+Use `jev schema questions` to author or check a question set: a request file in which only
+`questions` is required, as given to `jev eval -f` with --state-file, to `jev validate` and to `jev
+batch run -f`. Use `jev schema request` for a file that must carry its own `state` and `model`.
+
+Input:
+Nothing. It needs no API key and no configuration, and never uses the network.
+
+Output:
+A JSON Schema (draft 2020-12) with every definition inlined: the request schema with only
+`questions` required. JSON on a terminal too; -o yaml gives YAML.
 
 Usage: jev schema questions [OPTIONS]
 
@@ -57,3 +69,16 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    usage or validation error; nothing was sent
+
+Examples:
+  # Save it for an editor, then check a file offline
+  jev schema questions -o json > questions.schema.json
+  jev validate -f triage.yaml
+
+  # The question types
+  jev schema questions \
+      | jq '.properties.questions.additionalProperties.oneOf[].properties.type'
