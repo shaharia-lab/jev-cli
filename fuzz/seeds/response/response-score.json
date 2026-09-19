@@ -1,0 +1,13 @@
+{
+  "model": "jev-latest",
+  "answers": {
+    "frustration": {
+      "type": "score",
+      "score": 1.6,
+      "legend": { "0": "Calm", "1": "Frustrated", "2": "Very angry" },
+      "probabilities": { "0": 0.05, "1": 0.3, "2": 0.65 },
+      "confidence": 0.78
+    }
+  },
+  "usage": { "input_tokens": 312, "output_tokens": 48 }
+}

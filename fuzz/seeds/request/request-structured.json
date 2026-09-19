@@ -1,0 +1,53 @@
+{
+  "state": {
+    "ticket": {
+      "text": "Help! My payouts have been failing for 3 days.",
+      "plan": "pro"
+    }
+  },
+  "model": "jev-latest",
+  "questions": {
+    "is_urgent": {
+      "type": "noul",
+      "instructions": {
+        "question": "Does this convey urgency?"
+      },
+      "criteria": {
+        "true": {
+          "what": "time-sensitive"
+        },
+        "false": null
+      }
+    },
+    "department": {
+      "type": "choice",
+      "instructions": [
+        "Which team should handle this?"
+      ],
+      "criteria": {
+        "billing": {
+          "what": "Payments, refunds"
+        },
+        "technical": null,
+        "other": "Anything else"
+      }
+    },
+    "frustration": {
+      "type": "score",
+      "instructions": "How frustrated is the customer?",
+      "criteria": [
+        "Calm",
+        {
+          "what": "Frustrated",
+          "signals": [
+            "repeats"
+          ]
+        },
+        [
+          "Very angry",
+          "shouting"
+        ]
+      ]
+    }
+  }
+}

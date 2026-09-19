@@ -65,6 +65,8 @@ unsafe_code = "forbid"
 missing_docs = "warn"
 unreachable_pub = "warn"
 unused_must_use = "deny"
+# `cargo fuzz` builds with `--cfg fuzzing`, which compiles the entry points the targets in fuzz/ call.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

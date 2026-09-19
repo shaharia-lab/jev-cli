@@ -58,6 +58,14 @@ Or run the gates one at a time:
 
 CI runs lints and tests on Linux, macOS and Windows.
 
+Two more checks are not part of `make check`, because they need a release build or a nightly
+toolchain:
+
+- **Performance budgets** (`make bench`): start-up and request overhead, and batch memory over a
+  million rows, on a release build. CI runs them on Linux for every pull request.
+- **Fuzzing** (`fuzz/run.sh <target> [seconds]`): see [fuzz/README.md](fuzz/README.md). CI fuzzes
+  every target for ten minutes each week.
+
 ## How work is organised
 
 - Work is tracked as GitHub issues under an epic. Issues are ordered with GitHub's native

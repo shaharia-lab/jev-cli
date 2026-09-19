@@ -15,6 +15,9 @@ mod env;
 mod error;
 mod evaluate;
 mod exit;
+#[cfg(any(test, fuzzing))]
+#[doc(hidden)]
+pub mod fuzz;
 mod gate;
 mod help;
 mod input;

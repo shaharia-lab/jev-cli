@@ -1,0 +1,91 @@
+# Fuzzing: every parser of user or server input (request files, validation, responses, --field
+# and --assert, batch rows, config and credentials files, MCP messages) run by cargo-fuzz for a
+# bounded time, one job per target. Every input must be handled without a panic (PRD REL-7).
+#
+# A crash fails its job and the input that caused it is uploaded as an artifact. Reproduce it with
+# `cargo +nightly fuzz run <target> <file>`, fix it, and add the input as a regression test
+# (fuzz/README.md). The corpus each run builds is cached for the next one.
+#
+# Runs weekly, on demand, and on a pull request that changes the fuzz targets. It is not one of
+# the checks a pull request must pass: a fuzzer finds bugs that already exist, not ones a change
+# brings in, and ten minutes per target is too long to wait for on every change.
+
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: How long to fuzz each target, in seconds
+        default: "600"
+  pull_request:
+    branches: [main]
+    paths:
+      - "fuzz/**"
+      - "crates/*/src/fuzz.rs"
+      - ".github/workflows/fuzz.yml"
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo-fuzz needs nightly. A dated one, so that a new nightly cannot fail a run by itself; bump
+  # it deliberately.
+  FUZZ_TOOLCHAIN: nightly-2026-09-19
+  CARGO_FUZZ_VERSION: 0.13.2
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [request, response, request_file, output, batch_rows, config, mcp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install "$FUZZ_TOOLCHAIN" --profile minimal
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fuzz -> target
+          shared-key: fuzz
+      - name: Install cargo-fuzz
+        run: cargo +"$FUZZ_TOOLCHAIN" install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+      - name: Restore the corpus of earlier runs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Fuzz
+        run: fuzz/run.sh "$TARGET" "$FUZZ_SECONDS"
+        env:
+          TARGET: ${{ matrix.target }}
+          FUZZ_SECONDS: ${{ inputs.seconds || '600' }}
+      - name: Save the corpus
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+      - name: Upload the crashing input
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore
