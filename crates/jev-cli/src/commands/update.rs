@@ -1,5 +1,7 @@
 //! `jev update`, and the automatic update around every other command.
 
+use std::time::Duration;
+
 use semver::Version;
 use serde::Serialize;
 
@@ -223,7 +225,9 @@ impl Automatic {
         {
             return;
         }
-        let marked = self.state.change(true, |state| {
+        // Never waited for: this is on the way to a command a person is waiting for, and a notice
+        // lost to another `jev` writing at that moment is shown by the next run instead.
+        let marked = self.state.change(true, Duration::ZERO, |state| {
             (!state.notice_shown).then(|| state.notice_shown = true)
         });
         if marked.is_some() {

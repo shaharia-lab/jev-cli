@@ -13,12 +13,17 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use assert_cmd::Command;
 use serde_json::Value;
 
 const EXE: &str = std::env::consts::EXE_SUFFIX;
+
+/// How long anything here waits for something that is not this test's to hurry: another test's
+/// copy of `jev`, or a background process getting its turn. Nothing waits anywhere near this long
+/// on an idle machine, so it is set far above the worst load rather than near the usual case.
+const PATIENCE: Duration = Duration::from_secs(90);
 
 /// A scratch directory, removed afterwards.
 struct Sandbox(PathBuf);
@@ -119,16 +124,18 @@ struct Run {
 
 fn run(command: &mut Command) -> Run {
     command.timeout(Duration::from_secs(120));
-    // A copy of `jev` made by one test can be briefly held open for writing by a process another
-    // test is starting at that moment, which inherits the descriptor until it execs; Linux then
-    // refuses to run the copy ("Text file busy"). That clears within milliseconds.
-    let mut attempts = 0;
+    // A copy of `jev` made by one test can be held open for writing by a process another test is
+    // starting at that moment, which inherits the descriptor until it execs; Linux then refuses to
+    // run the copy ("Text file busy"). It clears as soon as that copy and that exec are done, but
+    // on a loaded machine both take far longer than they look, so this waits with everything
+    // else's patience: what it waits for is another test, not anything this one does.
+    let deadline = Instant::now() + PATIENCE;
     let output = loop {
         match command.output() {
             Err(error)
-                if error.kind() == std::io::ErrorKind::ExecutableFileBusy && attempts < 50 =>
+                if error.kind() == std::io::ErrorKind::ExecutableFileBusy
+                    && Instant::now() < deadline =>
             {
-                attempts += 1;
                 std::thread::sleep(Duration::from_millis(20));
             }
             outcome => break outcome.unwrap(),
@@ -352,6 +359,8 @@ mod with_releases {
     #[cfg(unix)]
     use std::time::{Duration, Instant};
 
+    #[cfg(unix)]
+    use super::PATIENCE;
     use super::{EXE, Run, Sandbox, jev, jev_in, json, run};
 
     const REPOSITORY: &str = "shaharia-lab/jev-cli";
@@ -848,11 +857,11 @@ mod with_releases {
 
     /// Waits for the background check to leave `what` behind in the sandbox.
     #[cfg(unix)]
-    async fn eventually(what: &str, done: impl Fn() -> bool) {
+    async fn eventually(what: &str, done: impl AsyncFn() -> bool) {
         let started = Instant::now();
-        while !done() {
+        while !done().await {
             assert!(
-                started.elapsed() < Duration::from_secs(90),
+                started.elapsed() < PATIENCE,
                 "the background check never {what}"
             );
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -905,7 +914,7 @@ mod with_releases {
             "{notice}"
         );
         let staged = exe.parent().unwrap().join(".jev-update");
-        eventually("staged the release", || recorded(&sandbox)).await;
+        eventually("staged the release", async || recorded(&sandbox)).await;
         assert_eq!(state(&sandbox).unwrap()["last_outcome"], "staged jev 0.2.0");
         assert!(staged.join(format!("ready{EXE}")).is_file());
         assert_eq!(fs::read(&exe).unwrap(), before, "not swapped yet");
@@ -969,12 +978,14 @@ mod with_releases {
         assert!(runs.iter().all(|run| run.code == 0));
         let notices = runs.iter().filter(|run| !run.stderr.is_empty()).count();
         assert_eq!(notices, 1, "the first-run notice is shown once");
-        eventually("recorded its outcome", || recorded(&sandbox)).await;
+        eventually("recorded its outcome", async || recorded(&sandbox)).await;
         assert_eq!(
             state(&sandbox).unwrap()["last_outcome"],
             "no release is published yet"
         );
         automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+        // A count taken at one moment can only be too low, never too high, so this cannot fail by
+        // being early; that exactly one of a crowd claims the day is `StateFile`'s own test.
         assert_eq!(checks(&server).await, 1);
     }
 
@@ -1008,9 +1019,12 @@ mod with_releases {
         let sandbox = Sandbox::new("slow");
         let exe = sandbox.install_with_script();
         let server = MockServer::start().await;
+        // Held back far longer than the check's own 30 s timeout, so it is still in flight when
+        // the command returns however slow the machine is, and a command that waited for it could
+        // not finish for at least those 30 s.
         Mock::given(method("GET"))
             .and(path(format!("/repos/{REPOSITORY}/releases/latest")))
-            .respond_with(ResponseTemplate::new(404).set_delay(Duration::from_secs(15)))
+            .respond_with(ResponseTemplate::new(404).set_delay(Duration::from_secs(600)))
             .mount(&server)
             .await;
         let key = Signer::new().public();
@@ -1020,15 +1034,14 @@ mod with_releases {
         let took = started.elapsed();
 
         assert_eq!(run.code, 0);
-        assert!(took < Duration::from_secs(8), "took {took:?}");
-        let started = Instant::now();
-        while checks(&server).await == 0 {
-            assert!(
-                started.elapsed() < Duration::from_secs(90),
-                "no check started"
-            );
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+        // The check cannot have finished, whenever the command happened to be given the processor.
+        assert!(!recorded(&sandbox), "the command waited for the check");
+        // And it did not wait for it under any load: a command takes milliseconds, not seconds.
+        assert!(took < Duration::from_secs(20), "took {took:?}");
+        eventually("asked for the latest release", async || {
+            checks(&server).await > 0
+        })
+        .await;
     }
 
     // On Windows a check is only started at a terminal; see `a_piped_run_on_windows_starts_no_check`.
@@ -1044,7 +1057,7 @@ mod with_releases {
         publish(&server, "0.2.0", b"not a program", &signer, true).await;
 
         automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
-        eventually("staged the release", || recorded(&sandbox)).await;
+        eventually("staged the release", async || recorded(&sandbox)).await;
         let next = automatic(&sandbox, &exe, "0.1.0", &server, &key, |command| {
             command.arg("-v");
         })

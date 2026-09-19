@@ -12,12 +12,13 @@
 //! found are kept in `auto-update.json` in the configuration directory. A check is claimed by
 //! writing its time there under a lock that is never waited for, so of several `jev` processes
 //! finishing together exactly one starts a check. A check that fails is not retried until the
-//! next window.
+//! next window. The background check itself has nothing left to do, so it is the one writer that
+//! waits for the lock ([`RECORD_PATIENCE`]) rather than losing what it found.
 
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,15 @@ const STATE_FILE: &str = "auto-update.json";
 
 /// Held while `auto-update.json` is changed.
 const LOCK_FILE: &str = "auto-update.lock";
+
+/// How long [`StateFile::record`] waits for that lock. A command never waits for it, but the
+/// background check is a process of its own with nothing left to do, and a lost outcome is one
+/// `jev -v` can never show again.
+const RECORD_PATIENCE: Duration = Duration::from_secs(10);
+
+/// How long a waiting writer pauses between two attempts at the lock, which is only ever held for
+/// the length of one small write.
+const LOCK_POLL: Duration = Duration::from_millis(20);
 
 /// What automatic updates remember between runs.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,13 +88,15 @@ impl StateFile {
 
     /// Changes the state while holding its lock. `change` returns `None` to write nothing.
     ///
-    /// Nothing waits here: when another `jev` holds the lock, or the directory cannot be
-    /// written, the result is `None` and nothing changes. The directory is created only when
-    /// `create` is set, so that a background check finishing after its directory was removed
+    /// A caller waits `patience` for the lock, and [`Duration::ZERO`] is a caller that does not
+    /// wait at all: when another `jev` holds the lock for longer than that, or the directory
+    /// cannot be written, the result is `None` and nothing changes. The directory is created only
+    /// when `create` is set, so that a background check finishing after its directory was removed
     /// does not bring it back.
     pub(crate) fn change<T>(
         &self,
         create: bool,
+        patience: Duration,
         change: impl FnOnce(&mut State) -> Option<T>,
     ) -> Option<T> {
         if create {
@@ -96,7 +108,16 @@ impl StateFile {
             .write(true)
             .open(self.dir.join(LOCK_FILE))
             .ok()?;
-        lock.try_lock().ok()?;
+        let deadline = Instant::now() + patience;
+        loop {
+            match lock.try_lock() {
+                Ok(()) => break,
+                Err(fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    std::thread::sleep(LOCK_POLL);
+                }
+                Err(_) => return None,
+            }
+        }
         let mut state = self.read();
         let outcome = change(&mut state)?;
         let text = serde_json::to_vec(&state).ok()?;
@@ -118,7 +139,7 @@ impl StateFile {
     /// Claims the check that is due at `now`, if one is. Only one of several `jev` processes
     /// asking at once gets it.
     pub(crate) fn claim(&self, now: u64) -> bool {
-        self.change(true, |state| {
+        self.change(true, Duration::ZERO, |state| {
             state.due(now).then(|| {
                 state.last_check = Some(now);
             })
@@ -126,9 +147,9 @@ impl StateFile {
         .is_some()
     }
 
-    /// Records the outcome of a check.
+    /// Records the outcome of a check, waiting [`RECORD_PATIENCE`] for the lock.
     pub(crate) fn record(&self, outcome: String) {
-        self.change(false, |state| {
+        self.change(false, RECORD_PATIENCE, |state| {
             state.last_outcome = Some(outcome);
             Some(())
         });
@@ -273,6 +294,37 @@ mod tests {
         let state = file.read();
         assert_eq!(state.last_outcome.as_deref(), Some("up to date"));
         assert!(!state.notice_shown);
+    }
+
+    #[test]
+    fn an_outcome_is_recorded_even_when_another_jev_holds_the_lock_for_a_moment() {
+        let dir = scratch().join("config");
+        let file = StateFile::new(dir.clone());
+        assert!(
+            file.claim(1_800_000_000),
+            "makes the directory and the lock"
+        );
+        let held = fs::OpenOptions::new()
+            .write(true)
+            .open(dir.join(super::LOCK_FILE))
+            .unwrap();
+        held.lock().unwrap();
+
+        let recorder = {
+            let file = file.clone();
+            std::thread::spawn(move || file.record("staged jev 9.9.9".to_owned()))
+        };
+        // Held long enough that the record really does find the lock taken, and a hundredth of
+        // the patience it waits for, so that a loaded machine cannot make this the other case.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(held);
+        recorder.join().unwrap();
+
+        assert_eq!(
+            file.read().last_outcome.as_deref(),
+            Some("staged jev 9.9.9"),
+            "a check that finds the lock taken waits for it"
+        );
     }
 
     #[test]
