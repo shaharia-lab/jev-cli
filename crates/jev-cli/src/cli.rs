@@ -44,16 +44,15 @@ pub(crate) struct Cli {
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Global options")]
 pub(crate) struct GlobalArgs {
-    /// Named profile to use (its API key, base URL and defaults)
-    #[arg(long, global = true, env = "JEV_PROFILE", value_name = "NAME")]
+    /// Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+    #[arg(long, global = true, value_name = "NAME")]
     pub(crate) profile: Option<String>,
 
-    /// Output format [default: table on a terminal, json when piped]
+    /// Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
     #[arg(
         short = 'o',
         long,
         global = true,
-        env = "JEV_OUTPUT",
         value_enum,
         ignore_case = true,
         value_name = "FORMAT"
@@ -78,7 +77,7 @@ pub(crate) struct GlobalArgs {
     pub(crate) base_url: Option<String>,
 
     /// Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
-    #[arg(long, global = true, value_name = "DURATION", value_parser = parse_duration)]
+    #[arg(long, global = true, value_name = "DURATION", value_parser = crate::duration::parse)]
     pub(crate) timeout: Option<Duration>,
 
     /// Retries after the first attempt; 0 disables retrying [default: 2]
@@ -104,30 +103,6 @@ pub(crate) struct GlobalArgs {
     /// Log to stderr; repeat for more (-v requests and retries, -vv everything)
     #[arg(short, long, global = true, action = ArgAction::Count)]
     pub(crate) verbose: u8,
-}
-
-/// Parses a duration: a bare number is seconds, or a number with `ms`, `s` or `m`.
-fn parse_duration(text: &str) -> Result<Duration, String> {
-    let text = text.trim();
-    let (number, scale) = if let Some(number) = text.strip_suffix("ms") {
-        (number, 0.001)
-    } else if let Some(number) = text.strip_suffix('s') {
-        (number, 1.0)
-    } else if let Some(number) = text.strip_suffix('m') {
-        (number, 60.0)
-    } else {
-        (text, 1.0)
-    };
-    let seconds = number
-        .trim()
-        .parse::<f64>()
-        .map_err(|_| format!("`{text}` is not a duration such as 30, 30s, 500ms or 2m"))?;
-    let duration = Duration::try_from_secs_f64(seconds * scale)
-        .map_err(|_| format!("`{text}` is out of range"))?;
-    if duration.is_zero() {
-        return Err("the duration must be greater than zero".to_owned());
-    }
-    Ok(duration)
 }
 
 /// Arguments of a command whose behaviour has not been written yet. Everything is accepted so
@@ -209,28 +184,48 @@ pub(crate) enum AuthCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ConfigCommand {
-    /// Print one setting
-    Get(Pending),
-    /// Change one setting
-    Set(Pending),
-    /// Remove one setting, restoring its default
-    Unset(Pending),
-    /// Print every setting and where its value comes from
-    List(Pending),
+    /// Print the effective value of one setting, and where it comes from
+    Get {
+        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or `warn_unpinned`
+        key: String,
+    },
+    /// Store a setting in the selected profile
+    Set {
+        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or `warn_unpinned`
+        key: String,
+        /// The new value, e.g. `jev-1.13.0`, `45s`, `json` or `false`
+        value: String,
+    },
+    /// Remove a setting from the selected profile, restoring its default
+    Unset {
+        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or `warn_unpinned`
+        key: String,
+    },
+    /// Print every effective setting and where its value comes from (flag, env, profile or default)
+    List,
     /// Print the path of the configuration file
-    Path(Pending),
+    Path,
 }
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ProfileCommand {
-    /// List profiles
-    List(Pending),
-    /// Make a profile the default
-    Use(Pending),
-    /// Create a profile
-    Create(Pending),
-    /// Delete a profile and its stored key
-    Delete(Pending),
+    /// List the profiles, marking the active one
+    List,
+    /// Make a profile the one used when neither --profile nor `JEV_PROFILE` selects another
+    Use {
+        /// Name of an existing profile
+        name: String,
+    },
+    /// Create a profile; --base-url, --model, --output, --timeout and --max-retries become its settings
+    Create {
+        /// Name for the new profile: letters, digits, `-` and `_`
+        name: String,
+    },
+    /// Delete a profile and its settings
+    Delete {
+        /// Name of the profile to delete
+        name: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -255,11 +250,9 @@ pub(crate) enum McpCommand {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use clap::{CommandFactory, Parser};
 
-    use super::{Cli, Command, parse_duration};
+    use super::{Cli, Command};
     use crate::output::Format;
 
     #[test]
@@ -361,17 +354,6 @@ mod tests {
             panic!("expected noul")
         };
         assert_eq!(pending.rest.len(), 4);
-    }
-
-    #[test]
-    fn durations_take_seconds_by_default_and_a_few_units() {
-        assert_eq!(parse_duration("30"), Ok(Duration::from_secs(30)));
-        assert_eq!(parse_duration("1.5s"), Ok(Duration::from_millis(1500)));
-        assert_eq!(parse_duration("500ms"), Ok(Duration::from_millis(500)));
-        assert_eq!(parse_duration(" 2m "), Ok(Duration::from_secs(120)));
-        for wrong in ["", "soon", "-1", "0", "1h", "NaN", "1e99"] {
-            assert!(parse_duration(wrong).is_err(), "{wrong:?}");
-        }
     }
 
     #[test]
