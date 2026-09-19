@@ -315,7 +315,7 @@ archive layout, the full asset list and the signatures are checked by
 
 The formulas come from `scripts/release/homebrew-formula.sh` (checksums from the verified
 `SHA256SUMS`) and reach the tap through `homebrew-publish.sh` (contents API, idempotent, never moves
-`jev.rb` back to an older release). `homebrew-check` runs on every release run, dry runs included:
+`jev.rb` back to an older release). `homebrew-check` runs on every release run of a stable version, dry runs included (a pre-release skips it):
 `brew style`, `brew audit --strict`, and `brew install` + `brew test` from that run's archives. The
 formula keeps the binary in the keg (`Cellar/jev/<version>/bin/jev`, beside Homebrew's
 `INSTALL_RECEIPT.json`), which is how `jev update` recognises a managed install.

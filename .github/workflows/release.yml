@@ -30,8 +30,9 @@
 #
 # Later stages attach after `stable`, so they never run for a pre-release and never point at an
 # asset that did not pass verification. `homebrew` writes the formulas to shaharia-lab/homebrew-tap
-# (crates.io will follow). `homebrew-check` runs on every run, dry runs included: Homebrew itself
-# lints, installs and tests the formula against this run's archives before any release depends on it.
+# (crates.io will follow). `homebrew-check` runs on every run of a stable version, dry runs included:
+# Homebrew itself lints, installs and tests the formula against this run's archives before any
+# release depends on it. A pre-release has no formula to check, so it skips the job.
 
 name: Release
 
@@ -340,13 +341,15 @@ jobs:
         env:
           TAG: ${{ needs.plan.outputs.tag }}
 
-  # The formula as Homebrew sees it, on every run: `brew style` and `brew audit --strict` on the
+  # The formula as Homebrew sees it, on every run of a stable version: `brew style` and `brew audit --strict` on the
   # formulas a release would publish, then both installed from this run's archives (file:// URLs,
   # so no release has to exist), `brew test`, and the layout `jev update` relies on to recognise a
   # managed install: the binary in the keg `Cellar/jev/<version>/bin`, beside INSTALL_RECEIPT.json.
   homebrew-check:
     name: Homebrew formula (${{ matrix.os }})
     needs: [plan, package]
+    # The main formula refuses a pre-release version, and `homebrew` never runs for one.
+    if: needs.plan.outputs.prerelease == 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
