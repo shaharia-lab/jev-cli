@@ -320,13 +320,18 @@ mod tests {
         );
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn the_locale_decides_whether_unicode_is_safe() {
         assert!(locale_is_utf8(Some("en_GB.UTF-8")));
         assert!(locale_is_utf8(Some("C.utf8")));
-        assert!(!locale_is_utf8(Some("C")));
-        assert!(!locale_is_utf8(Some("en_US.ISO-8859-1")));
-        assert!(!locale_is_utf8(None));
+
+        // Windows terminals show Unicode whatever these variables say; elsewhere they decide.
+        let without_a_utf8_locale = cfg!(windows);
+        assert_eq!(locale_is_utf8(Some("C")), without_a_utf8_locale);
+        assert_eq!(
+            locale_is_utf8(Some("en_US.ISO-8859-1")),
+            without_a_utf8_locale
+        );
+        assert_eq!(locale_is_utf8(None), without_a_utf8_locale);
     }
 }
