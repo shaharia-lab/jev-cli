@@ -29,6 +29,7 @@ mod notice;
 mod output;
 mod schemas;
 mod suggest;
+mod update;
 
 use std::io::{self, IsTerminal, Write};
 use std::panic::{self, AssertUnwindSafe};

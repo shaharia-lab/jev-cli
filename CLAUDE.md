@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`, `jev batch run`,
-`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema`, `jev completion` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema`, `jev completion`, `jev update` and `jev version` work; the automatic background update is still to come. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -221,6 +221,20 @@ It teaches a workflow and defers the contract to `jev spec`, `--help` and `jev s
 its exit-code table or MCP tool list differs from the binary's, or when its request file does not
 validate: renaming any of these means editing the skill in the same PR. Its question-writing
 advice is our own words; never paste TypeSafe's documentation into it.
+
+The updater (`update/`) only ever reads GitHub Releases of this repository, through `UpdateSource`
+(`GitHubReleases`, or a fake in tests). `stage` downloads into memory with size caps and verifies
+the minisign signatures of `SHA256SUMS` and the archive against the two keys in `keys/`
+(`include_str!`, either may sign) **and** that each trusted comment is exactly
+`file:<name>\tversion:<version>`, then the archive's SHA-256; only then is the binary written to
+`.jev-update/` beside the executable. `Installation::apply` keeps the old binary as
+`.jev-update/previous`, renames the new one in (on Windows the running `.exe` is renamed aside
+first), runs its self-test (`jev version -o json`) and puts the old one back if it fails. Automatic
+paths never downgrade (`is_upgrade`, `MINIMUM_VERSION`); only `--version` may. The install method
+comes from the path (`Cellar` is Homebrew, `<root>/bin` with `.crates.toml` is cargo) or the install
+script's receipt, `.jev-update/receipt.json`; managed installs get their package manager's command.
+Tests serve signed fake releases from `wiremock` through the test hooks `JEV_TEST_UPDATE_URL`,
+`JEV_TEST_UPDATE_KEY` and `JEV_TEST_VERSION`, which release builds do not contain.
 
 Commands depend on traits (`Transport`, `CredentialStore`, `Clock`, `UpdateSource`) so they are testable
 with fakes. Errors use `thiserror` in the library; the binary has one error → exit-code mapping.

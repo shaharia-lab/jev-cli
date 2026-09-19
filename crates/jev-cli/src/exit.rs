@@ -27,7 +27,6 @@ pub(crate) enum Exit {
     /// Evaluated successfully, and the answer is inside the abstain band.
     Abstain = 11,
     /// `jev update --check` found a newer version.
-    #[allow(dead_code)] // Reserved by the contract; first used by `jev update`.
     UpdateAvailable = 20,
     /// Interrupted by SIGINT or SIGTERM.
     Interrupted = 130,

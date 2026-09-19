@@ -114,8 +114,13 @@ gh attestation verify "$archive" --repo shaharia-lab/jev-cli
   downloaded every published asset and checked it with the standard minisign CLI against the
   committed primary key, checked every checksum, and verified the build provenance attestations.
   If any check fails, nothing is published and no later stage (crates.io, Homebrew) runs.
-- The updater, which is still being built, compiles in both public keys, primary and next, and
-  accepts a release signed by either of them. Nothing else can change which keys it trusts.
+- `jev update` compiles in both public keys, primary and next, and accepts a release signed by
+  either of them. Nothing else can change which keys it trusts. Before anything is written it
+  checks the signature of `SHA256SUMS` and of the archive, that each signature's trusted comment
+  names exactly that file and that version, and the archive's SHA-256. It downloads only from
+  GitHub Releases of this repository, over HTTPS, keeps the previous binary for
+  `jev update --rollback`, and puts it back by itself if the new binary fails its self-test.
+  It never moves to an older version unless asked to with `jev update --version`.
 
 ### Key rotation
 

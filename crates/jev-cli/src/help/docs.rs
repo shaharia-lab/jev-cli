@@ -835,6 +835,66 @@ it exits 1.",
         ],
     },
     Doc {
+        path: "update",
+        when: "Use `jev update` to move to the latest release now, `jev update --check` in a script \
+to learn whether one exists (exit 20) without changing anything, `jev update --rollback` to go \
+back to the binary the last update replaced, and `jev update --version <x.y.z>` to install one \
+particular release, which is the only way to move to an older one. When Homebrew or cargo \
+installed jev, it prints their command instead and changes nothing. Use `jev version` to see the \
+running version, how it was installed and whether it updates itself.",
+        input: "Nothing but the flags; no API key and no configuration. It contacts only GitHub \
+Releases of shaharia-lab/jev-cli, and --rollback and package-manager installs contact nothing. \
+Every download is checked against the release keys compiled into jev (a minisign signature of \
+the archive and of SHA256SUMS, each naming its file and version, and the archive's SHA-256) \
+before anything is written. The new binary is swapped in atomically next to the old one, which is \
+kept for --rollback, and must pass a self-test (`jev version`) or the old one is put back.",
+        output: "One object: `status` (`up_to_date`, `update_available`, `updated`, \
+`rolled_back` or `managed`), `current_version` (the version that was running), `version` (the \
+release concerned: the latest, the one installed or the one restored; `null` when nothing is \
+published yet), `install_method` (`self_managed`, `homebrew`, `cargo` or `unknown`), `path` (the \
+binary), `release_url` (its changelog) and `command` (what to run next, such as the package \
+manager's command). A download that fails verification, or a new binary that fails its self-test \
+and is rolled back, is exit 1 with the code `update_verification_failed` or \
+`update_self_test_failed`; the installed binary is unchanged in both cases.",
+        exit_codes: &[
+            code_as(
+                Exit::Success,
+                "done, or nothing to do; --check: this is the latest version",
+            ),
+            code_as(
+                Exit::Usage,
+                "bad flag, no such release, nothing to roll back, or jev's directory is read-only",
+            ),
+            code_as(Exit::RateLimited, "GitHub is limiting requests; try later"),
+            code_as(
+                Exit::Network,
+                "GitHub could not be reached, or a download was cut short",
+            ),
+            code_as(
+                Exit::UpdateAvailable,
+                "--check: a newer version is available",
+            ),
+        ],
+        examples: &[
+            Example {
+                description: "Update to the latest release",
+                command: "jev update",
+            },
+            Example {
+                description: "In a script: is there a newer version? (exit 20 when there is)",
+                command: "jev update --check -o json",
+            },
+            Example {
+                description: "Undo the last update",
+                command: "jev update --rollback",
+            },
+            Example {
+                description: "Install one particular release, older or newer",
+                command: "jev update --version 0.1.0",
+            },
+        ],
+    },
+    Doc {
         path: "completion",
         when: "Use `jev completion` once, when installing jev, to make the shell complete its \
 commands, flags and flag values on Tab. The script is generated from the same definitions as the \
@@ -873,7 +933,9 @@ examples).",
         when: "Use `jev version` to report the jev you run, e.g. in a bug report. Use \
 `jev --version` for the bare version, and `jev models list` for the model versions the API offers.",
         input: "Nothing.",
-        output: "`version`, `commit`, `build_date`, `target` and `client_version`. \
+        output: "`version`, `commit`, `build_date`, `target`, `client_version`, \
+`install_method` (`self_managed` for the install script, `homebrew`, `cargo` or `unknown`), \
+`update_channel` and `auto_update` (`enabled`, and the `reason` when it is off). \
 `--field version` prints just the version.",
         exit_codes: &[code(Exit::Success)],
         examples: &[

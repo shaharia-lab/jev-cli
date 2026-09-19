@@ -88,7 +88,6 @@ impl Ui {
     }
 
     /// Whether Unicode characters are used.
-    #[cfg(test)]
     pub(crate) const fn has_unicode(self) -> bool {
         self.unicode
     }

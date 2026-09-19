@@ -34,23 +34,33 @@ clap.workspace = true
 clap_complete.workspace = true
 clap_mangen.workspace = true
 csv.workspace = true
+flate2.workspace = true
 indexmap.workspace = true
 jev-client.workspace = true
+minisign-verify.workspace = true
+reqwest.workspace = true
+ring.workspace = true
 rpassword.workspace = true
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
 schemars.workspace = true
+semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-saphyr.workspace = true
+tar.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "signal", "sync", "time"] }
 toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 unicode-width.workspace = true
 zeroize.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
 jsonschema.workspace = true
+minisign.workspace = true
 predicates.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 wiremock.workspace = true
