@@ -9,6 +9,7 @@ mod mcp;
 mod models;
 mod profile;
 mod shortcut;
+mod spec;
 mod validate;
 mod version;
 
@@ -136,6 +137,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Choice(arguments) => return shortcut::choice(arguments, context),
         Command::Score(arguments) => return shortcut::score(arguments, context),
         Command::Version => version::run(context),
+        Command::Spec => spec::run(context),
         Command::Auth(command) => auth::run(command, context),
         Command::Config(command) => config::run(command, context),
         Command::Profile(command) => profile::run(command, context),
@@ -149,7 +151,6 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Schema(SchemaCommand::BatchRecord(_)) => pending("schema batch-record", 16),
         Command::Schema(SchemaCommand::Output(_)) => pending("schema output", 16),
         Command::Schema(SchemaCommand::Error(_)) => pending("schema error", 16),
-        Command::Spec(_) => pending("spec", 15),
         Command::Mcp(McpCommand::Serve(arguments)) => mcp::serve(arguments, context),
         Command::Update(_) => pending("update", 25),
         Command::Completion(_) => pending("completion", 17),

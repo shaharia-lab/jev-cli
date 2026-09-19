@@ -1,10 +1,13 @@
-//! The command tree. `clap` is the single source for parsing, `--help` and, later, `jev spec`.
+//! The command tree. `clap` is the single source for parsing, `--help` and `jev spec`.
+//!
+//! Each command's one-line purpose and its arguments are here; the rest of its help (when to use
+//! it, input, output, exit codes, examples) is its `Doc` in `help/docs.rs`, attached by [`command`].
 
 use std::ffi::OsString;
 use std::time::Duration;
 
 use clap::builder::FalseyValueParser;
-use clap::{ArgAction, Args, Parser, Subcommand};
+use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand};
 
 use crate::gate::AbstainBand;
 use crate::input::{InputFormat, StateFormat};
@@ -24,8 +27,9 @@ model and returns calibrated probabilities, never generated text.\n\n\
 Three question types: `noul` (yes/no, the probability of yes), `choice` (one of up to 255 options) and \
 `score` (a position on a rubric of 2 to 10 levels).\n\n\
 stdout carries data only: readable text on a terminal, JSON when piped. Everything else goes to stderr. \
-Exit codes are a stable contract: 0 ok, 2 usage, 3 auth, 4 API rejected, 5 rate limited, 6 network, \
-10 gate condition false.\n\n\
+Exit codes are a stable contract (listed under Exit codes).\n\n\
+Agents and tooling: `jev spec` prints every command, flag, exit code and example as JSON, and \
+`jev <command> --help` says when to use each command.\n\n\
 This is an unofficial community tool, not affiliated with TypeSafe AI.",
     arg_required_else_help = true,
     subcommand_required = true,
@@ -38,6 +42,11 @@ pub(crate) struct Cli {
 
     #[command(subcommand)]
     pub(crate) command: Command,
+}
+
+/// The command tree with its help: what `jev` parses, and what `--help` and `jev spec` show.
+pub(crate) fn command() -> clap::Command {
+    crate::help::apply(Cli::command())
 }
 
 /// Flags accepted by every command.
@@ -197,25 +206,8 @@ pub(crate) struct QuestionArgs {
     pub(crate) instructions_file: Option<String>,
 }
 
-const NOUL_EXAMPLES: &str = "\
-Examples:
-  # Branch in a shell script: exit 0 when P(yes) >= 0.7, exit 10 when it is lower
-  if git log -1 --pretty=%B | jev noul \"Does this commit describe a user-facing change?\" --fail-under 0.7; then
-    echo \"needs a changelog entry\"
-  fi
-
-  # Just the probability
-  jev noul \"Is the customer angry?\" --state-file ticket.txt --field noul
-
-  # Route uncertain answers to a person: exit 11 when the model cannot tell
-  jev noul \"Is this spam?\" --state \"$MESSAGE\" --fail-under 0.6 --abstain-band 0.4,0.6
-
-Exit codes: 0 condition holds (or no gate) · 10 condition false · 11 inside the abstain band ·
-2 usage · 3 auth · 4 API rejected · 5 rate limited · 6 network. An error is never exit 10.";
-
 /// Arguments of `jev noul`.
 #[derive(Debug, Args)]
-#[command(after_help = NOUL_EXAMPLES)]
 pub(crate) struct NoulArgs {
     #[command(flatten)]
     pub(crate) question: QuestionArgs,
@@ -251,25 +243,8 @@ pub(crate) struct NoulArgs {
     pub(crate) send: SendArgs,
 }
 
-const CHOICE_EXAMPLES: &str = "\
-Examples:
-  # Pick a team, always offering a way out, and print only the winner
-  jev choice \"Which team should handle this?\" --state-file ticket.txt \\
-    --option billing=\"Payments, invoices, refunds\" --option technical=\"Bugs, outages\" --option other \\
-    --field choice
-
-  # Branch in a shell script: exit 0 when either option wins with enough confidence, 10 otherwise
-  if jev choice \"Which team?\" --state-file ticket.txt --option billing --option sales --option other \\
-       --expect billing --expect sales --min-confidence 0.8; then
-    echo \"route to revenue\"
-  fi
-
-Exit codes: 0 condition holds (or no gate) · 10 condition false · 2 usage · 3 auth ·
-4 API rejected · 5 rate limited · 6 network. An error is never exit 10.";
-
 /// Arguments of `jev choice`.
 #[derive(Debug, Args)]
-#[command(after_help = CHOICE_EXAMPLES)]
 pub(crate) struct ChoiceArgs {
     #[command(flatten)]
     pub(crate) question: QuestionArgs,
@@ -305,24 +280,8 @@ pub(crate) struct ChoiceArgs {
     pub(crate) send: SendArgs,
 }
 
-const SCORE_EXAMPLES: &str = "\
-Examples:
-  # Rate on a rubric; levels are numbered from 0 in the order given
-  jev score \"How frustrated is the customer?\" --state-file ticket.txt \\
-    --level Calm --level Frustrated --level \"Very angry\"
-
-  # Branch in a shell script: exit 10 when the score is above 1.5
-  if ! jev score \"How risky is this change?\" --state-file diff.txt \\
-       --level Safe --level Risky --level Dangerous --fail-over 1.5 --field score; then
-    echo \"needs a second reviewer\"
-  fi
-
-Exit codes: 0 condition holds (or no gate) · 10 condition false · 2 usage · 3 auth ·
-4 API rejected · 5 rate limited · 6 network. An error is never exit 10.";
-
 /// Arguments of `jev score`.
 #[derive(Debug, Args)]
-#[command(after_help = SCORE_EXAMPLES)]
 pub(crate) struct ScoreArgs {
     #[command(flatten)]
     pub(crate) question: QuestionArgs,
@@ -399,22 +358,8 @@ pub(crate) struct ValidateArgs {
     pub(crate) skip_size_check: bool,
 }
 
-const LOGIN_EXAMPLES: &str = "\
-The key is never accepted as a flag value, so that it cannot end up in shell history or a process list.
-
-Examples:
-  # Interactive: type or paste the key at a prompt that does not echo
-  jev auth login
-
-  # Automation: read the key from stdin
-  printf %s \"$TYPESAFE_KEY\" | jev auth login --with-token --profile ci
-
-jev looks for a key in TYPESAFE_API_KEY first, then in the credentials file this command writes\n\
-(next to config.toml, readable only by you). Set the variable, or log in once: that is all there is.";
-
 /// Arguments of `jev auth login`.
 #[derive(Debug, Args)]
-#[command(after_help = LOGIN_EXAMPLES)]
 pub(crate) struct LoginArgs {
     /// Read the key from stdin instead of prompting (for scripts and agents)
     #[arg(long)]
@@ -480,7 +425,7 @@ pub(crate) enum Command {
     #[command(subcommand)]
     Schema(SchemaCommand),
     /// Dump the entire command tree as JSON, for agents and tooling
-    Spec(Pending),
+    Spec,
     /// Run as a Model Context Protocol server
     #[command(subcommand)]
     Mcp(McpCommand),
@@ -505,10 +450,6 @@ pub(crate) enum BatchCommand {
 #[derive(Debug, Subcommand)]
 pub(crate) enum ModelsCommand {
     /// List model names and aliases, with their description and release date
-    ///
-    /// A versioned id such as `jev-1.13.0` is accepted by --model even when it is not listed here.
-    /// Aliases such as `jev-latest` move to newer versions without notice, so pin a versioned id
-    /// once thresholds have been tuned against it.
     List,
 }
 
@@ -582,31 +523,8 @@ pub(crate) enum SchemaCommand {
     Error(Pending),
 }
 
-const MCP_SERVE_EXAMPLES: &str = "\
-Tools: evaluate (a state and many questions), noul, choice, score (one question each),
-validate (offline, needs no key) and list_models. A result is the same JSON envelope as
-`jev eval -o json`, plus `session` (calls made and estimated spend so far); a failure is a tool
-error carrying the same JSON error object `jev` prints on stderr.
-
-Examples:
-  # Register with Claude Code
-  claude mcp add jev -- jev mcp serve
-
-  # Refuse any call estimated above a tenth of a cent (pin a versioned model so it has a price)
-  jev mcp serve --model jev-1.13.0 --max-cost-usd-per-call 0.001
-
-  # Use a profile's key and settings; logs go to stderr, never stdout
-  jev mcp serve --profile work -v
-
-  # Check it from a shell: list the tools as one JSON-RPC line on stdout
-  echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | jev mcp serve
-
-Exit codes: 0 the client closed stdin · 1 stdout could not be written · 2 usage or a broken
-configuration. API failures never end the server: each one is a tool error with its own code.";
-
 /// Arguments of `jev mcp serve`.
 #[derive(Debug, Args)]
-#[command(after_help = MCP_SERVE_EXAMPLES)]
 pub(crate) struct McpServeArgs {
     /// Refuse, before sending, any call whose estimated cost in US dollars is above this
     #[arg(long, value_name = "USD", value_parser = parse_usd, help_heading = "Guardrails")]
@@ -625,16 +543,6 @@ fn parse_usd(text: &str) -> Result<f64, String> {
 #[derive(Debug, Subcommand)]
 pub(crate) enum McpCommand {
     /// Serve jev's tools to an MCP client (Claude Code, Claude Desktop, Cursor, VS Code) over stdio
-    ///
-    /// Speaks the Model Context Protocol on stdin and stdout, one JSON-RPC message per line, until
-    /// the client closes stdin. stdout carries protocol messages only; logs, notices and warnings go
-    /// to stderr. Use this when an AI agent should call Jev as a tool; from a shell script or CI,
-    /// call `jev eval`, `jev noul`, `jev choice` or `jev score` directly instead.
-    ///
-    /// The API key, base URL and model come from the usual places (--profile, the environment, the
-    /// profile), read once at start-up. The key is never part of a tool's input, result or error.
-    /// Every call is validated offline before anything is sent, and an invalid request is a tool
-    /// error listing every finding.
     Serve(McpServeArgs),
 }
 
@@ -736,10 +644,10 @@ mod tests {
 
     #[test]
     fn a_pending_command_accepts_whatever_follows_it() {
-        let cli = Cli::try_parse_from(["jev", "spec", "--format", "json", "-x"]).unwrap();
+        let cli = Cli::try_parse_from(["jev", "update", "--format", "json", "-x"]).unwrap();
 
-        let Command::Spec(pending) = cli.command else {
-            panic!("expected spec")
+        let Command::Update(pending) = cli.command else {
+            panic!("expected update")
         };
         assert_eq!(pending.rest.len(), 3);
     }

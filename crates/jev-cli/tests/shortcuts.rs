@@ -640,12 +640,8 @@ async fn help_for_each_shortcut_shows_a_shell_if_and_the_exit_codes() {
             run.stdout
         );
         assert!(
-            run.stdout.contains("10 condition false"),
-            "{shortcut}:\n{}",
-            run.stdout
-        );
-        assert!(
-            run.stdout.contains("An error is never exit 10"),
+            run.stdout.contains("\n  10   evaluated, and ")
+                && run.stdout.contains("(never an error)"),
             "{shortcut}:\n{}",
             run.stdout
         );

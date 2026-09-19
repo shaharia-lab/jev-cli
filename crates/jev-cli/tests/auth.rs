@@ -506,10 +506,8 @@ async fn the_key_is_never_a_flag_value() {
     }
     let mut help = sandbox.jev(None);
     help.args(["auth", "login", "--help"]);
-    assert!(
-        run(help)
-            .await
-            .stdout
-            .contains("never accepted as a flag value")
-    );
+    // Joined up again: the help wraps to the terminal's width.
+    let help = run(help).await.stdout;
+    let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(help.contains("never accepted as a flag value"), "{help}");
 }

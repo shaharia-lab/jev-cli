@@ -1,0 +1,153 @@
+Rate the state on an ordered rubric of 2 to 10 levels
+
+When to use:
+Use `jev score` to place the state on one ordered scale: how much, how severe, how good? Each level
+is judged on its own, so describe a situation per level rather than "worse than the previous one",
+and rate one dimension per score. Use `jev noul` for yes or no, and `jev choice` for options with no
+order.
+
+Input:
+QUESTION in plain words, or --instructions-file. The levels are repeated --level, lowest first (2 to
+10), or --criteria-file with an ordered list; they are numbered from 0. The state is --state or
+--state-file (`-` for stdin), else a pipe.
+
+Output:
+`score` (the expected level, from 0 to the highest level), `confidence`, `probabilities` and
+`legend` per level, then `model`, `requested_model`, `usage`, `cost_usd` (an estimate),
+`request_id`, `latency_ms`, and `gate` when a gating flag was used. `--field score` prints just the
+number.
+
+Usage: jev score [OPTIONS] [QUESTION]
+
+Arguments:
+  [QUESTION]
+          The question, in plain words
+
+Options:
+      --instructions-file <FILE>
+          Structured instructions (JSON or YAML: `what`, `not_for`, `examples`, ...) instead of
+          QUESTION
+
+      --level <DESCRIPTION>
+          A level of the rubric, lowest first; repeat for each (2 to 10)
+
+      --criteria-file <FILE>
+          Structured criteria (JSON or YAML): an ordered list of level descriptions
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Gating:
+      --fail-under <SCORE>
+          Exit 10 when the score is below this
+
+      --fail-over <SCORE>
+          Exit 10 when the score is above this
+
+      --min-confidence <C>
+          Exit 10 when the confidence is below this
+
+State:
+      --state <TEXT>
+          The state to evaluate, as text
+
+      --state-file <PATH>
+          Read the state from a file, or from stdin with `-`
+
+      --state-format <FORMAT>
+          How to read the state: `json` sends an object or array, `text` one string
+
+          Possible values:
+          - auto: JSON for a `.json` file, text for everything else
+          - text: Send the content as one string
+          - json: Parse the content as JSON and send the object or array
+
+          [default: auto]
+
+Sending:
+      --dry-run
+          Validate, print the exact request body and a size estimate, and send nothing
+
+      --strict
+          Treat validation warnings as errors
+
+      --skip-size-check
+          Skip the offline estimate of the request's size
+
+      --warn-unpinned
+          Remind me on stderr to pin a versioned model id when the request used an alias
+
+      --raw
+          Print the API response body exactly as received, ignoring --output
+
+Global options:
+      --profile <NAME>
+          Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+
+  -o, --output <FORMAT>
+          Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
+
+          Possible values:
+          - table: Readable text for a person at a terminal
+          - json:  One pretty-printed JSON document. The default when stdout is not a terminal
+          - yaml:  One YAML document
+          - jsonl: Compact JSON, one record per line
+
+      --field <PATH>
+          Print one raw value from the output, e.g. `answers.is_urgent.noul`
+
+      --model <MODEL>
+          Model alias or versioned id, e.g. `jev-latest` or `jev-1.13.0`
+
+      --base-url <URL>
+          API root [default: https://api.typesafe.ai]
+
+      --timeout <DURATION>
+          Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
+
+      --max-retries <N>
+          Retries after the first attempt; 0 disables retrying [default: 2]
+
+      --no-input
+          Never ask for input; fail with an error naming the flag to use instead
+
+          [env: JEV_NO_INPUT=]
+
+      --no-color
+          Disable colour (also honours the `NO_COLOR` environment variable)
+
+      --ascii
+          Use only ASCII characters in human-readable output
+
+      --insecure-allow-http
+          Allow a plain http:// base URL to a host other than localhost (the API key travels
+          unencrypted)
+
+      --debug-bodies
+          Log request and response bodies with -v; `state` may contain sensitive data
+
+  -q, --quiet
+          Print errors only; suppress notices and warnings on stderr
+
+  -v, --verbose...
+          Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and the condition holds (or no gate was given)
+  2    usage or validation error; nothing was sent
+  3    no API key, or the API refused it
+  4    the API rejected the request
+  5    rate limited or overloaded, after retries
+  6    network failure, timeout or server error, after retries
+  10   evaluated, and --fail-under, --fail-over or --min-confidence does not hold (never an error)
+
+Examples:
+  # Rate on a rubric; levels are numbered from 0 in the order given
+  jev score "How frustrated is the customer?" --state-file ticket.txt \
+      --level Calm --level Frustrated --level "Very angry"
+
+  # Branch in a shell script: exit 10 when the score is above 1.5
+  if ! jev score "How risky is this change?" --state-file diff.txt \
+       --level Safe --level Risky --level Dangerous --fail-over 1.5 --field score; then
+    echo "needs a second reviewer"
+  fi
