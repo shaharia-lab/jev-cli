@@ -194,7 +194,16 @@ fn a_choice_without_a_way_out_is_a_warning_and_an_error_in_strict_mode() {
     );
     assert!(!strict.is_valid());
 
-    for way_out in ["other", "None of the above", "not_stated", "N/A", "unknown"] {
+    for way_out in [
+        "other",
+        "None of the above",
+        "not_stated",
+        "N/A",
+        "unknown",
+        "not_enough_information",
+        "nobody_not_stated",
+        "Cannot-Tell",
+    ] {
         let mut with_exit = document.value().clone();
         with_exit["questions"]["q"]["criteria"][way_out] = Value::Null;
         assert_eq!(check_value(&with_exit).findings, [], "{way_out}");
@@ -324,6 +333,7 @@ fn rule_cases() -> Vec<(Rule, Severity, &'static str, String)> {
         (Rule::SizeTotal, Severity::Error, "", json!({ "state": huge, "model": "m", "questions": { "q": noul } }).to_string()),
         (Rule::SizeQuestion, Severity::Error, "/state", json!({ "state": huge, "model": "m", "questions": { "q": noul } }).to_string()),
         (Rule::ChoiceNoEscapeOption, Severity::Warning, "/questions/q/criteria", question(json!({ "type": "choice", "instructions": "?", "criteria": { "a": "x", "b": "y", "c": "z" } }))),
+        (Rule::ChoiceNoEscapeOption, Severity::Warning, "/questions/q/criteria", question(json!({ "type": "choice", "instructions": "?", "criteria": { "another": null, "otherwise": null, "not_urgent": null, "insufficient_funds": null, "NA-east": null } }))),
         (Rule::ChoiceYesNo, Severity::Warning, "/questions/q/criteria", question(json!({ "type": "choice", "instructions": "?", "criteria": { "Yes": null, "No": null } }))),
         (Rule::PathIndexLongArray, Severity::Warning, "/questions/q/instructions", json!({ "state": long_state, "model": "m", "questions": { "q": { "type": "noul", "instructions": "Is `items[25]` even?" } } }).to_string()),
         (Rule::DuplicateDescription, Severity::Warning, "/questions/q/criteria/b", question(json!({ "type": "choice", "instructions": "?", "criteria": { "a": "Same text", "b": " same TEXT ", "other": null } }))),
