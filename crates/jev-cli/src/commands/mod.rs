@@ -6,6 +6,7 @@ pub(crate) mod debug;
 mod eval;
 mod models;
 mod profile;
+mod shortcut;
 mod validate;
 mod version;
 
@@ -19,6 +20,7 @@ use crate::config::{ConfigFile, ConfigStore, Flags, Settings};
 use crate::credentials::{CredentialStore, EnvCredentials};
 use crate::env::Env;
 use crate::error::CliError;
+use crate::exit::Exit;
 use crate::interaction::Interaction;
 use crate::notice::{Notice, Notifier};
 use crate::output::Output;
@@ -123,20 +125,21 @@ impl Context<'_> {
 /// # Errors
 ///
 /// Whatever the command fails with. The caller prints it and turns it into an exit code.
-pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<(), CliError> {
+pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, CliError> {
     match command {
+        // The evaluating commands decide their own exit code: a gate may make it 10 or 11.
+        Command::Eval(arguments) => return eval::run(arguments, context),
+        Command::Noul(arguments) => return shortcut::noul(arguments, context),
+        Command::Choice(arguments) => return shortcut::choice(arguments, context),
+        Command::Score(arguments) => return shortcut::score(arguments, context),
         Command::Version => version::run(context),
         Command::Config(command) => config::run(command, context),
         Command::Profile(command) => profile::run(command, context),
+        Command::Validate(arguments) => validate::run(arguments, context),
+        Command::Models(ModelsCommand::List) => models::list(context),
         #[cfg(feature = "internal-test-hooks")]
         Command::Debug(command) => debug::run(command, context),
-        Command::Eval(arguments) => eval::run(arguments, context),
-        Command::Noul(_) => pending("noul", 12),
-        Command::Choice(_) => pending("choice", 12),
-        Command::Score(_) => pending("score", 12),
-        Command::Validate(arguments) => validate::run(arguments, context),
         Command::Batch(BatchCommand::Run(_)) => pending("batch run", 13),
-        Command::Models(ModelsCommand::List) => models::list(context),
         Command::Auth(AuthCommand::Login(_)) => pending("auth login", 10),
         Command::Auth(AuthCommand::Status(_)) => pending("auth status", 10),
         Command::Auth(AuthCommand::Logout(_)) => pending("auth logout", 10),
@@ -150,6 +153,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<(), Cl
         Command::Update(_) => pending("update", 25),
         Command::Completion(_) => pending("completion", 17),
     }
+    .map(|()| Exit::Success)
 }
 
 /// A command that is in the tree but has no behaviour yet, and the issue that will give it some.

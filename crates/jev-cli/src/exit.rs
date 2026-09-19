@@ -24,10 +24,8 @@ pub(crate) enum Exit {
     #[allow(dead_code)] // Reserved by the contract; first used by `jev batch run`.
     BatchPartial = 7,
     /// Evaluated successfully, and the gate condition is false. Never used for an error.
-    #[allow(dead_code)] // Reserved by the contract; first used by the gating flags.
     GateFalse = 10,
     /// Evaluated successfully, and the answer is inside the abstain band.
-    #[allow(dead_code)] // Reserved by the contract; first used by the gating flags.
     Abstain = 11,
     /// `jev update --check` found a newer version.
     #[allow(dead_code)] // Reserved by the contract; first used by `jev update`.

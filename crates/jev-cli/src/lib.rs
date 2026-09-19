@@ -14,6 +14,7 @@ mod env;
 mod error;
 mod evaluate;
 mod exit;
+mod gate;
 mod input;
 mod interaction;
 mod logging;
@@ -78,7 +79,8 @@ pub fn main() -> ExitCode {
 
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| run(&arguments, terminal, early_format)));
     match outcome {
-        Ok(Ok(())) => Exit::Success.into(),
+        // Not only success: a gate that is false is exit 10, and that is not an error.
+        Ok(Ok(exit)) => exit.into(),
         Ok(Err(failure)) => {
             if let Some(error) = failure.error {
                 report(&error, failure.format, stderr_ui);
@@ -98,7 +100,7 @@ struct Failure {
     format: Format,
 }
 
-fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result<(), Failure> {
+fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result<Exit, Failure> {
     let cli =
         Cli::try_parse_from(arguments).map_err(|error| parse_failure(&error, early_format))?;
     let global = &cli.global;

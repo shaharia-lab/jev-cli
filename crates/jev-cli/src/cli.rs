@@ -6,6 +6,7 @@ use std::time::Duration;
 use clap::builder::FalseyValueParser;
 use clap::{ArgAction, Args, Parser, Subcommand};
 
+use crate::gate::AbstainBand;
 use crate::input::{InputFormat, StateFormat};
 use crate::output::Format;
 
@@ -114,31 +115,29 @@ pub(crate) struct GlobalArgs {
     pub(crate) verbose: u8,
 }
 
-/// Arguments of `jev eval`.
-// On/off command-line switches are booleans by nature; there is no state machine hiding here.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Args)]
-pub(crate) struct EvalArgs {
-    /// Request file, JSON or YAML, with `questions` and optionally `state` and `model`; `-` reads stdin
-    #[arg(short = 'f', long, value_name = "FILE")]
-    pub(crate) file: String,
-
-    /// Format of the request file [default: by extension; for stdin, JSON if it starts with `{`]
-    #[arg(long, value_enum, value_name = "FORMAT")]
-    pub(crate) input_format: Option<InputFormat>,
-
-    /// The state to evaluate, as text; overrides `state` in the request file
+/// Where the state comes from, when it is not the request file. Shared by every evaluating command.
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "State")]
+pub(crate) struct StateArgs {
+    /// The state to evaluate, as text
     #[arg(long, value_name = "TEXT", conflicts_with = "state_file")]
     pub(crate) state: Option<String>,
 
-    /// Read the state from a file, or from stdin with `-`; overrides `state` in the request file
+    /// Read the state from a file, or from stdin with `-`
     #[arg(long, value_name = "PATH")]
     pub(crate) state_file: Option<String>,
 
-    /// How to read a state given outside the request file
+    /// How to read the state: `json` sends an object or array, `text` one string
     #[arg(long, value_enum, default_value_t, value_name = "FORMAT")]
     pub(crate) state_format: StateFormat,
+}
 
+/// How the request is checked and sent. Shared by every evaluating command.
+// On/off command-line switches are booleans by nature; there is no state machine hiding here.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Sending")]
+pub(crate) struct SendArgs {
     /// Validate, print the exact request body and a size estimate, and send nothing
     #[arg(long)]
     pub(crate) dry_run: bool,
@@ -158,6 +157,214 @@ pub(crate) struct EvalArgs {
     /// Print the API response body exactly as received, ignoring --output
     #[arg(long, conflicts_with_all = ["field", "dry_run"])]
     pub(crate) raw: bool,
+}
+
+/// Arguments of `jev eval`.
+#[derive(Debug, Args)]
+pub(crate) struct EvalArgs {
+    /// Request file, JSON or YAML, with `questions` and optionally `state` and `model`; `-` reads stdin
+    #[arg(short = 'f', long, value_name = "FILE")]
+    pub(crate) file: String,
+
+    /// Format of the request file [default: by extension; for stdin, JSON if it starts with `{`]
+    #[arg(long, value_enum, value_name = "FORMAT")]
+    pub(crate) input_format: Option<InputFormat>,
+
+    /// Exit 10 unless this holds, e.g. `is_urgent >= 0.7`, `team == billing`, `team.confidence >= 0.8`
+    #[arg(long = "assert", value_name = "CONDITION", help_heading = "Gating")]
+    pub(crate) assertions: Vec<String>,
+
+    #[command(flatten)]
+    pub(crate) state: StateArgs,
+
+    #[command(flatten)]
+    pub(crate) send: SendArgs,
+}
+
+/// What a shortcut command asks, when it is not given as plain text.
+#[derive(Debug, Default, Args)]
+pub(crate) struct QuestionArgs {
+    /// The question, in plain words
+    #[arg(
+        value_name = "QUESTION",
+        required_unless_present = "instructions_file",
+        conflicts_with = "instructions_file"
+    )]
+    pub(crate) question: Option<String>,
+
+    /// Structured instructions (JSON or YAML: `what`, `not_for`, `examples`, ...) instead of QUESTION
+    #[arg(long, value_name = "FILE")]
+    pub(crate) instructions_file: Option<String>,
+}
+
+const NOUL_EXAMPLES: &str = "\
+Examples:
+  # Branch in a shell script: exit 0 when P(yes) >= 0.7, exit 10 when it is lower
+  if git log -1 --pretty=%B | jev noul \"Does this commit describe a user-facing change?\" --fail-under 0.7; then
+    echo \"needs a changelog entry\"
+  fi
+
+  # Just the probability
+  jev noul \"Is the customer angry?\" --state-file ticket.txt --field noul
+
+  # Route uncertain answers to a person: exit 11 when the model cannot tell
+  jev noul \"Is this spam?\" --state \"$MESSAGE\" --fail-under 0.6 --abstain-band 0.4,0.6
+
+Exit codes: 0 condition holds (or no gate) · 10 condition false · 11 inside the abstain band ·
+2 usage · 3 auth · 4 API rejected · 5 rate limited · 6 network. An error is never exit 10.";
+
+/// Arguments of `jev noul`.
+#[derive(Debug, Args)]
+#[command(after_help = NOUL_EXAMPLES)]
+pub(crate) struct NoulArgs {
+    #[command(flatten)]
+    pub(crate) question: QuestionArgs,
+
+    /// What a yes (a value near 1) means
+    #[arg(long = "true", value_name = "TEXT", conflicts_with = "criteria_file")]
+    pub(crate) when_true: Option<String>,
+
+    /// What a no (a value near 0) means
+    #[arg(long = "false", value_name = "TEXT", conflicts_with = "criteria_file")]
+    pub(crate) when_false: Option<String>,
+
+    /// Structured criteria (JSON or YAML) with `true` and `false`
+    #[arg(long, value_name = "FILE")]
+    pub(crate) criteria_file: Option<String>,
+
+    /// Exit 10 when P(yes) is below this
+    #[arg(long, value_name = "P", help_heading = "Gating", value_parser = parse_probability)]
+    pub(crate) fail_under: Option<f64>,
+
+    /// Exit 10 when P(yes) is above this
+    #[arg(long, value_name = "P", help_heading = "Gating", value_parser = parse_probability)]
+    pub(crate) fail_over: Option<f64>,
+
+    /// Exit 11 when P(yes) is inside `LO,HI`, e.g. `0.4,0.6`: near 0.5 the model cannot tell
+    #[arg(long, value_name = "LO,HI", help_heading = "Gating", value_parser = AbstainBand::parse)]
+    pub(crate) abstain_band: Option<AbstainBand>,
+
+    #[command(flatten)]
+    pub(crate) state: StateArgs,
+
+    #[command(flatten)]
+    pub(crate) send: SendArgs,
+}
+
+const CHOICE_EXAMPLES: &str = "\
+Examples:
+  # Pick a team, always offering a way out, and print only the winner
+  jev choice \"Which team should handle this?\" --state-file ticket.txt \\
+    --option billing=\"Payments, invoices, refunds\" --option technical=\"Bugs, outages\" --option other \\
+    --field choice
+
+  # Branch in a shell script: exit 0 when either option wins with enough confidence, 10 otherwise
+  if jev choice \"Which team?\" --state-file ticket.txt --option billing --option sales --option other \\
+       --expect billing --expect sales --min-confidence 0.8; then
+    echo \"route to revenue\"
+  fi
+
+Exit codes: 0 condition holds (or no gate) · 10 condition false · 2 usage · 3 auth ·
+4 API rejected · 5 rate limited · 6 network. An error is never exit 10.";
+
+/// Arguments of `jev choice`.
+#[derive(Debug, Args)]
+#[command(after_help = CHOICE_EXAMPLES)]
+pub(crate) struct ChoiceArgs {
+    #[command(flatten)]
+    pub(crate) question: QuestionArgs,
+
+    /// An option, as `name` or `name=description`; repeat for each (up to 255). Include a way out such as `other`
+    #[arg(
+        long = "option",
+        value_name = "NAME[=DESCRIPTION]",
+        conflicts_with = "criteria_file"
+    )]
+    pub(crate) options: Vec<String>,
+
+    /// Structured criteria (JSON or YAML): a map of option name to description
+    #[arg(long, value_name = "FILE")]
+    pub(crate) criteria_file: Option<String>,
+
+    /// Do not warn when no option offers a way out (`other`, `none_of_the_above`, `not_stated`, ...)
+    #[arg(long)]
+    pub(crate) no_escape_warning: bool,
+
+    /// Exit 10 unless this option wins; repeat to accept any of several
+    #[arg(long, value_name = "OPTION", help_heading = "Gating")]
+    pub(crate) expect: Vec<String>,
+
+    /// Exit 10 when the confidence is below this
+    #[arg(long, value_name = "C", help_heading = "Gating", value_parser = parse_probability)]
+    pub(crate) min_confidence: Option<f64>,
+
+    #[command(flatten)]
+    pub(crate) state: StateArgs,
+
+    #[command(flatten)]
+    pub(crate) send: SendArgs,
+}
+
+const SCORE_EXAMPLES: &str = "\
+Examples:
+  # Rate on a rubric; levels are numbered from 0 in the order given
+  jev score \"How frustrated is the customer?\" --state-file ticket.txt \\
+    --level Calm --level Frustrated --level \"Very angry\"
+
+  # Branch in a shell script: exit 10 when the score is above 1.5
+  if ! jev score \"How risky is this change?\" --state-file diff.txt \\
+       --level Safe --level Risky --level Dangerous --fail-over 1.5 --field score; then
+    echo \"needs a second reviewer\"
+  fi
+
+Exit codes: 0 condition holds (or no gate) · 10 condition false · 2 usage · 3 auth ·
+4 API rejected · 5 rate limited · 6 network. An error is never exit 10.";
+
+/// Arguments of `jev score`.
+#[derive(Debug, Args)]
+#[command(after_help = SCORE_EXAMPLES)]
+pub(crate) struct ScoreArgs {
+    #[command(flatten)]
+    pub(crate) question: QuestionArgs,
+
+    /// A level of the rubric, lowest first; repeat for each (2 to 10)
+    #[arg(
+        long = "level",
+        value_name = "DESCRIPTION",
+        conflicts_with = "criteria_file"
+    )]
+    pub(crate) levels: Vec<String>,
+
+    /// Structured criteria (JSON or YAML): an ordered list of level descriptions
+    #[arg(long, value_name = "FILE")]
+    pub(crate) criteria_file: Option<String>,
+
+    /// Exit 10 when the score is below this
+    #[arg(long, value_name = "SCORE", help_heading = "Gating")]
+    pub(crate) fail_under: Option<f64>,
+
+    /// Exit 10 when the score is above this
+    #[arg(long, value_name = "SCORE", help_heading = "Gating")]
+    pub(crate) fail_over: Option<f64>,
+
+    /// Exit 10 when the confidence is below this
+    #[arg(long, value_name = "C", help_heading = "Gating", value_parser = parse_probability)]
+    pub(crate) min_confidence: Option<f64>,
+
+    #[command(flatten)]
+    pub(crate) state: StateArgs,
+
+    #[command(flatten)]
+    pub(crate) send: SendArgs,
+}
+
+/// A probability, or a confidence: a number from 0 to 1.
+fn parse_probability(text: &str) -> Result<f64, String> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|value| (0.0..=1.0).contains(value))
+        .ok_or_else(|| format!("`{text}` is not a number from 0 to 1"))
 }
 
 /// Arguments of `jev validate`.
@@ -205,11 +412,11 @@ pub(crate) enum Command {
     /// Evaluate a full request (state + many questions) in one API call
     Eval(EvalArgs),
     /// Ask one yes/no question; returns the probability of yes
-    Noul(Pending),
+    Noul(NoulArgs),
     /// Pick one option from a set you define
-    Choice(Pending),
+    Choice(ChoiceArgs),
     /// Rate the state on an ordered rubric of 2 to 10 levels
-    Score(Pending),
+    Score(ScoreArgs),
     /// Check a request file offline; nothing is sent or billed
     Validate(ValidateArgs),
     /// Apply one question set to every row of a JSONL or CSV file
@@ -437,14 +644,42 @@ mod tests {
 
     #[test]
     fn a_pending_command_accepts_whatever_follows_it() {
-        let cli =
-            Cli::try_parse_from(["jev", "noul", "Is it urgent?", "--fail-under", "0.7", "-x"])
-                .unwrap();
+        let cli = Cli::try_parse_from(["jev", "spec", "--format", "json", "-x"]).unwrap();
 
-        let Command::Noul(pending) = cli.command else {
-            panic!("expected noul")
+        let Command::Spec(pending) = cli.command else {
+            panic!("expected spec")
         };
-        assert_eq!(pending.rest.len(), 4);
+        assert_eq!(pending.rest.len(), 3);
+    }
+
+    #[test]
+    fn a_shortcut_needs_a_question_or_an_instructions_file_but_not_both() {
+        assert!(Cli::try_parse_from(["jev", "noul", "Is it urgent?"]).is_ok());
+        assert!(Cli::try_parse_from(["jev", "noul", "--instructions-file", "i.yaml"]).is_ok());
+        assert!(Cli::try_parse_from(["jev", "noul"]).is_err());
+        assert!(
+            Cli::try_parse_from(["jev", "noul", "Is it?", "--instructions-file", "i.yaml"])
+                .is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["jev", "noul", "Is it?", "--fail-under", "1.5"]).is_err(),
+            "a probability is 0 to 1"
+        );
+        assert!(
+            Cli::try_parse_from(["jev", "noul", "Is it?", "--abstain-band", "0.6,0.4"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from([
+                "jev",
+                "score",
+                "How?",
+                "--level",
+                "a",
+                "--criteria-file",
+                "c.yaml"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
