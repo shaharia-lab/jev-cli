@@ -1,0 +1,147 @@
+# CI: the quality gates every pull request must pass. Each job mirrors a command a contributor
+# can run locally (see CONTRIBUTING.md); `make check` runs them all.
+#
+# Releases are not built here. The organisation only allows an approved list of actions, so tools
+# are installed by scripts/ci/ rather than by third-party installer actions. The actions that are
+# used are pinned to a commit SHA, enforced by scripts/ci/check-action-pins.sh.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same pull request supersedes the run in progress. Runs on main always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege: nothing here writes to the repository.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installs the toolchain pinned in rust-toolchain.toml, with rustfmt and clippy.
+      - run: rustup toolchain install
+      - run: cargo fmt --all --check
+
+  test:
+    name: Lint and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # Clippy runs on every OS so platform-specific code is linted too.
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo build --workspace --locked
+      - run: cargo test --workspace --all-features --locked
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 --locked | jq -r '.packages[0].rust_version')
+          test -n "$version" && test "$version" != "null"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: rustup toolchain install "$MSRV" --profile minimal
+        env:
+          MSRV: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: msrv
+      - run: cargo +"$MSRV" check --workspace --all-targets --all-features --locked
+        env:
+          MSRV: ${{ steps.msrv.outputs.version }}
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo doc --workspace --no-deps --all-features --locked
+
+  supply-chain:
+    name: Supply chain (cargo-deny, cargo-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - name: Install cargo-deny and cargo-audit (pinned, checksum-verified)
+        run: scripts/ci/install-audit-tools.sh
+      - run: cargo deny --locked check
+      - run: cargo audit --deny unsound --deny yanked
+
+  policy:
+    name: Repository policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - name: GitHub Actions are pinned to a commit SHA
+        run: scripts/ci/check-action-pins.sh
+      - name: jev-client stays free of CLI, terminal and config crates
+        run: scripts/ci/check-client-deps.sh
+      # Keeps .pre-commit-config.yaml valid and applies the hygiene hooks to every file, including
+      # for contributors who did not install the hooks. The branch guard is meaningless in CI and
+      # the cargo hooks already run in the jobs above.
+      - name: pre-commit hygiene hooks
+        run: pipx run pre-commit==4.6.2 run --all-files --show-diff-on-failure
+        env:
+          SKIP: no-commit-to-branch,cargo-fmt,cargo-clippy
+      - name: AGENTS.md is a symlink to CLAUDE.md
+        run: |
+          test "$(git ls-files -s AGENTS.md | cut -d' ' -f1)" = "120000"
+          test "$(readlink AGENTS.md)" = "CLAUDE.md"
+
+  # One stable check name for branch rules to require, whatever jobs exist above.
+  ci-ok:
+    name: CI result
+    if: always()
+    needs: [fmt, test, msrv, docs, supply-chain, policy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every job succeeded
+        run: |
+          echo '${{ toJSON(needs) }}' | jq -e 'all(.[]; .result == "success")' > /dev/null

@@ -1,0 +1,23 @@
+[package]
+name = "jev-cli"
+description = "Unofficial command-line tool for TypeSafe AI's Jev model, built for humans, scripts and AI agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[[bin]]
+name = "jev"
+path = "src/main.rs"
+
+[dependencies]
+jev-client.workspace = true
+
+[lints]
+workspace = true

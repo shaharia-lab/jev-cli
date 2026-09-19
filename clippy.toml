@@ -1,0 +1,9 @@
+# `unwrap_used`, `expect_used`, `panic` and `indexing_slicing` guard production code paths;
+# tests are allowed to fail loudly.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+
+# Proper nouns that `doc_markdown` would otherwise want in backticks. ".." keeps clippy's defaults.
+doc-valid-idents = ["TypeSafe", ".."]

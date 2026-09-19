@@ -1,0 +1,7 @@
+# Always check text out with LF, on every platform. rustfmt enforces Unix newlines and the shell
+# scripts must not gain CRLF on Windows.
+* text=auto eol=lf
+
+*.png binary
+*.gif binary
+*.ico binary

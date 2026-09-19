@@ -1,0 +1,86 @@
+# Local checks that run before a commit and before a push, so problems are caught before CI.
+#
+#   pre-commit install        # once per clone; installs both the pre-commit and pre-push hooks
+#   pre-commit run --all-files
+#
+# On commit: file hygiene, plus rustfmt and clippy when Rust or Cargo files change (both are fast
+# in a workspace this size). On push: the test suite and the crate-boundary check. The slower and
+# networked gates (MSRV build, rustdoc, cargo-deny, cargo-audit) stay in CI and `make check`.
+# CI remains the gate that counts: hooks can be skipped with --no-verify, CI cannot.
+
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  # ── General hygiene ──────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        # Two trailing spaces are a Markdown line break.
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      # AGENTS.md is a symlink to CLAUDE.md; a dangling link would silently drop the guide.
+      - id: check-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      # This tool handles API keys and will handle release signing keys. Neither belongs in git.
+      - id: detect-private-key
+      # main only changes through pull requests.
+      - id: no-commit-to-branch
+        args: [--branch, main]
+      - id: no-commit-to-branch
+        name: no-push-to-main
+        args: [--branch, main]
+        stages: [pre-push]
+
+  # ── Rust and repository policy ───────────────────────────────────────────────
+  # `language: system`: these use the toolchain pinned in rust-toolchain.toml, so cargo must be on
+  # PATH (`. "$HOME/.cargo/env"` in a fresh shell).
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt --check
+        entry: cargo fmt --all --check
+        language: system
+        files: \.rs$|^rustfmt\.toml$
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy -D warnings
+        entry: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        language: system
+        files: \.rs$|(^|/)Cargo\.(toml|lock)$|^clippy\.toml$|^rust-toolchain\.toml$
+        pass_filenames: false
+
+      - id: action-pins
+        name: GitHub Actions pinned to a commit SHA
+        entry: scripts/ci/check-action-pins.sh
+        language: system
+        files: ^\.github/workflows/
+        pass_filenames: false
+
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test --workspace --all-features --locked
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: client-deps
+        name: jev-client free of CLI, terminal and config crates
+        entry: scripts/ci/check-client-deps.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
