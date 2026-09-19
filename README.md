@@ -129,8 +129,10 @@ language server at one, for example with a first line in a YAML file:
 
 ## Shell completions and man pages
 
-`jev completion <shell>` prints a completion script for the commands and flags of the `jev` you
-run. Enable it once per shell, and run it again after upgrading:
+Installed with Homebrew (`brew install shaharia-lab/tap/jev`), the man pages and the Bash, Zsh
+and Fish completions are set up for you. Otherwise, `jev completion <shell>` prints a completion
+script for the commands and flags of the `jev` you run. Enable it once per shell, and run it again
+after upgrading:
 
 | Shell | Enable it |
 | --- | --- |

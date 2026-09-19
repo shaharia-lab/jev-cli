@@ -156,6 +156,8 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
       - name: Release keys are well-formed and documented; signing rejects tampered assets
         run: scripts/release/self-test.sh
+      - name: Homebrew formulas carry the release checksums; tap publishing is idempotent
+        run: scripts/release/homebrew-self-test.sh
       # Keeps .pre-commit-config.yaml valid and applies the hygiene hooks to every file, including
       # for contributors who did not install the hooks. The branch guard is meaningless in CI and
       # the cargo hooks already run in the jobs above.
