@@ -160,6 +160,38 @@ pub(crate) struct EvalArgs {
     pub(crate) raw: bool,
 }
 
+/// Arguments of `jev validate`.
+#[derive(Debug, Args)]
+pub(crate) struct ValidateArgs {
+    /// Request file, JSON or YAML; `state` and `model` may be left out; `-` reads stdin
+    #[arg(short = 'f', long, value_name = "FILE")]
+    pub(crate) file: String,
+
+    /// Format of the request file [default: by extension; for stdin, JSON if it starts with `{`]
+    #[arg(long, value_enum, value_name = "FORMAT")]
+    pub(crate) input_format: Option<InputFormat>,
+
+    /// Check the request with this state, as text, so that its size can be estimated
+    #[arg(long, value_name = "TEXT", conflicts_with = "state_file")]
+    pub(crate) state: Option<String>,
+
+    /// Check the request with the state in this file, or on stdin with `-`
+    #[arg(long, value_name = "PATH")]
+    pub(crate) state_file: Option<String>,
+
+    /// How to read a state given outside the request file
+    #[arg(long, value_enum, default_value_t, value_name = "FORMAT")]
+    pub(crate) state_format: StateFormat,
+
+    /// Count warnings as errors, so that any finding makes the request invalid
+    #[arg(long)]
+    pub(crate) strict: bool,
+
+    /// Skip the offline estimate of the request's size
+    #[arg(long)]
+    pub(crate) skip_size_check: bool,
+}
+
 /// Arguments of a command whose behaviour has not been written yet. Everything is accepted so
 /// that the answer is always "not implemented", never a complaint about a flag.
 #[derive(Debug, Args)]
@@ -179,7 +211,7 @@ pub(crate) enum Command {
     /// Rate the state on an ordered rubric of 2 to 10 levels
     Score(Pending),
     /// Check a request file offline; nothing is sent or billed
-    Validate(Pending),
+    Validate(ValidateArgs),
     /// Apply one question set to every row of a JSONL or CSV file
     #[command(subcommand)]
     Batch(BatchCommand),

@@ -1,0 +1,9 @@
+state: Help! My payouts have been failing.
+questions:
+  team:
+    type: choice
+    instructions: Which team should handle this?
+    criteria:
+      billing: Payments and refunds
+      technical: Bugs and outages
+      sales: Pricing

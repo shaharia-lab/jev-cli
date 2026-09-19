@@ -447,6 +447,34 @@ fn the_model_can_be_left_to_the_caller() {
 }
 
 #[test]
+fn the_state_can_be_left_to_the_caller_too() {
+    let questions_only = Document::from_json_str(
+        r#"{"questions": {"q": {"type": "score", "instructions": "?", "criteria": ["only"]}}}"#,
+    )
+    .unwrap();
+    let options = Options::default().model_optional(true).state_optional(true);
+
+    let report = validate::check_document(&questions_only, &options);
+
+    let rules: Vec<Rule> = report.findings.iter().map(|finding| finding.rule).collect();
+    assert_eq!(
+        rules,
+        [Rule::ScoreTooFewLevels],
+        "the questions are still checked"
+    );
+    assert_eq!(report.size, None, "there is no state to measure");
+
+    let wrong = Document::from_json_str(
+        r#"{"state": 3, "questions": {"q": {"type": "noul", "instructions": "?"}}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        only(&validate::check_document(&wrong, &options), Rule::StateType).path,
+        "/state"
+    );
+}
+
+#[test]
 fn short_arrays_and_unrelated_backticks_are_not_linted() {
     let request = json!({
         "state": { "items": [1, 2, 3], "log": (0..30).collect::<Vec<u32>>() },

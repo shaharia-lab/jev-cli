@@ -6,6 +6,7 @@ pub(crate) mod debug;
 mod eval;
 mod models;
 mod profile;
+mod validate;
 mod version;
 
 use std::io::Write;
@@ -133,7 +134,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<(), Cl
         Command::Noul(_) => pending("noul", 12),
         Command::Choice(_) => pending("choice", 12),
         Command::Score(_) => pending("score", 12),
-        Command::Validate(_) => pending("validate", 11),
+        Command::Validate(arguments) => validate::run(arguments, context),
         Command::Batch(BatchCommand::Run(_)) => pending("batch run", 13),
         Command::Models(ModelsCommand::List) => models::list(context),
         Command::Auth(AuthCommand::Login(_)) => pending("auth login", 10),
