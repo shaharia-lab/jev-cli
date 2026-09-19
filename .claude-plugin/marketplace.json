@@ -1,0 +1,25 @@
+{
+  "name": "jev-cli",
+  "description": "The agent skill for jev, an unofficial CLI for TypeSafe AI's Jev model. Not affiliated with TypeSafe AI.",
+  "owner": {
+    "name": "Shaharia Lab",
+    "url": "https://github.com/shaharia-lab"
+  },
+  "plugins": [
+    {
+      "name": "jev",
+      "description": "Teaches an agent to use the jev CLI: discover with jev spec, author with jev schema, check with jev validate, run with -o json and branch on exit codes. Not affiliated with TypeSafe AI.",
+      "source": "./skills/jev-cli",
+      "strict": false,
+      "skills": ["./"],
+      "author": {
+        "name": "Shaharia Lab",
+        "url": "https://github.com/shaharia-lab"
+      },
+      "homepage": "https://github.com/shaharia-lab/jev-cli",
+      "repository": "https://github.com/shaharia-lab/jev-cli",
+      "license": "MIT OR Apache-2.0",
+      "keywords": ["jev", "typesafe", "cli", "classification", "mcp"]
+    }
+  ]
+}

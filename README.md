@@ -81,6 +81,31 @@ price, so a capped server refuses it) and set a per-call limit:
 `"--profile", "<name>"` to use a profile's key and settings. Logs go to stderr; stdout carries only
 protocol messages.
 
+## Agent skill
+
+[`skills/jev-cli`](skills/jev-cli/SKILL.md) is an [agent skill](https://agentskills.io) that
+teaches an AI agent to use `jev` from a shell: discover commands with `jev spec`, write request
+files from `jev schema`, check them with `jev validate`, run them with `-o json`, branch on exit
+codes, gate scripts on an answer, label records in bulk with `jev batch run`, and choose between
+the CLI and the MCP server. It also covers how to write questions Jev answers well. For deeper
+question design, use TypeSafe's own skill, [typesafe-ai/skills](https://github.com/typesafe-ai/skills).
+
+**Claude Code plugin**
+
+```bash
+claude plugin marketplace add shaharia-lab/jev-cli
+claude plugin install jev@jev-cli
+```
+
+**Other agents**, through [skills.sh](https://skills.sh) (project-local by default; add `-g` for
+every project):
+
+```bash
+npx skills add shaharia-lab/jev-cli --skill jev-cli
+```
+
+The skill needs `jev` on the `PATH` and an API key from `TYPESAFE_API_KEY` or `jev auth login`.
+
 ## JSON Schemas
 
 `jev schema request|questions|batch-record|output|error` prints a JSON Schema (draft 2020-12)

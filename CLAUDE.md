@@ -195,6 +195,14 @@ do not contain them. Tests must isolate the environment (`CI`, `NO_COLOR`, `TERM
 `TYPESAFE_*`): CI sets `CI=true`, and a developer's shell has a UTF-8 locale. What a person sees is
 tested on a real pseudo-terminal in `tests/terminal.rs` (Unix only).
 
+The agent skill for *users'* agents is `skills/jev-cli/SKILL.md`, installable with `npx skills add`
+and as a Claude Code plugin (`.claude-plugin/marketplace.json`, whose plugin is that one directory).
+It teaches a workflow and defers the contract to `jev spec`, `--help` and `jev schema`.
+`tests/skill.rs` fails when it names a command or flag that `jev spec` lacks or marks pending, when
+its exit-code table or MCP tool list differs from the binary's, or when its request file does not
+validate: renaming any of these means editing the skill in the same PR. Its question-writing
+advice is our own words; never paste TypeSafe's documentation into it.
+
 Commands depend on traits (`Transport`, `CredentialStore`, `Clock`, `UpdateSource`) so they are testable
 with fakes. Errors use `thiserror` in the library; the binary has one error → exit-code mapping.
 
