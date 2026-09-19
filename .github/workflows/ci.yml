@@ -67,6 +67,10 @@ jobs:
       - name: Install zsh and fish
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
+      # The install script tests (tests/install_script.rs) check signatures with the minisign CLI,
+      # as a user's machine would, and require it in CI.
+      - name: Install minisign
+        run: scripts/ci/install-minisign.sh
       - run: cargo test --workspace --all-features --locked
         env:
           JEV_TEST_SHELLS: ${{ runner.os == 'Linux' && 'bash,zsh,fish,powershell' || '' }}
@@ -158,6 +162,9 @@ jobs:
         run: scripts/release/self-test.sh
       - name: Homebrew formulas carry the release checksums; tap publishing is idempotent
         run: scripts/release/homebrew-self-test.sh
+      # shellcheck, pwsh and PSScriptAnalyzer come with the runner image.
+      - name: ShellCheck and PSScriptAnalyzer on install.sh and install.ps1
+        run: scripts/ci/lint-install-scripts.sh
       # Keeps .pre-commit-config.yaml valid and applies the hygiene hooks to every file, including
       # for contributors who did not install the hooks. The branch guard is meaningless in CI and
       # the cargo hooks already run in the jobs above.

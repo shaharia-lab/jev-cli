@@ -37,6 +37,32 @@ Planned for the first version:
   server mode
 - API key from `TYPESAFE_API_KEY` or a private credentials file, no telemetry, signed and verified self-updates
 
+## Install
+
+Linux and macOS, into `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/install.sh | sh
+```
+
+Windows (PowerShell), into `%LOCALAPPDATA%\Programs\jev`:
+
+```powershell
+irm https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/install.ps1 | iex
+```
+
+The scripts install the latest stable release. Until there is one, name a pre-release from the
+[releases page](https://github.com/shaharia-lab/jev-cli/releases):
+`... | sh -s -- --version 0.1.0-rc.1`, or in PowerShell set `$env:JEV_INSTALL_VERSION = '0.1.0-rc.1'`
+before running the script. Other options: `--install-dir <dir>`, `--no-modify-path` (the scripts
+otherwise add the directory to `PATH` in your shell profile, or your user `PATH` on Windows) and
+`--require-signature`; `sh install.sh --help` explains them.
+
+They never use `sudo` or ask for elevation. Before installing anything they check the archive's
+SHA-256 against the release's `SHA256SUMS` and, when [minisign](https://jedisct1.github.io/minisign/)
+is installed, the signatures of both against the release keys, and they say which checks ran.
+A script install updates itself with `jev update`. Other platforms: `cargo install jev-cli --locked`.
+
 ## Use it from an AI agent (MCP)
 
 `jev mcp serve` runs `jev` as a [Model Context Protocol](https://modelcontextprotocol.io) server

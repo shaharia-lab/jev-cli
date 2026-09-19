@@ -305,6 +305,14 @@ GitHub Releases + install scripts (self-updating), the existing `shaharia-lab/ho
 (`Formula/jev.rb` plus pinned `jev@<version>.rb`, written via the scoped GitHub App token), and
 crates.io. Package-manager installs never self-update.
 
+The install scripts, `install.sh` (POSIX sh) and `install.ps1` (Windows PowerShell 5.1 and 7), live
+at the repository root and are served from `main`. They embed the release keys, check the checksum
+always and the signature when `minisign` is on PATH, and write `<dir>/.jev-update/receipt.json`
+(`installer`, `version`, `target`), which is how `jev update` recognises a self-managed install.
+Their release constants (URLs, keys, verifier) sit in one block, one assignment per line:
+`tests/install_script.rs` replaces only that block to run them against a local server, and checks
+that the shipped values are GitHub over HTTPS and the committed keys. `install.ps1` must stay ASCII.
+
 `release-please.yml` tags and drafts a release as the `jev-release-bot` App (a tag or pull request
 made with `GITHUB_TOKEN` triggers no workflow), and the tag starts `release.yml`. It is staged: plan → build
 (six native runners) → package (+ CycloneDX SBOM) → publish (sign, draft, `release` environment)

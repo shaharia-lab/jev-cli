@@ -69,8 +69,8 @@ The release public keys:
 
 The same keys are in the repository as
 [`crates/jev-cli/keys/release-primary.pub`](crates/jev-cli/keys/release-primary.pub) and
-[`release-next.pub`](crates/jev-cli/keys/release-next.pub); CI fails if they and this table ever
-differ.
+[`release-next.pub`](crates/jev-cli/keys/release-next.pub), and embedded in the install scripts;
+CI fails if any of them and this table ever differ.
 
 To verify a download by hand (Linux or macOS; minisign also has Windows builds):
 
@@ -121,6 +121,13 @@ gh attestation verify "$archive" --repo shaharia-lab/jev-cli
   GitHub Releases of this repository, over HTTPS, keeps the previous binary for
   `jev update --rollback`, and puts it back by itself if the new binary fails its self-test.
   It never moves to an older version unless asked to with `jev update --version`.
+- The install scripts (`install.sh`, `install.ps1`) embed the same two public keys. They always
+  check the archive's SHA-256 against `SHA256SUMS`, and, when the `minisign` CLI is installed,
+  the signatures of both, with the same trusted-comment check; `--require-signature` makes a
+  missing `minisign` an error. They download over HTTPS only, run the new binary once before
+  installing it, install nothing unless every check passes, and never use `sudo` or ask for
+  elevation. Without `minisign` the checksum proves only that the download is intact, and the
+  scripts say so.
 
 ### Key rotation
 
@@ -131,7 +138,8 @@ and its secret half is not available to the release workflow and has never signe
 To rotate, planned or because the primary key may be compromised:
 
 1. Promote the next key: from now on the release workflow signs with it.
-2. Generate a new next key pair, and commit its public key.
+2. Generate a new next key pair, and commit its public key, in `crates/jev-cli/keys` and in the
+   install scripts.
 3. Ship a release signed with the promoted key that compiles in the promoted key as primary and
    the new key as next. Installed copies already trust the promoted key, so they accept this
    release, and from then on trust the new pair only.
