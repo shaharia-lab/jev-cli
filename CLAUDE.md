@@ -12,8 +12,8 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
-exit-code contract. `jev eval`, `jev validate`, `jev models list`, `jev config`, `jev profile` and
-`jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`,
+`jev models list`, `jev config`, `jev profile` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -117,6 +117,15 @@ possible source**: a caller that leaves stdin open would make `jev` hang, and ag
 request file with its own `state` therefore never reads stdin; `--state-file -` is the explicit way.
 Integration tests run `jev` against `wiremock` with `TYPESAFE_BASE_URL` pointed at it (loopback
 http is allowed), and default to an address nothing listens on so a test can never reach the real API.
+
+Gates (`gate.rs`) turn an answer into an exit code. **Exit 10 means exactly one thing: evaluated
+successfully, condition false.** It is returned as `Ok(Exit::GateFalse)`, never as an error: the
+answer is printed normally and stderr stays empty. Anything that goes wrong, including an answer the
+gate cannot compare, is a `CliError` with its own code. Conditions are checked against the request
+before sending (unknown question id, a choice compared with `>=`, an option that does not exist), so a
+gate that could never be decided costs nothing. The shortcuts flatten their one answer to the top
+level so `--field noul|choice|score` works; `jev eval` adds `gate` to its envelope only when
+`--assert` was used.
 
 Settings come from one resolver, `config::Settings::resolve`: **flag > environment > profile >
 default**, each value carrying its `Source`. A command reads `context.settings()?`; it never reads a

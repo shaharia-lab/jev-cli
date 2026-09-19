@@ -242,11 +242,6 @@ fn a_usage_error_is_a_json_object_on_stderr_when_the_output_is_for_a_program() {
 fn commands_without_behaviour_say_so_whatever_flags_follow() {
     let cases = [
         (
-            vec!["noul", "Is it urgent?", "--fail-under", "0.7"],
-            "noul",
-            12,
-        ),
-        (
             vec!["batch", "run", "--input", "rows.jsonl"],
             "batch run",
             13,

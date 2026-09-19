@@ -11,6 +11,7 @@ use serde_json::Value;
 
 use super::table::{Cell, Table};
 use super::{Render, Ui};
+use crate::gate::GateOutcome;
 
 /// Cells in a probability bar.
 const BAR_WIDTH: usize = 20;
@@ -35,6 +36,9 @@ pub(crate) struct ResultEnvelope {
     pub(crate) request_id: Option<String>,
     /// Wall-clock time for the call, including retries, in milliseconds.
     pub(crate) latency_ms: u64,
+    /// The outcome of the gate, present only when a gating flag was used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) gate: Option<GateOutcome>,
 }
 
 impl ResultEnvelope {
@@ -81,6 +85,7 @@ impl ResultEnvelope {
                 .or_else(|| pricing::estimate_cost_usd(&response.model, response.usage)),
             request_id,
             latency_ms: u64::try_from(latency.as_millis()).unwrap_or(u64::MAX),
+            gate: None,
         }
     }
 
@@ -115,6 +120,18 @@ impl Render for ResultEnvelope {
         }
         if self.answers.is_empty() {
             text.push_str("no answers\n");
+        }
+        if let Some(gate) = &self.gate {
+            let line = gate.describe();
+            let _ = writeln!(
+                text,
+                "{}",
+                if gate.passed && !gate.abstained {
+                    ui.bold(&line)
+                } else {
+                    ui.warning_label(&line)
+                }
+            );
         }
         text.push_str(&self.footer(ui));
         text.push('\n');
