@@ -105,16 +105,23 @@ mod tests {
 
     #[test]
     fn xdg_config_home_is_honoured_only_when_absolute() {
-        let absolute = Env::from([("HOME", "/home/u"), ("XDG_CONFIG_HOME", "/etc/xdg-u")]);
+        // What counts as absolute depends on the platform running the test: `/etc` is not
+        // absolute on Windows, where a path needs a drive.
+        let xdg = if cfg!(windows) {
+            "C:\\xdg-u"
+        } else {
+            "/etc/xdg-u"
+        };
+        let absolute = Env::from([("HOME", "/home/u"), ("XDG_CONFIG_HOME", xdg)]);
         let relative = Env::from([("HOME", "/home/u"), ("XDG_CONFIG_HOME", "relative/dir")]);
 
         assert_eq!(
             platform_dir(&absolute, Platform::Unix),
-            Some(PathBuf::from("/etc/xdg-u/jev"))
+            Some(PathBuf::from(xdg).join("jev"))
         );
         assert_eq!(
             platform_dir(&relative, Platform::Unix),
-            Some(PathBuf::from("/home/u/.config/jev"))
+            Some(PathBuf::from("/home/u").join(".config").join("jev"))
         );
     }
 
