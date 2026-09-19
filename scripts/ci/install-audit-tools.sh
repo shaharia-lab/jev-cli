@@ -28,7 +28,7 @@ install_tool() {
   tmp=$(mktemp -d)
 
   echo "Installing $name from $url"
-  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 "$url" -o "$tmp/archive.tar.gz"
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 "$url" -o "$tmp/archive.tar.gz"
   echo "$sha256  $tmp/archive.tar.gz" | sha256sum --check --quiet
   tar -xzf "$tmp/archive.tar.gz" -C "$tmp" --strip-components=1
   install -m 0755 "$tmp/$name" "$BIN_DIR/$name"
