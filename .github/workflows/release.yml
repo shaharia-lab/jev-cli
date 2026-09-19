@@ -417,6 +417,10 @@ jobs:
     name: Update the Homebrew tap
     needs: [plan, stable, homebrew-check]
     runs-on: ubuntu-latest
+    # The tap App credentials live in this environment (v* tags only), not in
+    # repository secrets, which any branch's workflow could read (#81). No
+    # reviewer: this run already stopped for approval in `release`.
+    environment: publish
     permissions:
       contents: read
     env:
