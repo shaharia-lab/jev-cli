@@ -72,6 +72,13 @@ Cargo workspace, one-way dependency `jev-cli → jev-client`:
   one module per command group under `commands/`, config and profiles, credential stores, output
   renderers, batch engine, MCP stdio server, updater.
 
+The `jev-client` types follow three rules. Requests are sent as written (key order, explicit `null`
+and unknown fields are all preserved). Responses parse tolerantly (unknown fields ignored; an unknown or
+reshaped answer becomes `Answer::Unknown` with its raw JSON). Every type derives `JsonSchema`, and a
+type whose doc comment has rustdoc links or examples sets `#[schemars(description = "...")]`, because
+agents read those descriptions (a test enforces this). Public structs are `#[non_exhaustive]` with
+constructors, so adding a field is not a breaking change.
+
 Commands depend on traits (`Transport`, `CredentialStore`, `Clock`, `UpdateSource`) so they are testable
 with fakes. Errors use `thiserror` in the library; the binary has one error → exit-code mapping.
 
@@ -86,7 +93,15 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
 - Surface the resolved model id (`jev-1.13.0`) and the `x-typesafe-request-id` header. Aliases
   (`jev-latest`) move without notice.
 - Only input tokens are billed ($0.042 per million for `jev-1.13.0`); cost is always labelled *estimated*.
-- Score `probabilities` and `legend` are keyed by **string** level over HTTP.
+- Score `probabilities` and `legend` are keyed by **string** level over HTTP. `legend` values echo the
+  question's levels, so they can be objects or arrays, not only strings.
+- The upstream docs are not the last word; live behaviour is (`docs/context/05-live-test-findings.md`).
+  A `null` Score level is a 422 although documented as allowed; `instructions` is optional in practice.
+- An unknown top-level request field gets an opaque `400 Invalid request.`, but an unknown field
+  *inside a question* is silently accepted, so a misspelt `criteria` quietly degrades answers. The
+  request types keep unknown fields (`extra`) so validation can report them.
+- Error bodies have three shapes under `detail`: the documented `{error_type, message}` object, a bare
+  string, and a FastAPI list for 422 that **echoes the request input** (treat it like a body when logging).
 - Answers are not bit-for-bit deterministic. Tests assert shapes and ranges, never exact probabilities.
 - Parse responses tolerantly: unknown fields and unknown answer types must not crash the CLI.
 
