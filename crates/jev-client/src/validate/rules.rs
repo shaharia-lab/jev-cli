@@ -74,7 +74,7 @@ pub(super) fn check_shape<'a>(
         findings.push(finding);
     }
 
-    let state = check_state(root, findings);
+    let state = check_state(root, options, findings);
     check_model(root, options, findings);
     let questions = check_questions(root, findings);
     check_duplicates(document, &questions, findings);
@@ -82,8 +82,13 @@ pub(super) fn check_shape<'a>(
     Some(RequestView { state, questions })
 }
 
-fn check_state<'a>(root: &'a Map<String, Value>, findings: &mut Vec<Finding>) -> Option<&'a Value> {
+fn check_state<'a>(
+    root: &'a Map<String, Value>,
+    options: &Options,
+    findings: &mut Vec<Finding>,
+) -> Option<&'a Value> {
     match root.get("state") {
+        None if options.state_optional => None,
         None => {
             findings.push(
                 Finding::error(Rule::StateMissing, "", "`state` is missing").suggest(

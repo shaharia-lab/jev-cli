@@ -12,8 +12,8 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
-exit-code contract. `jev eval`, `jev models list`, `jev config`, `jev profile` and `jev version`
-work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+exit-code contract. `jev eval`, `jev validate`, `jev models list`, `jev config`, `jev profile` and
+`jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 

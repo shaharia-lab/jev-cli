@@ -64,12 +64,16 @@ pub const MAX_SCORE_LEVELS: usize = 10;
 /// let options = Options::default().strict(true).skip_size_check(true);
 /// assert!(options.is_strict());
 /// ```
+// Four independent switches behind a builder; the fields are private, so this is not an API made
+// of positional booleans.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Options {
     strict: bool,
     skip_size_check: bool,
     model_optional: bool,
+    state_optional: bool,
 }
 
 impl Options {
@@ -92,6 +96,16 @@ impl Options {
     #[must_use]
     pub const fn model_optional(mut self, optional: bool) -> Self {
         self.model_optional = optional;
+        self
+    }
+
+    /// Accepts a request without a `state`, for a request file whose state is supplied when it is
+    /// evaluated (a flag, a pipe, or one row of a batch). Nothing about the state can be checked
+    /// then, and the size estimate covers the questions only. A `state` that is present must
+    /// still be a string, an object or an array.
+    #[must_use]
+    pub const fn state_optional(mut self, optional: bool) -> Self {
+        self.state_optional = optional;
         self
     }
 
