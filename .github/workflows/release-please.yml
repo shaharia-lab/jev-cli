@@ -3,9 +3,14 @@
 # that pull request makes the next run create the tag and a draft GitHub Release, and dispatch
 # .github/workflows/release.yml on the tag to build, verify and publish it.
 #
-# The tag and release are created with the default GITHUB_TOKEN, which triggers no other workflow;
-# a workflow_dispatch is the exception, so the release is started explicitly. The repository must
-# allow GitHub Actions to create pull requests (Settings > Actions > General).
+# release-please acts as the `jev-release-bot` GitHub App (secrets RELEASE_APP_ID and
+# RELEASE_APP_PRIVATE_KEY), with a token limited to this repository. The organisation does not let
+# GitHub Actions create pull requests, so the default GITHUB_TOKEN cannot open the release pull
+# request; an App token can, and because it is not GITHUB_TOKEN, CI runs on that pull request.
+#
+# release.yml has no `push: tags` trigger, so the tag the App creates starts nothing by itself. The
+# release is started by one explicit dispatch on the tag, made with GITHUB_TOKEN (`actions: write`,
+# which the App does not have), so each tag gets exactly one release run.
 #
 # Configuration: release-please-config.json and .release-please-manifest.json.
 
@@ -27,15 +32,23 @@ jobs:
   release-please:
     name: Release pull request and tag
     runs-on: ubuntu-latest
+    # The App token writes the release branch, pull request, labels, tag and draft release;
+    # GITHUB_TOKEN only dispatches the release workflow.
     permissions:
-      contents: write # the release branch, the tag and the draft release
-      pull-requests: write # the release pull request
-      issues: write # the autorelease labels on it
-      actions: write # dispatching the release workflow
+      actions: write
     steps:
+      - name: Mint release App token
+        id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
+          token: ${{ steps.app_token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
       - name: Build and publish ${{ steps.release.outputs.tag_name }}

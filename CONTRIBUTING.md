@@ -80,8 +80,12 @@ versions or `CHANGELOG.md` by hand.
    Conventional Commit titles since the last release, and its changelog entry. A `feat` bumps the
    minor version, a `fix` the patch; before 1.0 a breaking change (`!`) bumps the minor version.
    The `PR title` check rejects a pull request whose title does not follow the format.
+   release-please acts as the `jev-release-bot` GitHub App (repository secrets `RELEASE_APP_ID` and
+   `RELEASE_APP_PRIVATE_KEY`), because the organisation does not allow GitHub Actions to create
+   pull requests. The release pull request therefore gets the usual CI checks.
 2. Merging the release pull request tags `vX.Y.Z` and creates a **draft** GitHub Release, then
-   starts `.github/workflows/release.yml` on the tag.
+   starts `.github/workflows/release.yml` on the tag with one dispatch (`release.yml` has no tag
+   trigger, so each tag is released exactly once).
 3. That workflow builds all six targets (x86_64 and aarch64 of static-musl Linux, macOS and
    Windows) on native runners, checks each binary's size, version and (on Linux) static linking,
    packs `jev-<version>-<triple>.tar.gz` (`.zip` on Windows) with the licences, man pages and
