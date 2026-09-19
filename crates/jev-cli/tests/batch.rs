@@ -234,9 +234,16 @@ async fn ten_thousand_rows_give_ten_thousand_records_and_an_accurate_summary() {
     assert_eq!(summary["models"], json!(["jev-1.13.0"]));
     assert_eq!(summary["stopped_by"], Value::Null);
     assert!(summary["rows_per_second"].as_f64().unwrap() > 0.0);
-    // Piped, so the summary on stderr is one JSON line, the same as the file.
-    assert_eq!(run.stderr.lines().count(), 1, "{}", run.stderr);
-    assert_eq!(json_of(&run.stderr)["summary"]["ok"], 10_000);
+    // Piped, so the summary on stderr is one JSON line, the same as the file, after any progress
+    // lines a slow machine took long enough to get.
+    let stderr = lines_of(&run.stderr);
+    let (last, before) = stderr.split_last().unwrap();
+    assert_eq!(last["summary"]["ok"], 10_000, "{}", run.stderr);
+    assert!(
+        before.iter().all(|line| line.get("progress").is_some()),
+        "{}",
+        run.stderr
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
