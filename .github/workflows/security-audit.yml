@@ -24,8 +24,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
-        with:
-          tool: cargo-deny,cargo-audit
+      - name: Install cargo-deny and cargo-audit (pinned, checksum-verified)
+        run: scripts/ci/install-audit-tools.sh
       - run: cargo deny --locked check advisories
       - run: cargo audit --deny unsound --deny yanked
