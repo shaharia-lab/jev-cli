@@ -7,10 +7,13 @@
 //! cargo test --release -p jev-cli --test performance -- --ignored --nocapture --test-threads=1
 //! ```
 //!
-//! CI runs exactly that on Linux, so a change that makes start-up much slower fails there. Each
-//! test runs `jev` a fixed number of times after one warm-up run and checks the median against
-//! the PRD's budget; the 95th percentile is printed, as the PRD states the budget on it, but a
-//! single slow run on a shared CI machine is not allowed to fail the build.
+//! CI runs exactly that on Linux. Each test runs `jev` a fixed number of times after one warm-up
+//! run, prints the median and the 95th percentile, and checks the median against two limits: the
+//! PRD's budget, and a much tighter regression guard of about two and a half times what CI
+//! measured when the guard was set, so that a change which doubles start-up fails there. The
+//! median rather than the 95th percentile (on which the PRD states its budgets) is checked so
+//! that one slow run on a shared CI machine cannot fail the build. The guards are set for that
+//! runner: on a slower machine only the budgets say something.
 //!
 //! NFR-PERF-3 (batch memory is proportional to the concurrency, not to the input) is
 //! `a_million_rows_stay_under_100_mb_of_memory` in `tests/batch.rs`.
@@ -31,13 +34,21 @@ use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-41c7";
 
 /// How many timed runs each measurement takes, after one warm-up run.
-const RUNS: usize = 20;
+const RUNS: usize = 30;
 
 /// NFR-PERF-1: process start to request sent, plus response received to exit.
 const OVERHEAD_BUDGET: Duration = Duration::from_millis(30);
 
 /// NFR-PERF-2: a command that needs no network.
 const OFFLINE_BUDGET: Duration = Duration::from_millis(50);
+
+/// The regression guards, about two and a half times the medians CI's Linux runner measured when
+/// they were set (in brackets). One that trips means start-up has roughly doubled: find out why
+/// before raising it, and never above the budget.
+const HELP_GUARD: Duration = Duration::from_millis(5); // (1.8 ms)
+const SPEC_GUARD: Duration = Duration::from_millis(7); // (2.8 ms)
+const VALIDATE_GUARD: Duration = Duration::from_millis(5); // (1.8 ms)
+const OVERHEAD_GUARD: Duration = Duration::from_millis(18); // (7.4 ms)
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -102,18 +113,23 @@ fn summarise(mut timings: Vec<Duration>) -> (Duration, Duration) {
     (rank(50), rank(95))
 }
 
-/// Prints a measurement and fails when its median is over the budget.
-fn check(what: &str, timings: Vec<Duration>, budget: Duration) {
+/// Prints a measurement and fails when its median is over the budget or the guard.
+fn check(what: &str, timings: Vec<Duration>, budget: Duration, guard: Duration) {
     let (median, p95) = summarise(timings);
     eprintln!(
-        "{what}: median {:.1} ms, p95 {:.1} ms (budget {} ms)",
+        "{what}: median {:.1} ms, p95 {:.1} ms (budget {} ms, guard {} ms)",
         median.as_secs_f64() * 1000.0,
         p95.as_secs_f64() * 1000.0,
-        budget.as_millis()
+        budget.as_millis(),
+        guard.as_millis()
     );
     assert!(
         median <= budget,
         "{what} takes {median:?} (median of {RUNS} runs), over the budget of {budget:?}"
+    );
+    assert!(
+        median <= guard,
+        "{what} takes {median:?} (median of {RUNS} runs), over the regression guard of {guard:?}: start-up has become much slower"
     );
 }
 
@@ -123,10 +139,10 @@ fn check(what: &str, timings: Vec<Duration>, budget: Duration) {
 fn commands_that_need_no_network_finish_within_50_ms() {
     let request = fixture("eval/triage.json");
     let request = request.to_str().unwrap();
-    for arguments in [
-        vec!["--help"],
-        vec!["spec"],
-        vec!["validate", "-f", request],
+    for (arguments, guard) in [
+        (vec!["--help"], HELP_GUARD),
+        (vec!["spec"], SPEC_GUARD),
+        (vec!["validate", "-f", request], VALIDATE_GUARD),
     ] {
         time(&mut jev(NOWHERE, &arguments));
         let timings = (0..RUNS)
@@ -139,6 +155,7 @@ fn commands_that_need_no_network_finish_within_50_ms() {
             &format!("jev {}", arguments.join(" ")),
             timings,
             OFFLINE_BUDGET,
+            guard,
         );
     }
 }
@@ -205,5 +222,10 @@ async fn eval_adds_under_30_ms_to_a_request() {
             p95.as_secs_f64() * 1000.0
         );
     }
-    check("jev eval, overhead in all", total, OVERHEAD_BUDGET);
+    check(
+        "jev eval, overhead in all",
+        total,
+        OVERHEAD_BUDGET,
+        OVERHEAD_GUARD,
+    );
 }
