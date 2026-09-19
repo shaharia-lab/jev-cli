@@ -317,14 +317,19 @@ impl FileStore {
 }
 
 /// Options for a file only its owner can read, from the moment it is created.
+#[cfg(unix)]
 fn private_file_options() -> OpenOptions {
+    use std::os::unix::fs::OpenOptionsExt;
+
     let mut options = OpenOptions::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
+    options.mode(0o600);
     options
+}
+
+/// On Windows a file inherits the ACLs of the user's profile, which already keep others out.
+#[cfg(not(unix))]
+fn private_file_options() -> OpenOptions {
+    OpenOptions::new()
 }
 
 /// Creates the directory, and makes sure only its owner can enter it.
