@@ -1,4 +1,18 @@
-Schema of a JSON error
+JSON Schema of the error object printed on stderr for a program
+
+When to use:
+Use `jev schema error` before writing code that handles jev's failures: branch on `code` or
+`exit_code`, show `message` and follow `hint`. Use `jev schema output` for what a successful command
+prints on stdout.
+
+Input:
+Nothing. It needs no API key and no configuration, and never uses the network.
+
+Output:
+A JSON Schema (draft 2020-12) of the one JSON object a failing command prints on stderr when its
+output format is machine-readable, and that an MCP tool error carries: `{error: {code, exit_code,
+error_type, message, hint, request_id, http_status, retryable, details}}`, every field always
+present. JSON on a terminal too; -o yaml gives YAML.
 
 Usage: jev schema error [OPTIONS]
 
@@ -57,3 +71,14 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    usage or validation error; nothing was sent
+
+Examples:
+  # The error fields
+  jev schema error | jq '.properties.error.required'
+
+  # As YAML
+  jev schema error -o yaml

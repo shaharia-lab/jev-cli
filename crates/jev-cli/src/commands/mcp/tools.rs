@@ -7,13 +7,13 @@
 use jev_client::validate::{self, Document, Options};
 use jev_client::{Choice, Noul, Request, Score, Transport};
 use schemars::JsonSchema;
-use schemars::generate::SchemaSettings;
 use serde_json::{Map, Value, json};
 
 use super::{Session, with_session};
 use crate::commands::shortcut::{ANSWER, Single};
 use crate::commands::validate::Validation;
 use crate::error::CliError;
+use crate::schemas;
 
 /// What a tool does with its arguments.
 pub(super) type Handler<T> = fn(&mut Session<T>, &Map<String, Value>) -> Result<Value, CliError>;
@@ -297,16 +297,7 @@ fn list_models_tool<T: Transport>(
 /// A type's JSON Schema as a plain object, with every definition inlined: some MCP clients do
 /// not follow `$ref`.
 fn schema_of<T: JsonSchema>() -> Map<String, Value> {
-    let mut settings = SchemaSettings::draft2020_12();
-    settings.inline_subschemas = true;
-    let mut schema = match settings
-        .into_generator()
-        .into_root_schema_for::<T>()
-        .to_value()
-    {
-        Value::Object(schema) => schema,
-        _ => Map::new(),
-    };
+    let mut schema = schemas::inlined::<T>();
     schema.remove("$schema");
     schema.remove("title");
     schema

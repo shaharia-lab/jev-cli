@@ -80,6 +80,19 @@ price, so a capped server refuses it) and set a per-call limit:
 `"--profile", "<name>"` to use a profile's key and settings. Logs go to stderr; stdout carries only
 protocol messages.
 
+## JSON Schemas
+
+`jev schema request|questions|batch-record|output|error` prints a JSON Schema (draft 2020-12)
+generated from the types `jev` itself reads and writes: a complete request, a question set (a
+request file whose state comes from elsewhere), one line of `jev batch run` output, the result of an
+evaluation, and the error object printed on stderr. The same
+files are in [`schemas/`](schemas). To have an editor check request files, point the YAML or JSON
+language server at one, for example with a first line in a YAML file:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/schemas/questions.schema.json
+```
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) to build and test, and [`CLAUDE.md`](CLAUDE.md) for the

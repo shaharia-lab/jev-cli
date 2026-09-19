@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jev question set",
+  "description": "A question set: a request file in which only `questions` is required. `state` comes from --state, --state-file or stdin (`jev eval`) or from each input row (`jev batch run`). The model is --model, else `model` here, else TYPESAFE_DEFAULT_MODEL, the profile's model, and finally `jev-latest`. `jev validate` checks files of this shape.",
+  "type": "object",
+  "properties": {
+    "state": {
+      "description": "The content to evaluate: a string, or structured data such as a chat log or a record.\n\nThe API rejects `null` and scalar values here.",
+      "type": [
+        "string",
+        "object",
+        "array"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "description": "The model that handles the request: an alias such as `jev-latest`, or a versioned id such\nas `jev-1.13.0`. Aliases move without notice; pin a versioned id once thresholds are tuned."
+    },
+    "questions": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "instructions": {
+                "description": "The yes/no question to evaluate.\n\nThe API reference marks this as required. In practice the server also accepts a Noul that\nhas only `criteria`, so it is optional here and offline validation decides.",
+                "type": [
+                  "string",
+                  "object",
+                  "array",
+                  "null"
+                ]
+              },
+              "criteria": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "true": {
+                    "description": "What a yes (a value near 1) means.",
+                    "type": [
+                      "string",
+                      "object",
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "false": {
+                    "description": "What a no (a value near 0) means.",
+                    "type": [
+                      "string",
+                      "object",
+                      "array",
+                      "null"
+                    ]
+                  }
+                },
+                "description": "Optional descriptions of what a yes and a no mean.",
+                "additionalProperties": false
+              },
+              "type": {
+                "type": "string",
+                "const": "noul"
+              }
+            },
+            "description": "A yes/no question, answered with the probability of yes.",
+            "required": [
+              "type",
+              "instructions"
+            ],
+            "unevaluatedProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "instructions": {
+                "description": "What the model should decide.\n\nMarked required by the API reference, although the server accepts a Choice without it.",
+                "type": [
+                  "string",
+                  "object",
+                  "array",
+                  "null"
+                ]
+              },
+              "criteria": {
+                "type": "object",
+                "additionalProperties": {
+                  "description": "Free-form content: a string, an object, an array, or null.",
+                  "type": [
+                    "string",
+                    "object",
+                    "array",
+                    "null"
+                  ]
+                },
+                "description": "Each option mapped to its description, or to `null` when the name says enough.\n\nOptions keep the order they were written in. The API allows up to 255 of them. A repeated\noption is a parse error when reading JSON or YAML text directly.",
+                "minProperties": 1,
+                "maxProperties": 255
+              },
+              "type": {
+                "type": "string",
+                "const": "choice"
+              }
+            },
+            "required": [
+              "type",
+              "instructions",
+              "criteria"
+            ],
+            "description": "Pick one option from a set, answered with a probability per option.",
+            "unevaluatedProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "instructions": {
+                "description": "What the model should rate.\n\nMarked required by the API reference, although the server accepts a Score without it.",
+                "type": [
+                  "string",
+                  "object",
+                  "array",
+                  "null"
+                ]
+              },
+              "criteria": {
+                "type": "array",
+                "items": {
+                  "description": "Free-form content: a string, an object, or an array.",
+                  "type": [
+                    "string",
+                    "object",
+                    "array"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 10,
+                "description": "Level descriptions in order, from level 0 upwards. The API allows 2 to 10 levels.\n\nUnlike a choice option, a level cannot be `null`: the server rejects it with a 422."
+              },
+              "type": {
+                "type": "string",
+                "const": "score"
+              }
+            },
+            "required": [
+              "type",
+              "instructions",
+              "criteria"
+            ],
+            "description": "Rate along an ordered rubric, answered with a probability per level.",
+            "unevaluatedProperties": false
+          }
+        ],
+        "description": "One typed question. The `type` field selects the kind: `noul`, `choice` or `score`. The question id is never sent to the model, so put the full meaning in `instructions`."
+      },
+      "description": "The questions, keyed by an id the caller chooses. Answers come back under the same ids.\n\nQuestions keep the order they were written in. Ids are never sent to the model. A repeated\nid is a parse error when reading JSON or YAML text directly (a parser that has already\ncollapsed the document into a generic value keeps only the last one).",
+      "minProperties": 1
+    }
+  },
+  "required": [
+    "questions"
+  ],
+  "additionalProperties": false
+}

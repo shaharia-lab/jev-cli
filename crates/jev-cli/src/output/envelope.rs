@@ -21,12 +21,17 @@ const BAR_WIDTH: usize = 20;
 /// This shape is versioned public API. `answers` is what the API returned, passed through
 /// unmodified, so a field this version of `jev` does not know still reaches the caller.
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+// Every field but `gate` is always present, `null` when it has no value.
+#[schemars(extend("required" = [
+    "model", "requested_model", "answers", "usage", "cost_usd", "request_id", "latency_ms"
+]))]
 pub(crate) struct ResultEnvelope {
     /// The versioned id of the model that answered, such as `jev-1.13.0`.
     pub(crate) model: String,
     /// The model name the request used, which may be an alias such as `jev-latest`.
     pub(crate) requested_model: String,
     /// One answer per question, exactly as the API returned them.
+    #[schemars(with = "IndexMap<String, Answer>")]
     pub(crate) answers: IndexMap<String, Value>,
     /// Token usage. Only input tokens are billed.
     pub(crate) usage: Usage,
@@ -38,6 +43,7 @@ pub(crate) struct ResultEnvelope {
     pub(crate) latency_ms: u64,
     /// The outcome of the gate, present only when a gating flag was used.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "GateOutcome", default)]
     pub(crate) gate: Option<GateOutcome>,
 }
 

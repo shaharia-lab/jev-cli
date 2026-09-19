@@ -246,7 +246,6 @@ fn a_usage_error_is_a_json_object_on_stderr_when_the_output_is_for_a_program() {
 fn commands_without_behaviour_say_so_whatever_flags_follow() {
     let cases = [
         (vec!["update", "--check"], "update", 25),
-        (vec!["schema", "batch-record"], "schema batch-record", 16),
         (vec!["completion", "zsh"], "completion", 17),
     ];
 

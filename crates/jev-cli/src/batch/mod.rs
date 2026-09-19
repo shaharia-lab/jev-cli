@@ -11,6 +11,7 @@
 
 mod engine;
 mod input;
+mod record;
 mod summary;
 
 use std::collections::HashSet;
@@ -20,6 +21,7 @@ use serde_json::{Map, Value, json};
 
 pub(crate) use engine::{Job, run};
 pub(crate) use input::{Row, RowFormat, RowProblem, RowSource, Rows};
+pub(crate) use record::Record;
 pub(crate) use summary::Summary;
 
 use crate::error::CliError;

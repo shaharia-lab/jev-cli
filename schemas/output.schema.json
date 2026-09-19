@@ -1,0 +1,447 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jev result",
+  "description": "The result of an evaluation, as `jev eval`, `jev noul`, `jev choice` and `jev score` print it with `-o json` (and `jev mcp serve` returns it). `jev eval` puts every answer under `answers`, keyed by question id, exactly as the API returned it; the one-question commands put their answer's own fields (`type`, `noul`, `choice`, `score`, ...) at the top level instead. `gate` is present only when a gating flag was used. New fields may be added; existing ones do not change within a major version.",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "The versioned id of the model that answered, such as `jev-1.13.0`."
+        },
+        "requested_model": {
+          "type": "string",
+          "description": "The model name the request used, which may be an alias such as `jev-latest`."
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "noul": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "The probability of yes, from 0 (no) to 1 (yes)."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "noul"
+                  }
+                },
+                "required": [
+                  "type",
+                  "noul"
+                ],
+                "description": "The probability that the answer to a yes/no question is yes."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "choice": {
+                    "type": "string",
+                    "description": "The highest-probability option."
+                  },
+                  "probabilities": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "format": "double"
+                    },
+                    "description": "Every option mapped to its probability. The values sum to 1, within rounding.\n\nThe server does not return options in the order they were asked."
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "choice"
+                  }
+                },
+                "required": [
+                  "type",
+                  "choice",
+                  "probabilities",
+                  "confidence"
+                ],
+                "description": "The chosen option and the probability of every option."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "score": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "The probability-weighted level. It can land between two levels."
+                  },
+                  "legend": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "description": "Free-form content: a string, an object, an array, or null.",
+                      "type": [
+                        "string",
+                        "object",
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "description": "Each level, as a **string** key such as `\"0\"`, mapped back to its description.\n\nThe API reference types the description as a string, but the server echoes whatever the\nquestion used for that level, including an object or an array."
+                  },
+                  "probabilities": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "format": "double"
+                    },
+                    "description": "Each level, as a **string** key matching `legend`, mapped to its probability."
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "score"
+                  }
+                },
+                "required": [
+                  "type",
+                  "score",
+                  "legend",
+                  "probabilities",
+                  "confidence"
+                ],
+                "description": "The probability-weighted level and the probability of every level."
+              },
+              {
+                "description": "An answer this version of the crate does not understand, kept as the raw JSON received."
+              }
+            ],
+            "description": "The answer to one question. The `type` field mirrors the question's type. An answer of a type this version does not understand is passed through as the raw JSON received."
+          },
+          "description": "One answer per question, exactly as the API returned them."
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "input_tokens": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "Tokens read: the state, every question, and a fixed per-request overhead.",
+              "default": 0
+            },
+            "output_tokens": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "Tokens produced. Reported by the API but not billed.",
+              "default": 0
+            }
+          },
+          "description": "Token usage. Only input tokens are billed."
+        },
+        "cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "The estimated cost in US dollars, or `null` when the model's price is not known."
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The `x-typesafe-request-id` to quote when asking TypeSafe about this request."
+        },
+        "latency_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Wall-clock time for the call, including retries, in milliseconds."
+        },
+        "gate": {
+          "type": "object",
+          "properties": {
+            "passed": {
+              "type": "boolean",
+              "description": "`true` when every condition holds. `false` means exit code 10."
+            },
+            "abstained": {
+              "type": "boolean",
+              "description": "`true` when the answer fell inside the abstain band, which means exit code 11."
+            },
+            "conditions": {
+              "type": "array",
+              "items": {
+                "description": "The outcome of one condition.",
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "description": "The condition, as it was understood.",
+                    "type": "string"
+                  },
+                  "passed": {
+                    "description": "Whether the condition holds.",
+                    "type": "boolean"
+                  },
+                  "actual": {
+                    "description": "The value the condition was compared with."
+                  }
+                },
+                "required": [
+                  "condition",
+                  "passed",
+                  "actual"
+                ]
+              }
+            }
+          },
+          "required": [
+            "passed",
+            "abstained",
+            "conditions"
+          ],
+          "description": "The outcome of the gate, present only when a gating flag was used."
+        }
+      },
+      "required": [
+        "model",
+        "requested_model",
+        "answers",
+        "usage",
+        "cost_usd",
+        "request_id",
+        "latency_ms"
+      ],
+      "description": "The documented result of an evaluation.\n\nThis shape is versioned public API. `answers` is what the API returned, passed through\nunmodified, so a field this version of `jev` does not know still reaches the caller.",
+      "title": "jev eval: every answer under `answers`"
+    },
+    {
+      "title": "jev noul|choice|score: the one answer's fields at the top level",
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string",
+              "description": "The versioned id of the model that answered, such as `jev-1.13.0`."
+            },
+            "requested_model": {
+              "type": "string",
+              "description": "The model name the request used, which may be an alias such as `jev-latest`."
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "input_tokens": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0,
+                  "description": "Tokens read: the state, every question, and a fixed per-request overhead.",
+                  "default": 0
+                },
+                "output_tokens": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0,
+                  "description": "Tokens produced. Reported by the API but not billed.",
+                  "default": 0
+                }
+              },
+              "description": "Token usage. Only input tokens are billed."
+            },
+            "cost_usd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double",
+              "description": "The estimated cost in US dollars, or `null` when the model's price is not known."
+            },
+            "request_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The `x-typesafe-request-id` to quote when asking TypeSafe about this request."
+            },
+            "latency_ms": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "Wall-clock time for the call, including retries, in milliseconds."
+            },
+            "gate": {
+              "type": "object",
+              "properties": {
+                "passed": {
+                  "type": "boolean",
+                  "description": "`true` when every condition holds. `false` means exit code 10."
+                },
+                "abstained": {
+                  "type": "boolean",
+                  "description": "`true` when the answer fell inside the abstain band, which means exit code 11."
+                },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "description": "The outcome of one condition.",
+                    "type": "object",
+                    "properties": {
+                      "condition": {
+                        "description": "The condition, as it was understood.",
+                        "type": "string"
+                      },
+                      "passed": {
+                        "description": "Whether the condition holds.",
+                        "type": "boolean"
+                      },
+                      "actual": {
+                        "description": "The value the condition was compared with."
+                      }
+                    },
+                    "required": [
+                      "condition",
+                      "passed",
+                      "actual"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "passed",
+                "abstained",
+                "conditions"
+              ],
+              "description": "The outcome of the gate, present only when a gating flag was used."
+            }
+          },
+          "required": [
+            "model",
+            "requested_model",
+            "usage",
+            "cost_usd",
+            "request_id",
+            "latency_ms"
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "noul": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "The probability of yes, from 0 (no) to 1 (yes)."
+                },
+                "type": {
+                  "type": "string",
+                  "const": "noul"
+                }
+              },
+              "required": [
+                "type",
+                "noul"
+              ],
+              "description": "The probability that the answer to a yes/no question is yes."
+            },
+            {
+              "type": "object",
+              "properties": {
+                "choice": {
+                  "type": "string",
+                  "description": "The highest-probability option."
+                },
+                "probabilities": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number",
+                    "format": "double"
+                  },
+                  "description": "Every option mapped to its probability. The values sum to 1, within rounding.\n\nThe server does not return options in the order they were asked."
+                },
+                "confidence": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
+                },
+                "type": {
+                  "type": "string",
+                  "const": "choice"
+                }
+              },
+              "required": [
+                "type",
+                "choice",
+                "probabilities",
+                "confidence"
+              ],
+              "description": "The chosen option and the probability of every option."
+            },
+            {
+              "type": "object",
+              "properties": {
+                "score": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "The probability-weighted level. It can land between two levels."
+                },
+                "legend": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "description": "Free-form content: a string, an object, an array, or null.",
+                    "type": [
+                      "string",
+                      "object",
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "description": "Each level, as a **string** key such as `\"0\"`, mapped back to its description.\n\nThe API reference types the description as a string, but the server echoes whatever the\nquestion used for that level, including an object or an array."
+                },
+                "probabilities": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number",
+                    "format": "double"
+                  },
+                  "description": "Each level, as a **string** key matching `legend`, mapped to its probability."
+                },
+                "confidence": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
+                },
+                "type": {
+                  "type": "string",
+                  "const": "score"
+                }
+              },
+              "required": [
+                "type",
+                "score",
+                "legend",
+                "probabilities",
+                "confidence"
+              ],
+              "description": "The probability-weighted level and the probability of every level."
+            },
+            {
+              "description": "An answer this version of the crate does not understand, kept as the raw JSON received."
+            }
+          ],
+          "description": "The answer to one question. The `type` field mirrors the question's type. An answer of a type this version does not understand is passed through as the raw JSON received."
+        }
+      ]
+    }
+  ]
+}

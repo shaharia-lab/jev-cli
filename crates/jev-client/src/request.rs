@@ -49,6 +49,7 @@ pub struct Request {
     /// id is a parse error when reading JSON or YAML text directly (a parser that has already
     /// collapsed the document into a generic value keeps only the last one).
     #[serde(deserialize_with = "de::unique_map")]
+    #[schemars(extend("minProperties" = 1))]
     pub questions: IndexMap<String, Question>,
 
     /// Top-level fields this version of the crate does not know, sent to the API unchanged.

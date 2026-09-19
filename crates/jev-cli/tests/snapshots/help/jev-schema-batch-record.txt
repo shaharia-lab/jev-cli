@@ -1,4 +1,18 @@
-Schema of one batch output record
+JSON Schema of one line of `jev batch run` output
+
+When to use:
+Use `jev schema batch-record` before writing code that reads the JSONL of `jev batch run`: every
+line is one record. Use `jev schema output` for the result of a single evaluation, and `jev schema
+questions` for the question set a batch reads.
+
+Input:
+Nothing. It needs no API key and no configuration, and never uses the network.
+
+Output:
+A JSON Schema (draft 2020-12) of one record: `anyOf` an `ok` record (`id`, `status`, `model`,
+`answers`, `usage`, `cost_usd`, `request_id`, `latency_ms`) and an `error` record (`id`, `status`,
+and an `error` object shaped like the JSON error on stderr). JSON on a terminal too; -o yaml gives
+YAML.
 
 Usage: jev schema batch-record [OPTIONS]
 
@@ -57,3 +71,14 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    usage or validation error; nothing was sent
+
+Examples:
+  # Save it to check a results file
+  jev schema batch-record -o json > jev-batch-record.schema.json
+
+  # The fields of a failed row
+  jev schema batch-record | jq '.anyOf[1].properties | keys'

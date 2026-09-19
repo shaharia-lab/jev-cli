@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jev batch record",
+  "description": "One line of `jev batch run` output, one per input row, in completion order. `status` `ok`: the row's `id` and the same facts `jev eval -o json` reports (`model`, `answers`, `usage`, `cost_usd`, `request_id`, `latency_ms`). `status` `error`: the row's `id` and an `error` object shaped like the JSON error on stderr. A run with any `error` record exits 7.",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "description": "The row's id: the value of --id-field (a string or a number), else its 1-based line number."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok"
+          ],
+          "description": "Always `ok`."
+        },
+        "model": {
+          "type": "string",
+          "description": "The versioned id of the model that answered, such as `jev-1.13.0`."
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "noul": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "The probability of yes, from 0 (no) to 1 (yes)."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "noul"
+                  }
+                },
+                "required": [
+                  "type",
+                  "noul"
+                ],
+                "description": "The probability that the answer to a yes/no question is yes."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "choice": {
+                    "type": "string",
+                    "description": "The highest-probability option."
+                  },
+                  "probabilities": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "format": "double"
+                    },
+                    "description": "Every option mapped to its probability. The values sum to 1, within rounding.\n\nThe server does not return options in the order they were asked."
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "choice"
+                  }
+                },
+                "required": [
+                  "type",
+                  "choice",
+                  "probabilities",
+                  "confidence"
+                ],
+                "description": "The chosen option and the probability of every option."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "score": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "The probability-weighted level. It can land between two levels."
+                  },
+                  "legend": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "description": "Free-form content: a string, an object, an array, or null.",
+                      "type": [
+                        "string",
+                        "object",
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "description": "Each level, as a **string** key such as `\"0\"`, mapped back to its description.\n\nThe API reference types the description as a string, but the server echoes whatever the\nquestion used for that level, including an object or an array."
+                  },
+                  "probabilities": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "format": "double"
+                    },
+                    "description": "Each level, as a **string** key matching `legend`, mapped to its probability."
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "score"
+                  }
+                },
+                "required": [
+                  "type",
+                  "score",
+                  "legend",
+                  "probabilities",
+                  "confidence"
+                ],
+                "description": "The probability-weighted level and the probability of every level."
+              },
+              {
+                "description": "An answer this version of the crate does not understand, kept as the raw JSON received."
+              }
+            ],
+            "description": "The answer to one question. The `type` field mirrors the question's type. An answer of a type this version does not understand is passed through as the raw JSON received."
+          },
+          "description": "One answer per question, exactly as the API returned them."
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "input_tokens": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "Tokens read: the state, every question, and a fixed per-request overhead.",
+              "default": 0
+            },
+            "output_tokens": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "Tokens produced. Reported by the API but not billed.",
+              "default": 0
+            }
+          },
+          "description": "Token usage. Only input tokens are billed."
+        },
+        "cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "The estimated cost in US dollars, or `null` when the model's price is not known."
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The `x-typesafe-request-id` to quote when asking TypeSafe about this row."
+        },
+        "latency_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Wall-clock time for the row's call, including retries, in milliseconds."
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "model",
+        "answers",
+        "usage",
+        "cost_usd",
+        "request_id",
+        "latency_ms"
+      ],
+      "description": "A row that was evaluated."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "number",
+            "null"
+          ],
+          "description": "The row's id, as in an `ok` record; `null` only if jev itself failed while handling it."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "error"
+          ],
+          "description": "Always `error`."
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "A stable, machine-readable name for the failure, such as `usage`, `authentication`,\n`api_rejected`, `rate_limited`, `timeout` or `not_implemented`."
+            },
+            "exit_code": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255,
+              "description": "The process exit code: 1 internal, 2 usage or validation, 3 auth, 4 API rejected, 5 rate\nlimited or overloaded, 6 network or timeout, 7 batch partial failure, 130 interrupted.\nNever 10 or 11: those mean an evaluation succeeded and a gate decided."
+            },
+            "error_type": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The API's own `error_type` when it sent one, passed through unchanged."
+            },
+            "message": {
+              "type": "string",
+              "description": "What went wrong, in one sentence."
+            },
+            "hint": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The next action to take, such as the flag or command that fixes it."
+            },
+            "request_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The `x-typesafe-request-id` of the failed call, to quote when asking TypeSafe about it."
+            },
+            "http_status": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "description": "The HTTP status the API answered with, when the failure came from the API."
+            },
+            "retryable": {
+              "type": "boolean",
+              "description": "Whether trying the same thing again later may succeed."
+            },
+            "details": {
+              "description": "Structured detail, such as the findings of a failed validation, or `null`."
+            }
+          },
+          "required": [
+            "code",
+            "exit_code",
+            "error_type",
+            "message",
+            "hint",
+            "request_id",
+            "http_status",
+            "retryable",
+            "details"
+          ],
+          "description": "What went wrong: the same object as a JSON error on stderr (see `jev schema error`)."
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "error"
+      ],
+      "description": "A row that failed. The run goes on, and exits 7 at the end."
+    }
+  ]
+}

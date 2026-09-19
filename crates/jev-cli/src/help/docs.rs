@@ -3,7 +3,7 @@
 //! Write for a reader who has only this text, person or agent: say when to pick the command over
 //! its siblings, and make every example something that runs as written.
 
-use super::{Doc, Example, code, code_as};
+use super::{Doc, Example, ExitCode, code, code_as};
 use crate::exit::Exit;
 
 /// The examples of `jev --help`.
@@ -17,6 +17,13 @@ pub(crate) const ROOT_EXAMPLES: &[Example] = &[
         command: "jev spec | jq -r '.commands[].path'",
     },
 ];
+
+/// What every `jev schema` command reads.
+const SCHEMA_INPUT: &str =
+    "Nothing. It needs no API key and no configuration, and never uses the network.";
+
+/// What every `jev schema` command can exit with.
+const SCHEMA_EXIT_CODES: &[ExitCode] = &[code(Exit::Success), code(Exit::Usage)];
 
 /// Every command's help, in the order of the command tree.
 pub(crate) const DOCS: &[Doc] = &[
@@ -619,6 +626,115 @@ key.",
             Example {
                 description: "The same, for a script",
                 command: "jev profile delete staging -o json",
+            },
+        ],
+    },
+    Doc {
+        path: "schema request",
+        when: "Use `jev schema request` to author or check a file that carries everything an \
+evaluation needs: `state`, `model` and `questions`, exactly the body the API takes. Use \
+`jev schema questions` for a file whose state comes from elsewhere, and `jev validate` to check a \
+file offline with jev's own rules, which explain each problem and suggest the fix.",
+        input: SCHEMA_INPUT,
+        output: "A JSON Schema (draft 2020-12) with every definition inlined, generated from the \
+types jev reads. It holds the limits: 1 to 255 choice options, 2 to 10 score levels, at least one \
+question, and no unknown fields. JSON on a terminal too; -o yaml gives YAML.",
+        exit_codes: SCHEMA_EXIT_CODES,
+        examples: &[
+            Example {
+                description: "Save it for an editor or a JSON Schema validator",
+                command: "jev schema request -o json > jev-request.schema.json",
+            },
+            Example {
+                description: "The fields a question may have",
+                command: "jev schema request | jq '.properties.questions.additionalProperties'",
+            },
+        ],
+    },
+    Doc {
+        path: "schema questions",
+        when: "Use `jev schema questions` to author or check a question set: a request file in \
+which only `questions` is required, as given to `jev eval -f` with --state-file, to \
+`jev validate` and to `jev batch run -f`. Use `jev schema request` for a file that must carry its \
+own `state` and `model`.",
+        input: SCHEMA_INPUT,
+        output: "A JSON Schema (draft 2020-12) with every definition inlined: the request schema \
+with only `questions` required. JSON on a terminal too; -o yaml gives YAML.",
+        exit_codes: SCHEMA_EXIT_CODES,
+        examples: &[
+            Example {
+                description: "Save it for an editor, then check a file offline",
+                command: "jev schema questions -o json > questions.schema.json\njev validate -f triage.yaml",
+            },
+            Example {
+                description: "The question types",
+                command: "jev schema questions \\\n    | jq '.properties.questions.additionalProperties.oneOf[].properties.type'",
+            },
+        ],
+    },
+    Doc {
+        path: "schema batch-record",
+        when: "Use `jev schema batch-record` before writing code that reads the JSONL of \
+`jev batch run`: every line is one record. Use `jev schema output` for the result of a single \
+evaluation, and `jev schema questions` for the question set a batch reads.",
+        input: SCHEMA_INPUT,
+        output: "A JSON Schema (draft 2020-12) of one record: `anyOf` an `ok` record (`id`, \
+`status`, `model`, `answers`, `usage`, `cost_usd`, `request_id`, `latency_ms`) and an `error` \
+record (`id`, `status`, and an `error` object shaped like the JSON error on stderr). JSON on a \
+terminal too; -o yaml gives YAML.",
+        exit_codes: SCHEMA_EXIT_CODES,
+        examples: &[
+            Example {
+                description: "Save it to check a results file",
+                command: "jev schema batch-record -o json > jev-batch-record.schema.json",
+            },
+            Example {
+                description: "The fields of a failed row",
+                command: "jev schema batch-record | jq '.anyOf[1].properties | keys'",
+            },
+        ],
+    },
+    Doc {
+        path: "schema output",
+        when: "Use `jev schema output` before writing code that reads the JSON of `jev eval`, \
+`jev noul`, `jev choice` or `jev score`. Use `jev schema error` for what they print on stderr \
+when they fail.",
+        input: SCHEMA_INPUT,
+        output: "A JSON Schema (draft 2020-12) of the result: `anyOf` the `jev eval` form, with \
+every answer under `answers`, and the one-question form, with the answer's fields at the top \
+level. Both have `model`, `requested_model`, `usage`, `cost_usd`, `request_id` and `latency_ms`, \
+and `gate` when a gating flag was used. JSON on a terminal too; -o yaml gives YAML.",
+        exit_codes: SCHEMA_EXIT_CODES,
+        examples: &[
+            Example {
+                description: "The fields every result has",
+                command: "jev schema output | jq '.anyOf[0].required'",
+            },
+            Example {
+                description: "Save it to check results in a test suite",
+                command: "jev schema output -o json > jev-result.schema.json",
+            },
+        ],
+    },
+    Doc {
+        path: "schema error",
+        when: "Use `jev schema error` before writing code that handles jev's failures: branch on \
+`code` or `exit_code`, show `message` and follow `hint`. Use `jev schema output` for what a \
+successful command prints on stdout.",
+        input: SCHEMA_INPUT,
+        output: "A JSON Schema (draft 2020-12) of the one JSON object a failing command prints on \
+stderr when its output format is machine-readable, and that an MCP tool error carries: \
+`{error: {code, exit_code, error_type, message, hint, request_id, http_status, retryable, \
+details}}`, every field always present. JSON on a terminal too; -o yaml gives YAML.",
+        exit_codes: SCHEMA_EXIT_CODES,
+        examples: &[
+            Example {
+                description: "The error fields",
+                command: "jev schema error | jq '.properties.error.required'",
+            },
+            Example {
+                description: "As YAML",
+                command: "jev schema error -o yaml",
             },
         ],
     },

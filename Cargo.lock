@@ -915,6 +915,7 @@ dependencies = [
  "csv",
  "indexmap",
  "jev-client",
+ "jsonschema",
  "predicates",
  "pty-process",
  "rpassword",

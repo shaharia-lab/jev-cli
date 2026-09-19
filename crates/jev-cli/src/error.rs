@@ -3,6 +3,7 @@
 use std::fmt::Write as _;
 
 use jev_client::ErrorKind;
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -105,7 +106,10 @@ impl CliError {
 
     /// The single JSON object printed on stderr when the output format is machine-readable.
     pub(crate) fn to_json(&self) -> Value {
-        json!({ "error": ErrorBody::from(self) })
+        serde_json::to_value(ErrorDocument {
+            error: ErrorBody::from(self),
+        })
+        .unwrap_or_else(|_| json!({ "error": { "code": self.code, "message": self.message } }))
     }
 
     /// The text printed on stderr for a person.
@@ -124,18 +128,41 @@ impl CliError {
     }
 }
 
+/// The JSON error document: one `error` object. `jev schema error` prints its schema.
+#[derive(Serialize, JsonSchema)]
+pub(crate) struct ErrorDocument<'a> {
+    /// What went wrong, and what to do next.
+    error: ErrorBody<'a>,
+}
+
 /// The documented shape of a JSON error. Every field is always present, so a reader never has to
 /// test for one.
-#[derive(Serialize)]
-struct ErrorBody<'a> {
+#[derive(Serialize, JsonSchema)]
+#[schemars(extend("required" = [
+    "code", "exit_code", "error_type", "message", "hint", "request_id", "http_status", "retryable",
+    "details"
+]))]
+pub(crate) struct ErrorBody<'a> {
+    /// A stable, machine-readable name for the failure, such as `usage`, `authentication`,
+    /// `api_rejected`, `rate_limited`, `timeout` or `not_implemented`.
     code: &'a str,
+    /// The process exit code: 1 internal, 2 usage or validation, 3 auth, 4 API rejected, 5 rate
+    /// limited or overloaded, 6 network or timeout, 7 batch partial failure, 130 interrupted.
+    /// Never 10 or 11: those mean an evaluation succeeded and a gate decided.
     exit_code: u8,
+    /// The API's own `error_type` when it sent one, passed through unchanged.
     error_type: Option<&'a str>,
+    /// What went wrong, in one sentence.
     message: &'a str,
+    /// The next action to take, such as the flag or command that fixes it.
     hint: Option<&'a str>,
+    /// The `x-typesafe-request-id` of the failed call, to quote when asking TypeSafe about it.
     request_id: Option<&'a str>,
+    /// The HTTP status the API answered with, when the failure came from the API.
     http_status: Option<u16>,
+    /// Whether trying the same thing again later may succeed.
     retryable: bool,
+    /// Structured detail, such as the findings of a failed validation, or `null`.
     details: Option<&'a Value>,
 }
 

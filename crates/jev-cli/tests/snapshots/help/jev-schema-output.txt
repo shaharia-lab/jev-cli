@@ -1,4 +1,17 @@
-Schema of the result envelope
+JSON Schema of the result that `jev eval`, `jev noul`, `jev choice` and `jev score` print
+
+When to use:
+Use `jev schema output` before writing code that reads the JSON of `jev eval`, `jev noul`, `jev
+choice` or `jev score`. Use `jev schema error` for what they print on stderr when they fail.
+
+Input:
+Nothing. It needs no API key and no configuration, and never uses the network.
+
+Output:
+A JSON Schema (draft 2020-12) of the result: `anyOf` the `jev eval` form, with every answer under
+`answers`, and the one-question form, with the answer's fields at the top level. Both have `model`,
+`requested_model`, `usage`, `cost_usd`, `request_id` and `latency_ms`, and `gate` when a gating flag
+was used. JSON on a terminal too; -o yaml gives YAML.
 
 Usage: jev schema output [OPTIONS]
 
@@ -57,3 +70,14 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    usage or validation error; nothing was sent
+
+Examples:
+  # The fields every result has
+  jev schema output | jq '.anyOf[0].required'
+
+  # Save it to check results in a test suite
+  jev schema output -o json > jev-result.schema.json
