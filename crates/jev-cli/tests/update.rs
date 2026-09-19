@@ -349,6 +349,7 @@ mod with_releases {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    #[cfg(unix)]
     use std::time::{Duration, Instant};
 
     use super::{EXE, Run, Sandbox, jev, jev_in, json, run};
@@ -834,6 +835,7 @@ mod with_releases {
     }
 
     /// How many times `jev` asked `server` for the latest release.
+    #[cfg(unix)]
     async fn checks(server: &MockServer) -> usize {
         server
             .received_requests()
@@ -845,6 +847,7 @@ mod with_releases {
     }
 
     /// Waits for the background check to leave `what` behind in the sandbox.
+    #[cfg(unix)]
     async fn eventually(what: &str, done: impl Fn() -> bool) {
         let started = Instant::now();
         while !done() {
@@ -862,6 +865,7 @@ mod with_releases {
     }
 
     /// Whether the last check has recorded what it found.
+    #[cfg(unix)]
     fn recorded(sandbox: &Sandbox) -> bool {
         state(sandbox).is_some_and(|state| {
             state
@@ -870,6 +874,8 @@ mod with_releases {
         })
     }
 
+    // On Windows a check is only started at a terminal; see `a_piped_run_on_windows_starts_no_check`.
+    #[cfg(unix)]
     #[tokio::test(flavor = "multi_thread")]
     async fn a_newer_release_is_staged_after_one_command_and_swapped_in_before_the_next() {
         let sandbox = Sandbox::new("automatic");
@@ -940,6 +946,8 @@ mod with_releases {
         }
     }
 
+    // On Windows a check is only started at a terminal; see `a_piped_run_on_windows_starts_no_check`.
+    #[cfg(unix)]
     #[tokio::test(flavor = "multi_thread")]
     async fn concurrent_commands_start_one_check_a_day() {
         let sandbox = Sandbox::new("once-a-day");
@@ -993,6 +1001,8 @@ mod with_releases {
         assert_eq!(server.received_requests().await.unwrap().len(), 0);
     }
 
+    // On Windows a check is only started at a terminal; see `a_piped_run_on_windows_starts_no_check`.
+    #[cfg(unix)]
     #[tokio::test(flavor = "multi_thread")]
     async fn a_slow_check_never_holds_up_the_command() {
         let sandbox = Sandbox::new("slow");
@@ -1021,6 +1031,8 @@ mod with_releases {
         }
     }
 
+    // On Windows a check is only started at a terminal; see `a_piped_run_on_windows_starts_no_check`.
+    #[cfg(unix)]
     #[tokio::test(flavor = "multi_thread")]
     async fn a_staged_update_that_fails_its_self_test_is_rolled_back_silently() {
         let sandbox = Sandbox::new("automatic-self-test");
@@ -1052,5 +1064,26 @@ mod with_releases {
             (0, ""),
             "not tried again"
         );
+    }
+
+    /// Windows gives a new process every inheritable handle, the caller's pipes included, so a
+    /// check started from a piped run would keep the caller waiting for the end of the output.
+    #[cfg(windows)]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_piped_run_on_windows_starts_no_check() {
+        let sandbox = Sandbox::new("windows-piped");
+        let exe = sandbox.install_with_script();
+        let server = MockServer::start().await;
+        let key = Signer::new().public();
+
+        let run = automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+
+        assert_eq!(run.code, 0);
+        assert_eq!(json(&run.stderr)["info"]["code"], "auto_update_enabled");
+        assert_eq!(
+            state(&sandbox).unwrap()["last_check"],
+            serde_json::Value::Null
+        );
+        assert_eq!(server.received_requests().await.unwrap().len(), 0);
     }
 }

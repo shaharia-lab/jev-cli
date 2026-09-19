@@ -296,6 +296,18 @@ JEV_AUTO_UPDATE=false; `jev version` shows whether it is on",
             tracing::info!(reason, "no automatic update check");
             return;
         }
+        // On Windows a new process inherits every inheritable handle of this one, whatever its own
+        // standard streams are, and the pipes this `jev` was started with are inheritable. A check
+        // started now would hold the caller's pipe open, and the caller would wait for the end of
+        // the output until the check had finished. There the check waits for a run at a terminal.
+        #[cfg(windows)]
+        {
+            use std::io::IsTerminal;
+            if !(std::io::stdout().is_terminal() && std::io::stderr().is_terminal()) {
+                tracing::info!("the automatic update check waits for a run at a terminal");
+                return;
+            }
+        }
         if !self.state.claim(now) {
             return;
         }

@@ -181,7 +181,8 @@ signing keys compiled into `jev` before anything is replaced.
 A `jev` installed with the install script also updates itself. At most once a day, after a command
 has finished, a detached process looks for a newer release on GitHub and stages it; the next command
 swaps it in and says so in one line on stderr. A command's output and exit code never change, and it
-never waits for the check. `jev version` shows whether this happens and, if not, why. It is off
+never waits for the check. (On Windows the check starts only from a command run at a terminal,
+because a process started there would otherwise keep a caller's pipe open.) `jev version` shows whether this happens and, if not, why. It is off
 for Homebrew and cargo installs (update those with `brew upgrade` or `cargo install`), when
 `CI=true`, when `jev` cannot write to its own directory, and when you turn it off:
 
