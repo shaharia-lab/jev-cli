@@ -122,11 +122,11 @@ schema. `--field answers.team.choice` prints one raw value instead of the whole 
 | 4 | api_rejected | The API rejected the request. Read `message`; run `jev validate --strict`. |
 | 5 | rate_limited | Rate limited or overloaded after retries. Wait, or lower `--concurrency`. |
 | 6 | network | Network failure, timeout or server error after retries. Try again later. |
-| 7 | batch_partial | A batch finished, but some rows failed. Their records say why. |
+| 7 | batch_partial | A batch finished, but some rows failed. Their records say why; rerun with `--resume`. |
 | 10 | gate_false | Evaluated successfully, and the gate condition is **false**. Not an error. |
 | 11 | abstain | Evaluated, and the answer is inside the abstain band: the model cannot tell. |
 | 20 | update_available | A newer `jev` exists. |
-| 130 | interrupted | Interrupted. |
+| 130 | interrupted | Interrupted. A batch can continue with `--resume`. |
 
 On failure, stderr carries one JSON object when it is not a terminal:
 `{"error": {"code", "exit_code", "message", "hint", "request_id", ...}}` (`jev schema error`).
@@ -198,21 +198,24 @@ record per row as JSON Lines, in the order rows finish:
 
 ```bash
 jev validate -f triage.yaml --strict
-head -n 10 tickets.jsonl > sample.jsonl
-jev batch run -f triage.yaml --input sample.jsonl --state-field body --id-field ticket_id \
-    --out sample-results.jsonl --summary-json sample-summary.json
-jev batch run -f triage.yaml --input tickets.jsonl --state-field body --id-field ticket_id \
-    --out results.jsonl --summary-json summary.json
+jev batch run -f triage.yaml --input tickets.jsonl --state-field body --model jev-1.13.0 --dry-run
+jev batch run -f triage.yaml --input tickets.jsonl --state-field body --model jev-1.13.0 \
+    --id-field ticket_id --limit 10 --out sample.jsonl
+jev batch run -f triage.yaml --input tickets.jsonl --state-field body --model jev-1.13.0 \
+    --id-field ticket_id --out results.jsonl --summary-json summary.json
 ```
 
-- Validate the question set, then run a small sample and read its summary (`cost_usd` is an
-  estimate) before the full file.
+- Validate the question set, then `--dry-run` (free, no key) to see how many requests the run
+  makes and its estimated cost, which needs a pinned model: an alias has no price. Then run a
+  small sample with `--limit` and read it before the full file.
 - `--state-field` sends one field as the state, `--state-fields subject,body` an object of
   several; the default is the whole row. `--id-field` keys the records; the default is the line
   number.
 - Each record has `status` `ok` (with `answers`) or `error` (with `error`), and
-  `jev schema batch-record` is its schema. Exit 7 means some rows failed:
-  `jq -r 'select(.status == "error") | .id' results.jsonl` lists them.
+  `jev schema batch-record` is its schema.
+  `jq -r 'select(.status == "error") | .id' results.jsonl` lists the failed rows.
+- After exit 7 (some rows failed) or 130 (interrupted), fix the cause and rerun the same command
+  with `--resume`: rows already recorded `ok` are not sent again.
 - Leave `--concurrency` at its default unless you know the key's limits; shared keys get rate
   limited above about 8.
 - Prefer a file to piped rows: a file is checked in full before anything is sent.
