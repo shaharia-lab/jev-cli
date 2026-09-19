@@ -52,6 +52,8 @@ impl Summary {
     /// Fills in the figures that depend on the whole run.
     pub(crate) fn finish(&mut self, elapsed: Duration) {
         self.skipped = self.rows_total.saturating_sub(self.ok + self.failed);
+        // A sum of many small estimates gathers floating-point noise in its last digits.
+        self.cost_usd = self.cost_usd.map(|cost| (cost * 1e9).round() / 1e9);
         self.wall_time_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
         let seconds = elapsed.as_secs_f64();
         #[allow(clippy::cast_precision_loss)] // A row count is far below 2^52.

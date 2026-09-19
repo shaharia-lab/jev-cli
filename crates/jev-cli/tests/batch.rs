@@ -623,6 +623,7 @@ async fn a_million_rows_stay_under_100_mb_of_memory() {
 
     eprintln!("peak RSS {} MB", peak_kb / 1024);
     eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+    let _ = fs::remove_dir_all(&dir);
     assert!(output.status.success());
     assert!(peak_kb < 100 * 1024, "peak RSS {peak_kb} kB");
 }
