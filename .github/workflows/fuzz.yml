@@ -6,9 +6,10 @@
 # `cargo +nightly fuzz run <target> <file>`, fix it, and add the input as a regression test
 # (fuzz/README.md). The corpus each run builds is cached for the next one.
 #
-# Runs weekly, on demand, and on a pull request that changes the fuzz targets. It is not one of
-# the checks a pull request must pass: a fuzzer finds bugs that already exist, not ones a change
-# brings in, and ten minutes per target is too long to wait for on every change.
+# Each target runs for ten minutes weekly and, by default, on demand; on a pull request that
+# changes the fuzz targets it runs for one minute, enough to show that they build and run. It is
+# not one of the checks a pull request must pass: a fuzzer finds bugs that already exist, not ones
+# a change brings in.
 
 name: Fuzz
 
@@ -75,7 +76,7 @@ jobs:
         run: fuzz/run.sh "$TARGET" "$FUZZ_SECONDS"
         env:
           TARGET: ${{ matrix.target }}
-          FUZZ_SECONDS: ${{ inputs.seconds || '600' }}
+          FUZZ_SECONDS: ${{ inputs.seconds || (github.event_name == 'pull_request' && '60') || '600' }}
       - name: Save the corpus
         if: always()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
