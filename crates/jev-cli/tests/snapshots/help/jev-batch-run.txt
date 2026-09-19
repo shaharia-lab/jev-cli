@@ -1,10 +1,86 @@
 Evaluate every row of an input file, writing one result record per row
 
-Usage: jev batch run [OPTIONS]
+When to use:
+Use `jev batch run` to ask the same questions about many states: tickets, messages, records. It
+sends one request per row, a few at a time, and writes one result record per row. Use `jev eval` for
+one state and several questions, `jev noul`, `jev choice` or `jev score` for one state and one
+question, and `jev validate` to check the question set without sending anything.
+
+Input:
+A request file (-f), JSON or YAML, whose `questions` (and `model`, if present) are used for every
+row; any `state` in it is replaced by each row's. The rows are --input, a JSONL file (one JSON value
+per line) or a CSV file with a header row, or JSONL piped on stdin. A row's state is the whole row,
+one field of it (--state-field) or an object of some fields (--state-fields); its id is --id-field,
+else its line number. Before anything is sent the question set is validated and every row of a file
+is checked: a malformed row, a missing field or a repeated id is exit 2. Piped rows can be read only
+once, so they are checked as they arrive, and such a row stops sending there.
+
+Output:
+JSON Lines on stdout, or appended to --out: one record per row, in the order rows finish, whatever
+--output says. An answered row is `{id, status: "ok", model, answers, usage, cost_usd, request_id,
+latency_ms}`; a failed one is `{id, status: "error", error}`, where `error` has the shape of every
+JSON error (`code`, `exit_code`, `error_type`, `message`, `hint`, `request_id`, ...). A failed row
+does not stop the run unless --fail-fast or --max-errors says so. The summary goes to stderr (one
+`{"summary": ...}` JSON line when the output is for a program) and to --summary-json: `rows_total`,
+`ok`, `failed`, `skipped`, `input_tokens`, `cost_usd` (an estimate), `wall_time_ms`,
+`rows_per_second`, `retries`, `models` and `stopped_by`.
+
+Usage: jev batch run [OPTIONS] --file <FILE>
 
 Options:
+  -f, --file <FILE>
+          Question set: a request file (JSON or YAML) with `questions` and optionally `model`
+
+      --concurrency <N>
+          Requests in flight at once, 1 to 64; shared keys get rate limited above about 8 [default:
+          4]
+
+      --fail-fast
+          Stop sending at the first row that fails; rows in flight still finish
+
+      --max-errors <N>
+          Stop sending once N rows have failed; rows in flight still finish
+
   -h, --help
           Print help (see a summary with '-h')
+
+Rows:
+      --input <PATH>
+          Rows to evaluate: a JSONL or CSV file, or `-` for JSONL on stdin [default: stdin when
+          piped]
+
+      --input-format <FORMAT>
+          Format of --input [default: csv for a `.csv` file, jsonl otherwise]
+
+          Possible values:
+          - jsonl: One JSON value per line
+          - csv:   Comma-separated values with a header row
+
+      --state-field <NAME>
+          Send this one field of each row as its state [default: the whole row]
+
+      --state-fields <NAME,...>
+          Send an object of only these fields as the state, e.g. `subject,body`
+
+      --id-field <NAME>
+          Field that identifies each row in the results; must be unique [default: the line number]
+
+Results:
+      --out <PATH>
+          Write the records to this file instead of stdout; it must not exist yet, or be empty
+
+      --summary-json <PATH>
+          Also write the end-of-run summary to this file, as one JSON object
+
+Sending:
+      --strict
+          Treat validation warnings as errors
+
+      --skip-size-check
+          Skip the offline estimate of each request's size
+
+      --warn-unpinned
+          Remind me on stderr to pin a versioned model id when the run used an alias
 
 Global options:
       --profile <NAME>
@@ -57,3 +133,22 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    every row was answered
+  2    usage error, or a bad question set or input row; nothing was sent for a file
+  3    no API key, or the API refused it
+  7    the run finished, but some rows failed: see their error records
+
+Examples:
+  # Label tickets: the `body` field is the state, records keyed by ticket_id
+  jev batch run -f triage.yaml --input tickets.jsonl --state-field body \
+      --id-field ticket_id --out results.jsonl
+
+  # Send two columns of a CSV export, and keep a machine-readable summary
+  jev batch run -f triage.yaml --input export.csv --state-fields subject,body \
+      --out results.jsonl --summary-json summary.json
+
+  # Rows from a pipeline, stopping at the first failure; list the failed ids
+  jq -c '.items[]' dump.json | jev batch run -f triage.yaml --fail-fast \
+      | jq -r 'select(.status == "error") | .id'

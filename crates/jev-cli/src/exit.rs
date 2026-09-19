@@ -21,7 +21,6 @@ pub(crate) enum Exit {
     /// Network failure, timeout, or a server error after retries (408, 5xx).
     Network = 6,
     /// A batch finished, but some rows failed.
-    #[allow(dead_code)] // Reserved by the contract; first used by `jev batch run`.
     BatchPartial = 7,
     /// Evaluated successfully, and the gate condition is false. Never used for an error.
     GateFalse = 10,

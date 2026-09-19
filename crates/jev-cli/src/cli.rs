@@ -9,6 +9,7 @@ use std::time::Duration;
 use clap::builder::FalseyValueParser;
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand};
 
+use crate::batch::RowFormat;
 use crate::gate::AbstainBand;
 use crate::input::{InputFormat, StateFormat};
 use crate::output::Format;
@@ -386,6 +387,78 @@ pub(crate) struct LogoutArgs {
     pub(crate) all: bool,
 }
 
+/// Arguments of `jev batch run`.
+// On/off command-line switches are booleans by nature; there is no state machine hiding here.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Args)]
+pub(crate) struct BatchRunArgs {
+    /// Question set: a request file (JSON or YAML) with `questions` and optionally `model`
+    #[arg(short = 'f', long, value_name = "FILE")]
+    pub(crate) file: String,
+
+    /// Rows to evaluate: a JSONL or CSV file, or `-` for JSONL on stdin [default: stdin when piped]
+    #[arg(long, value_name = "PATH", help_heading = "Rows")]
+    pub(crate) input: Option<String>,
+
+    /// Format of --input [default: csv for a `.csv` file, jsonl otherwise]
+    #[arg(long, value_enum, value_name = "FORMAT", help_heading = "Rows")]
+    pub(crate) input_format: Option<RowFormat>,
+
+    /// Send this one field of each row as its state [default: the whole row]
+    #[arg(
+        long,
+        value_name = "NAME",
+        conflicts_with = "state_fields",
+        help_heading = "Rows"
+    )]
+    pub(crate) state_field: Option<String>,
+
+    /// Send an object of only these fields as the state, e.g. `subject,body`
+    #[arg(
+        long,
+        value_name = "NAME,...",
+        value_delimiter = ',',
+        help_heading = "Rows"
+    )]
+    pub(crate) state_fields: Vec<String>,
+
+    /// Field that identifies each row in the results; must be unique [default: the line number]
+    #[arg(long, value_name = "NAME", help_heading = "Rows")]
+    pub(crate) id_field: Option<String>,
+
+    /// Write the records to this file instead of stdout; it must not exist yet, or be empty
+    #[arg(long, value_name = "PATH", help_heading = "Results")]
+    pub(crate) out: Option<String>,
+
+    /// Also write the end-of-run summary to this file, as one JSON object
+    #[arg(long, value_name = "PATH", help_heading = "Results")]
+    pub(crate) summary_json: Option<String>,
+
+    /// Requests in flight at once, 1 to 64; shared keys get rate limited above about 8 [default: 4]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=64))]
+    pub(crate) concurrency: Option<u32>,
+
+    /// Stop sending at the first row that fails; rows in flight still finish
+    #[arg(long, conflicts_with = "max_errors")]
+    pub(crate) fail_fast: bool,
+
+    /// Stop sending once N rows have failed; rows in flight still finish
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+    pub(crate) max_errors: Option<u64>,
+
+    /// Treat validation warnings as errors
+    #[arg(long, help_heading = "Sending")]
+    pub(crate) strict: bool,
+
+    /// Skip the offline estimate of each request's size
+    #[arg(long, help_heading = "Sending")]
+    pub(crate) skip_size_check: bool,
+
+    /// Remind me on stderr to pin a versioned model id when the run used an alias
+    #[arg(long, help_heading = "Sending")]
+    pub(crate) warn_unpinned: bool,
+}
+
 /// Arguments of a command whose behaviour has not been written yet. Everything is accepted so
 /// that the answer is always "not implemented", never a complaint about a flag.
 #[derive(Debug, Args)]
@@ -441,10 +514,20 @@ pub(crate) enum Command {
     Debug(crate::commands::debug::DebugCommand),
 }
 
+impl Command {
+    /// The value of `--concurrency`, which only `jev batch run` has, for the settings resolver.
+    pub(crate) const fn concurrency(&self) -> Option<u32> {
+        match self {
+            Self::Batch(BatchCommand::Run(arguments)) => arguments.concurrency,
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub(crate) enum BatchCommand {
     /// Evaluate every row of an input file, writing one result record per row
-    Run(Pending),
+    Run(BatchRunArgs),
 }
 
 #[derive(Debug, Subcommand)]

@@ -20,6 +20,7 @@ jev-client = { path = "crates/jev-client", version = "0.0.0" }
 
 anstyle = "1.0.14"
 clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
+csv = "1.4"
 fastrand = "2.5"
 httpdate = "1.0.3"
 indexmap = { version = "2.14", features = ["serde"] }

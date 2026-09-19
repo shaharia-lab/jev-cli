@@ -233,6 +233,54 @@ Nothing is read from a pipe unless asked for with `-`.",
         ],
     },
     Doc {
+        path: "batch run",
+        when: "Use `jev batch run` to ask the same questions about many states: tickets, messages, \
+records. It sends one request per row, a few at a time, and writes one result record per row. Use \
+`jev eval` for one state and several questions, `jev noul`, `jev choice` or `jev score` for one \
+state and one question, and `jev validate` to check the question set without sending anything.",
+        input: "A request file (-f), JSON or YAML, whose `questions` (and `model`, if present) are \
+used for every row; any `state` in it is replaced by each row's. The rows are --input, a JSONL file \
+(one JSON value per line) or a CSV file with a header row, or JSONL piped on stdin. A row's state is \
+the whole row, one field of it (--state-field) or an object of some fields (--state-fields); its id \
+is --id-field, else its line number. Before anything is sent the question set is validated and \
+every row of a file is checked: a malformed row, a missing field or a repeated id is exit 2. Piped \
+rows can be read only once, so they are checked as they arrive, and such a row stops sending there.",
+        output: "JSON Lines on stdout, or appended to --out: one record per row, in the order rows \
+finish, whatever --output says. An answered row is `{id, status: \"ok\", model, answers, usage, \
+cost_usd, request_id, latency_ms}`; a failed one is `{id, status: \"error\", error}`, where \
+`error` has the shape of every JSON error (`code`, `exit_code`, `error_type`, `message`, `hint`, \
+`request_id`, ...). A failed row does not stop the run unless --fail-fast or --max-errors says so. \
+The summary goes to stderr (one `{\"summary\": ...}` JSON line when the output is for a program) \
+and to --summary-json: `rows_total`, `ok`, `failed`, `skipped`, `input_tokens`, `cost_usd` (an \
+estimate), `wall_time_ms`, `rows_per_second`, `retries`, `models` and `stopped_by`.",
+        exit_codes: &[
+            code_as(Exit::Success, "every row was answered"),
+            code_as(
+                Exit::Usage,
+                "usage error, or a bad question set or input row; nothing was sent for a file",
+            ),
+            code(Exit::Auth),
+            code_as(
+                Exit::BatchPartial,
+                "the run finished, but some rows failed: see their error records",
+            ),
+        ],
+        examples: &[
+            Example {
+                description: "Label tickets: the `body` field is the state, records keyed by ticket_id",
+                command: "jev batch run -f triage.yaml --input tickets.jsonl --state-field body \\\n    --id-field ticket_id --out results.jsonl",
+            },
+            Example {
+                description: "Send two columns of a CSV export, and keep a machine-readable summary",
+                command: "jev batch run -f triage.yaml --input export.csv --state-fields subject,body \\\n    --out results.jsonl --summary-json summary.json",
+            },
+            Example {
+                description: "Rows from a pipeline, stopping at the first failure; list the failed ids",
+                command: "jq -c '.items[]' dump.json | jev batch run -f triage.yaml --fail-fast \\\n    | jq -r 'select(.status == \"error\") | .id'",
+            },
+        ],
+    },
+    Doc {
         path: "models list",
         when: "Use `jev models list` to see the model names and aliases the account can use. A \
 versioned id such as `jev-1.13.0` is accepted by --model even when it is not listed here. Aliases \

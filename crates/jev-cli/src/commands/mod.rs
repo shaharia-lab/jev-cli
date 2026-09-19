@@ -1,6 +1,7 @@
 //! One module per command group. `run` is the only place that knows which module handles what.
 
 mod auth;
+mod batch;
 mod config;
 #[cfg(feature = "internal-test-hooks")]
 pub(crate) mod debug;
@@ -136,6 +137,8 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Noul(arguments) => return shortcut::noul(arguments, context),
         Command::Choice(arguments) => return shortcut::choice(arguments, context),
         Command::Score(arguments) => return shortcut::score(arguments, context),
+        // A batch with failed rows exits 7.
+        Command::Batch(BatchCommand::Run(arguments)) => return batch::run(arguments, context),
         Command::Version => version::run(context),
         Command::Spec => spec::run(context),
         Command::Auth(command) => auth::run(command, context),
@@ -145,7 +148,6 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Models(ModelsCommand::List) => models::list(context),
         #[cfg(feature = "internal-test-hooks")]
         Command::Debug(command) => debug::run(command, context),
-        Command::Batch(BatchCommand::Run(_)) => pending("batch run", 13),
         Command::Schema(SchemaCommand::Request(_)) => pending("schema request", 16),
         Command::Schema(SchemaCommand::Questions(_)) => pending("schema questions", 16),
         Command::Schema(SchemaCommand::BatchRecord(_)) => pending("schema batch-record", 16),

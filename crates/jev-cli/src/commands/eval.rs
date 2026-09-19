@@ -176,7 +176,9 @@ fn state_source(
 }
 
 /// Runs one future to completion on a runtime of its own.
-fn block_on<T>(future: impl Future<Output = Result<T, CliError>>) -> Result<T, CliError> {
+pub(crate) fn block_on<T>(
+    future: impl Future<Output = Result<T, CliError>>,
+) -> Result<T, CliError> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
