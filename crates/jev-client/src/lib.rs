@@ -49,6 +49,24 @@
 //! - **One definition, many uses.** Every type derives [`schemars::JsonSchema`], so the JSON
 //!   Schemas handed to editors, AI agents and MCP clients cannot drift from what is parsed.
 //!
+//! # Talking to the API
+//!
+//! [`Transport`] is the seam: `evaluate` and `list_models`, each returning a [`Reply`] with the
+//! parsed body plus the request id, latency and attempt count. [`HttpTransport`] is the real one.
+//! Code that needs the API should depend on the trait, so its tests can use an in-memory fake.
+//!
+//! - **Credentials.** [`ApiKey`] wipes itself on drop and never prints. [`BaseUrl`] insists on
+//!   `https://` (plain HTTP only for loopback, or by explicit opt-in), and redirects are not
+//!   followed, so the key cannot be sent somewhere unexpected.
+//! - **Retries.** [`RetryPolicy`] defaults to the official SDKs' behaviour: 2 retries with jittered
+//!   exponential backoff for 408, 429, 5xx, timeouts and connection failures, honouring
+//!   `Retry-After`. 400, 401, 403, 404 and 422 are never retried. [`Clock`] keeps tests instant.
+//! - **Errors.** One [`Error`] with an [`ErrorKind`] mirroring the SDKs' error classes, carrying
+//!   the HTTP status, the API's `error_type`, and the `x-typesafe-request-id`. No error ever
+//!   contains the API key or a request's `state`.
+//! - **Logging.** `tracing` events at `DEBUG` cover method, URL, status, timing, request id and
+//!   retry decisions. Bodies are traced only on explicit opt-in, and `Authorization` never is.
+//!
 //! The types describe shapes only. Limits such as 255 choice options or 2 to 10 score levels are
 //! enforced by offline validation, not by parsing.
 //!
@@ -58,20 +76,34 @@
 #![forbid(unsafe_code)]
 
 mod answer;
+mod base_url;
+mod clock;
 mod content;
 mod de;
+mod error;
+mod http;
 mod models;
 pub mod pricing;
 mod question;
 mod request;
 mod response;
+mod retry;
+mod secret;
+mod transport;
 
 pub use answer::{Answer, ChoiceAnswer, NoulAnswer, ScoreAnswer};
+pub use base_url::{BaseUrl, InvalidBaseUrl};
+pub use clock::{Clock, SystemClock};
 pub use content::Content;
+pub use error::{Error, ErrorKind};
+pub use http::{HttpTransport, HttpTransportBuilder};
 pub use models::{ModelCard, ModelList};
 pub use question::{Choice, Noul, NoulCriteria, Question, Score};
 pub use request::Request;
 pub use response::{Response, Usage};
+pub use retry::RetryPolicy;
+pub use secret::{ApiKey, InvalidApiKey};
+pub use transport::{Reply, ReplyMeta, Transport};
 
 /// Version of this crate, as published.
 ///
