@@ -63,13 +63,30 @@ pub struct Reply<T> {
     pub body: T,
     /// Facts about the exchange that are not part of the body.
     pub meta: ReplyMeta,
+    /// The response body exactly as the server sent it, when the transport kept it.
+    ///
+    /// `body` is the typed view, which drops fields this crate does not know. A caller that must
+    /// pass the API's answer on untouched reads it from here. [`HttpTransport`](crate::HttpTransport)
+    /// always fills it in; a fake transport usually does not.
+    pub raw_body: Option<String>,
 }
 
 impl<T> Reply<T> {
-    /// A reply, as a fake transport or a test would build one.
+    /// A reply, as a fake transport or a test would build one. It has no raw body.
     #[must_use]
     pub const fn new(body: T, meta: ReplyMeta) -> Self {
-        Self { body, meta }
+        Self {
+            body,
+            meta,
+            raw_body: None,
+        }
+    }
+
+    /// Attaches the response body as it was received.
+    #[must_use]
+    pub fn with_raw_body(mut self, raw_body: impl Into<String>) -> Self {
+        self.raw_body = Some(raw_body.into());
+        self
     }
 }
 

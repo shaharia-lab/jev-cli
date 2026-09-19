@@ -35,6 +35,8 @@ pub(crate) struct ConfigFile {
     document: DocumentMut,
     pub(crate) active_profile: Option<String>,
     pub(crate) profiles: IndexMap<String, IndexMap<Key, Value>>,
+    /// `[pricing] usd_per_mtok`: the user's own rate, used instead of the built-in price list.
+    pub(crate) pricing_usd_per_mtok: Option<f64>,
     pub(crate) warnings: Vec<Notice>,
 }
 
@@ -44,6 +46,7 @@ impl Default for ConfigFile {
             document: DocumentMut::new(),
             active_profile: None,
             profiles: IndexMap::new(),
+            pricing_usd_per_mtok: None,
             warnings: Vec::new(),
         }
     }
@@ -125,10 +128,25 @@ impl ConfigFile {
                 profiles.insert(name.to_owned(), values);
             }
         }
+        let pricing_usd_per_mtok = match document
+            .get("pricing")
+            .and_then(|pricing| pricing.get("usd_per_mtok"))
+        {
+            None => None,
+            Some(item) => {
+                let rate = item.as_float().or_else(|| {
+                    item.as_integer()
+                        .and_then(|whole| i32::try_from(whole).ok())
+                        .map(f64::from)
+                });
+                Some(rate.filter(|rate| rate.is_finite() && *rate >= 0.0).ok_or_else(|| invalid("pricing.usd_per_mtok", "must be a number of US dollars per million input tokens, zero or more"))?)
+            }
+        };
         Ok(Self {
             document,
             active_profile,
             profiles,
+            pricing_usd_per_mtok,
             warnings,
         })
     }
@@ -451,7 +469,7 @@ concurrency = 8
                 "`profiles.default.warn_unpinned` must be true or false",
             ),
             (
-                "[profiles.default]\nbase_url = \"http://example.com\"\n",
+                "[profiles.default]\nbase_url = \"ftp://example.com\"\n",
                 "`profiles.default.base_url`",
             ),
             (

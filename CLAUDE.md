@@ -12,8 +12,8 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
-exit-code contract, but only `jev version` does anything; every other command answers
-"not implemented" and names its tracking issue. Work is tracked in epic
+exit-code contract. `jev eval`, `jev models list`, `jev config`, `jev profile` and `jev version`
+work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -104,6 +104,19 @@ the four formats, and text on a terminal versus JSON on a pipe. Every failure is
 printed once, in `lib.rs`: text for a person, one JSON object for a program. `Interaction` is the only
 code that decides whether a prompt is allowed. To give a pending command its behaviour, replace its
 `Pending` arguments in `cli.rs`, add a module under `commands/`, and route it in `commands::run`.
+
+Every evaluation goes through `evaluate.rs`: `prepare` (resolve the model as flag > request file >
+env > profile > default, fill in the state, validate offline, build the typed request) and `send`
+(one call through a `Transport`, wrapped in the `ResultEnvelope`). The shortcut commands, batch and
+the MCP server must build a `Document` and use the same two steps, so that they cannot drift apart.
+Nothing is sent before validation passes, and `--dry-run` never touches the network or needs a key.
+The key comes from a `CredentialStore`; the transport is built in `client.rs`, which is also where the
+HTTPS rule is enforced (settings only check that a base URL is well-formed, because whether plain
+http:// is acceptable depends on `--insecure-allow-http`). **Never read stdin unless it is the only
+possible source**: a caller that leaves stdin open would make `jev` hang, and agents often do. A
+request file with its own `state` therefore never reads stdin; `--state-file -` is the explicit way.
+Integration tests run `jev` against `wiremock` with `TYPESAFE_BASE_URL` pointed at it (loopback
+http is allowed), and default to an address nothing listens on so a test can never reach the real API.
 
 Settings come from one resolver, `config::Settings::resolve`: **flag > environment > profile >
 default**, each value carrying its `Source`. A command reads `context.settings()?`; it never reads a

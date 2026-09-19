@@ -64,7 +64,9 @@ impl Key {
             Self::Timeout => "time allowed per attempt, e.g. 30s or 500ms",
             Self::MaxRetries => "retries after the first attempt",
             Self::Concurrency => "parallel requests in batch runs",
-            Self::WarnUnpinned => "warn when a gate uses a model alias instead of a versioned id",
+            Self::WarnUnpinned => {
+                "remind me to pin a versioned model id when a request used an alias"
+            }
         }
     }
 
@@ -99,7 +101,7 @@ impl Key {
             Self::Timeout => Some(Value::Duration(Duration::from_secs(30))),
             Self::MaxRetries => Some(Value::Count(2)),
             Self::Concurrency => Some(Value::Count(4)),
-            Self::WarnUnpinned => Some(Value::Switch(true)),
+            Self::WarnUnpinned => Some(Value::Switch(false)),
         }
     }
 
@@ -149,7 +151,9 @@ impl Key {
             .hint(format!("`{}` is the {}", self.name(), self.describe()))
         };
         match self {
-            Self::BaseUrl => BaseUrl::parse(text)
+            // Only that it is a well-formed base URL. Whether plain http:// is acceptable is decided
+            // where the connection is built, because that depends on --insecure-allow-http.
+            Self::BaseUrl => BaseUrl::parse_allowing_insecure_http(text)
                 .map(|_| Value::Text(text.to_owned()))
                 .map_err(|error| invalid(error.to_string())),
             Self::Model if text.is_empty() => {
@@ -492,7 +496,7 @@ mod tests {
                 "2",
             ),
             Key::Concurrency => (None, None, "9", "4"),
-            Key::WarnUnpinned => (None, None, "false", "true"),
+            Key::WarnUnpinned => (None, None, "true", "false"),
         }
     }
 
@@ -634,7 +638,7 @@ mod tests {
     fn a_bad_value_names_the_variable_or_flag_at_fault() {
         let env = Env::from([("JEV_OUTPUT", "xml")]);
         let flags = Flags {
-            base_url: Some("http://example.com".into()),
+            base_url: Some("ftp://example.com".into()),
             ..Flags::default()
         };
 
@@ -668,7 +672,7 @@ mod tests {
         assert!(Key::WarnUnpinned.parse("off").is_ok());
         assert!(Key::BaseUrl.parse("http://127.0.0.1:4010").is_ok());
         for (key, wrong) in [
-            (Key::BaseUrl, "http://example.com"),
+            (Key::BaseUrl, "ftp://example.com"),
             (Key::BaseUrl, "https://user:pw@example.com"),
             (Key::Model, " "),
             (Key::Output, "xml"),

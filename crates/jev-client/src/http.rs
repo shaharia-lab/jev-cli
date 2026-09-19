@@ -120,12 +120,10 @@ impl HttpTransport {
                 .await;
 
             let failure = match outcome {
-                Ok((parsed, request_id)) => {
+                Ok((parsed, request_id, raw_body)) => {
                     let latency = self.clock.now().duration_since(started);
-                    return Ok(Reply::new(
-                        parsed,
-                        ReplyMeta::new(request_id, latency, attempt),
-                    ));
+                    let meta = ReplyMeta::new(request_id, latency, attempt);
+                    return Ok(Reply::new(parsed, meta).with_raw_body(raw_body));
                 }
                 Err(failure) => failure,
             };
@@ -170,7 +168,7 @@ impl HttpTransport {
         url: &Url,
         body: Option<&[u8]>,
         attempt: u32,
-    ) -> Result<(T, Option<String>), Error> {
+    ) -> Result<(T, Option<String>, String), Error> {
         tracing::debug!(%method, %url, attempt, "sending request");
         if let (true, Some(body)) = (self.log_bodies, body) {
             let body = self.api_key.scrub(&String::from_utf8_lossy(body));
@@ -233,7 +231,11 @@ impl HttpTransport {
             .with_retry_after(retry_after));
         }
         match serde_json::from_slice::<T>(&bytes) {
-            Ok(parsed) => Ok((parsed, request_id)),
+            Ok(parsed) => Ok((
+                parsed,
+                request_id,
+                String::from_utf8_lossy(&bytes).into_owned(),
+            )),
             Err(error) => Err(
                 Error::new(ErrorKind::InvalidResponse, describe_json_error(&error))
                     .with_status(status.as_u16())

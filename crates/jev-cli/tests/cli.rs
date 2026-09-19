@@ -159,8 +159,11 @@ fn asked_for_help_and_version_go_to_stdout_and_succeed() {
         );
     }
     assert!(
-        !help.stdout.contains("debug"),
-        "test hooks are hidden:\n{}",
+        !help
+            .stdout
+            .lines()
+            .any(|line| line.trim_start().starts_with("debug ")),
+        "the `debug` test-hook command is hidden:\n{}",
         help.stdout
     );
     assert_eq!(sub_help.code, 0);
@@ -238,7 +241,6 @@ fn a_usage_error_is_a_json_object_on_stderr_when_the_output_is_for_a_program() {
 #[test]
 fn commands_without_behaviour_say_so_whatever_flags_follow() {
     let cases = [
-        (vec!["eval", "-f", "request.yaml"], "eval", 9),
         (
             vec!["noul", "Is it urgent?", "--fail-under", "0.7"],
             "noul",
@@ -454,7 +456,8 @@ mod with_hooks {
                     "hint",
                     "request_id",
                     "http_status",
-                    "retryable"
+                    "retryable",
+                    "details",
                 ],
                 "{kind}"
             );

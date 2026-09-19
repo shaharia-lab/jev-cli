@@ -40,8 +40,6 @@ impl Ui {
         self.paint(Style::new().dimmed(), text)
     }
 
-    // Drawn by the result envelope, which `jev eval` (issue #9) is the first command to print.
-    #[cfg_attr(not(feature = "internal-test-hooks"), allow(dead_code))]
     pub(crate) fn accent(self, text: &str) -> String {
         self.paint(Style::new().fg_color(Some(AnsiColor::Cyan.into())), text)
     }
@@ -61,8 +59,6 @@ impl Ui {
     }
 
     /// A horizontal bar of `width` cells, filled in proportion to `fraction` (0 to 1).
-    // Drawn by the result envelope, which `jev eval` (issue #9) is the first command to print.
-    #[cfg_attr(not(feature = "internal-test-hooks"), allow(dead_code))]
     pub(crate) fn bar(self, fraction: f64, width: usize) -> String {
         let (full, empty) = if self.unicode {
             ('█', '░')
@@ -98,8 +94,6 @@ impl Ui {
     }
 
     /// The separator between facts on one line.
-    // Drawn by the result envelope, which `jev eval` (issue #9) is the first command to print.
-    #[cfg_attr(not(feature = "internal-test-hooks"), allow(dead_code))]
     pub(crate) const fn separator(self) -> &'static str {
         if self.unicode { " · " } else { " | " }
     }

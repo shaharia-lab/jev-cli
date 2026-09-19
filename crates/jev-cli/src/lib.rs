@@ -5,12 +5,16 @@
 #![forbid(unsafe_code)]
 
 mod cli;
+mod client;
 mod commands;
 mod config;
+mod credentials;
 mod duration;
 mod env;
 mod error;
+mod evaluate;
 mod exit;
+mod input;
 mod interaction;
 mod logging;
 mod notice;
@@ -25,12 +29,14 @@ use clap::error::ErrorKind as ClapErrorKind;
 use clap::{CommandFactory, Parser};
 
 use crate::cli::Cli;
+use crate::client::Connection;
 use crate::commands::{Configuration, Context};
 use crate::config::{ConfigStore, Flags, Settings};
 use crate::env::Env;
 use crate::error::CliError;
 use crate::exit::Exit;
 use crate::interaction::Interaction;
+use crate::notice::Notifier;
 use crate::output::{Format, Output, Ui};
 
 /// The command tree, for tooling that generates documentation or completions from it.
@@ -131,10 +137,14 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
         logging::filter(global.verbose, global.quiet, env.get("TYPESAFE_LOG_LEVEL")),
         stderr_ui.has_color(),
     );
-    if let (false, Ok((file, _))) = (global.quiet, &loaded) {
-        let mut stderr = io::stderr().lock();
+    let notifier = Notifier {
+        format,
+        ui: stderr_ui,
+        quiet: global.quiet,
+    };
+    if let Ok((file, _)) = &loaded {
         for warning in &file.warnings {
-            warning.emit(format, stderr_ui, &mut stderr);
+            notifier.emit(warning);
         }
     }
 
@@ -147,11 +157,17 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
             ui: terminal.ui(terminal.stdout, global.no_color, global.ascii),
         },
         interaction: Interaction::new(terminal.stdin, global.no_input, env.get("CI")),
+        connection: Connection {
+            insecure_allow_http: global.insecure_allow_http,
+            debug_bodies: global.debug_bodies,
+        },
+        notifier,
         configuration: Configuration {
             store,
             loaded,
             flags,
         },
+        env,
         stdout: &mut stdout.lock(),
         stdin: &mut stdin.lock(),
     };

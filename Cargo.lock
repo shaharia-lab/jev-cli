@@ -899,10 +899,12 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
+ "tokio",
  "toml_edit",
  "tracing",
  "tracing-subscriber",
  "unicode-width",
+ "wiremock",
 ]
 
 [[package]]

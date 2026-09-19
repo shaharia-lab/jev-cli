@@ -6,6 +6,7 @@ use std::time::Duration;
 use clap::builder::FalseyValueParser;
 use clap::{ArgAction, Args, Parser, Subcommand};
 
+use crate::input::{InputFormat, StateFormat};
 use crate::output::Format;
 
 /// Unofficial command-line tool for TypeSafe AI's Jev model.
@@ -96,6 +97,14 @@ pub(crate) struct GlobalArgs {
     #[arg(long, global = true)]
     pub(crate) ascii: bool,
 
+    /// Allow a plain http:// base URL to a host other than localhost (the API key travels unencrypted)
+    #[arg(long, global = true)]
+    pub(crate) insecure_allow_http: bool,
+
+    /// Log request and response bodies with -v; `state` may contain sensitive data
+    #[arg(long, global = true)]
+    pub(crate) debug_bodies: bool,
+
     /// Print errors only; suppress notices and warnings on stderr
     #[arg(short, long, global = true, conflicts_with = "verbose")]
     pub(crate) quiet: bool,
@@ -103,6 +112,52 @@ pub(crate) struct GlobalArgs {
     /// Log to stderr; repeat for more (-v requests and retries, -vv everything)
     #[arg(short, long, global = true, action = ArgAction::Count)]
     pub(crate) verbose: u8,
+}
+
+/// Arguments of `jev eval`.
+// On/off command-line switches are booleans by nature; there is no state machine hiding here.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Args)]
+pub(crate) struct EvalArgs {
+    /// Request file, JSON or YAML, with `questions` and optionally `state` and `model`; `-` reads stdin
+    #[arg(short = 'f', long, value_name = "FILE")]
+    pub(crate) file: String,
+
+    /// Format of the request file [default: by extension; for stdin, JSON if it starts with `{`]
+    #[arg(long, value_enum, value_name = "FORMAT")]
+    pub(crate) input_format: Option<InputFormat>,
+
+    /// The state to evaluate, as text; overrides `state` in the request file
+    #[arg(long, value_name = "TEXT", conflicts_with = "state_file")]
+    pub(crate) state: Option<String>,
+
+    /// Read the state from a file, or from stdin with `-`; overrides `state` in the request file
+    #[arg(long, value_name = "PATH")]
+    pub(crate) state_file: Option<String>,
+
+    /// How to read a state given outside the request file
+    #[arg(long, value_enum, default_value_t, value_name = "FORMAT")]
+    pub(crate) state_format: StateFormat,
+
+    /// Validate, print the exact request body and a size estimate, and send nothing
+    #[arg(long)]
+    pub(crate) dry_run: bool,
+
+    /// Treat validation warnings as errors
+    #[arg(long)]
+    pub(crate) strict: bool,
+
+    /// Skip the offline estimate of the request's size
+    #[arg(long)]
+    pub(crate) skip_size_check: bool,
+
+    /// Remind me on stderr to pin a versioned model id when the request used an alias
+    #[arg(long)]
+    pub(crate) warn_unpinned: bool,
+
+    /// Print the API response body exactly as received, ignoring --output
+    #[arg(long, conflicts_with_all = ["field", "dry_run"])]
+    pub(crate) raw: bool,
 }
 
 /// Arguments of a command whose behaviour has not been written yet. Everything is accepted so
@@ -116,7 +171,7 @@ pub(crate) struct Pending {
 #[derive(Debug, Subcommand)]
 pub(crate) enum Command {
     /// Evaluate a full request (state + many questions) in one API call
-    Eval(Pending),
+    Eval(EvalArgs),
     /// Ask one yes/no question; returns the probability of yes
     Noul(Pending),
     /// Pick one option from a set you define
@@ -169,7 +224,11 @@ pub(crate) enum BatchCommand {
 #[derive(Debug, Subcommand)]
 pub(crate) enum ModelsCommand {
     /// List model names and aliases, with their description and release date
-    List(Pending),
+    ///
+    /// A versioned id such as `jev-1.13.0` is accepted by --model even when it is not listed here.
+    /// Aliases such as `jev-latest` move to newer versions without notice, so pin a versioned id
+    /// once thresholds have been tuned against it.
+    List,
 }
 
 #[derive(Debug, Subcommand)]

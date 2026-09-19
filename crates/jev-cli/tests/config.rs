@@ -134,7 +134,7 @@ fn with_no_configuration_every_setting_is_its_default() {
         ("timeout", json!("30s")),
         ("max_retries", json!(2)),
         ("concurrency", json!(4)),
-        ("warn_unpinned", json!(true)),
+        ("warn_unpinned", json!(false)),
     ];
     let rows = listed(&output);
     assert_eq!(rows.len(), expected.len());
@@ -210,7 +210,7 @@ fn config_list_reports_the_value_and_the_source_of_every_key() {
             ),
             (
                 "warn_unpinned".to_owned(),
-                json!(true),
+                json!(false),
                 "default".to_owned(),
                 Value::Null
             ),
@@ -328,8 +328,8 @@ fn bad_names_and_values_are_usage_errors_that_explain_themselves() {
             "time allowed per attempt",
         ),
         (
-            &["config", "set", "base_url", "http://example.com"],
-            "must use https://",
+            &["config", "set", "base_url", "ftp://example.com"],
+            "must start with https://",
             "API root",
         ),
         (

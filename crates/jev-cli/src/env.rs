@@ -2,10 +2,28 @@
 //! the real one.
 
 use std::collections::HashMap;
+use std::fmt;
 
-/// Environment variables as they were when `jev` started. An empty value counts as unset, which
-/// is how every variable `jev` reads is documented to behave.
-#[derive(Clone, Debug, Default)]
+/// Variables `jev` reads that do not start with `JEV_` or `TYPESAFE_`.
+const OTHER_VARIABLES: [&str; 10] = [
+    "CI",
+    "NO_COLOR",
+    "TERM",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "HOME",
+    "XDG_CONFIG_HOME",
+    "APPDATA",
+    "USERPROFILE",
+];
+
+/// The environment variables `jev` reads, as they were when it started. An empty value counts as
+/// unset, which is how every one of them is documented to behave.
+///
+/// Only variables `jev` has a use for are kept, and `Debug` shows names but never values: one of
+/// them is `TYPESAFE_API_KEY`.
+#[derive(Clone, Default)]
 pub(crate) struct Env(HashMap<String, String>);
 
 impl Env {
@@ -15,6 +33,11 @@ impl Env {
             std::env::vars_os()
                 .filter_map(|(name, value)| {
                     Some((name.into_string().ok()?, value.into_string().ok()?))
+                })
+                .filter(|(name, _)| {
+                    name.starts_with("JEV_")
+                        || name.starts_with("TYPESAFE_")
+                        || OTHER_VARIABLES.contains(&name.as_str())
                 })
                 .collect(),
         )
@@ -26,6 +49,14 @@ impl Env {
             .get(name)
             .map(String::as_str)
             .filter(|value| !value.is_empty())
+    }
+}
+
+impl fmt::Debug for Env {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut names: Vec<&str> = self.0.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        formatter.debug_tuple("Env").field(&names).finish()
     }
 }
 
@@ -52,5 +83,24 @@ mod tests {
         assert_eq!(env.get("JEV_OUTPUT"), Some("json"));
         assert_eq!(env.get("JEV_PROFILE"), None);
         assert_eq!(env.get("MISSING"), None);
+    }
+
+    #[test]
+    fn debug_shows_names_and_never_values() {
+        let env = Env::from([
+            ("TYPESAFE_API_KEY", "sentinel-key-value"),
+            ("JEV_OUTPUT", "json"),
+        ]);
+
+        let shown = format!("{env:?} {env:#?}");
+
+        assert!(
+            shown.contains("TYPESAFE_API_KEY") && shown.contains("JEV_OUTPUT"),
+            "{shown}"
+        );
+        assert!(
+            !shown.contains("sentinel-key-value") && !shown.contains("json"),
+            "{shown}"
+        );
     }
 }

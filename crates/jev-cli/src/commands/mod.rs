@@ -3,15 +3,23 @@
 mod config;
 #[cfg(feature = "internal-test-hooks")]
 pub(crate) mod debug;
+mod eval;
+mod models;
 mod profile;
 mod version;
 
 use std::io::Write;
 
 use crate::cli::{AuthCommand, BatchCommand, Command, McpCommand, ModelsCommand, SchemaCommand};
+use jev_client::HttpTransport;
+
+use crate::client::{self, Connection};
 use crate::config::{ConfigFile, ConfigStore, Flags, Settings};
+use crate::credentials::{CredentialStore, EnvCredentials};
+use crate::env::Env;
 use crate::error::CliError;
 use crate::interaction::Interaction;
+use crate::notice::{Notice, Notifier};
 use crate::output::Output;
 
 /// The configuration as it was found when `jev` started.
@@ -27,13 +35,13 @@ pub(crate) struct Configuration {
 }
 
 /// What a command needs from the outside world.
-// `interaction` and `stdin` are first read outside the test hooks by `jev auth login` and
-// `jev eval` (issues #10 and #9).
-#[cfg_attr(not(feature = "internal-test-hooks"), allow(dead_code))]
 pub(crate) struct Context<'a> {
     pub(crate) output: Output,
     pub(crate) interaction: Interaction,
     pub(crate) configuration: Configuration,
+    pub(crate) env: Env,
+    pub(crate) connection: Connection,
+    pub(crate) notifier: Notifier,
     pub(crate) stdout: &'a mut dyn Write,
     pub(crate) stdin: &'a mut dyn std::io::Read,
 }
@@ -65,6 +73,40 @@ impl Context<'_> {
             .map_err(Clone::clone)
     }
 
+    /// Says something on stderr that is neither the result nor a failure.
+    pub(crate) fn notify(&self, notice: &Notice) {
+        self.notifier.emit(notice);
+    }
+
+    /// The transport for the selected profile, with its API key.
+    ///
+    /// # Errors
+    ///
+    /// An authentication error when there is no usable key, or a usage error for a bad base URL.
+    pub(crate) fn transport(&self, settings: &Settings) -> Result<HttpTransport, CliError> {
+        let (api_key, _source) = EnvCredentials(&self.env).api_key(settings.profile_name())?;
+        let (transport, notices) = client::transport(settings, self.connection, api_key)?;
+        for notice in &notices {
+            self.notify(notice);
+        }
+        Ok(transport)
+    }
+
+    /// Writes text to stdout as it is, ending it with a newline if it lacks one.
+    ///
+    /// # Errors
+    ///
+    /// An internal error when stdout cannot be written to. A closed pipe is not an error.
+    pub(crate) fn write_raw(&mut self, text: &str) -> Result<(), CliError> {
+        let newline = if text.ends_with('\n') { "" } else { "\n" };
+        match write!(self.stdout, "{text}{newline}").and_then(|()| self.stdout.flush()) {
+            Err(error) if error.kind() != std::io::ErrorKind::BrokenPipe => Err(
+                CliError::internal(format!("could not write to stdout: {error}")),
+            ),
+            _ => Ok(()),
+        }
+    }
+
     /// Where the configuration lives.
     ///
     /// # Errors
@@ -87,13 +129,13 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<(), Cl
         Command::Profile(command) => profile::run(command, context),
         #[cfg(feature = "internal-test-hooks")]
         Command::Debug(command) => debug::run(command, context),
-        Command::Eval(_) => pending("eval", 9),
+        Command::Eval(arguments) => eval::run(arguments, context),
         Command::Noul(_) => pending("noul", 12),
         Command::Choice(_) => pending("choice", 12),
         Command::Score(_) => pending("score", 12),
         Command::Validate(_) => pending("validate", 11),
         Command::Batch(BatchCommand::Run(_)) => pending("batch run", 13),
-        Command::Models(ModelsCommand::List(_)) => pending("models list", 9),
+        Command::Models(ModelsCommand::List) => models::list(context),
         Command::Auth(AuthCommand::Login(_)) => pending("auth login", 10),
         Command::Auth(AuthCommand::Status(_)) => pending("auth status", 10),
         Command::Auth(AuthCommand::Logout(_)) => pending("auth logout", 10),

@@ -49,6 +49,22 @@ impl Notice {
     }
 }
 
+/// Emits notices to stderr the way this run was asked to: as text, as JSON lines, or not at all.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Notifier {
+    pub(crate) format: Format,
+    pub(crate) ui: Ui,
+    pub(crate) quiet: bool,
+}
+
+impl Notifier {
+    pub(crate) fn emit(self, notice: &Notice) {
+        if !self.quiet {
+            notice.emit(self.format, self.ui, &mut std::io::stderr().lock());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Notice;

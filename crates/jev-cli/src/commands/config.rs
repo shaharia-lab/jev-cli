@@ -6,6 +6,7 @@ use super::Context;
 use crate::cli::ConfigCommand;
 use crate::config::{Key, Setting, Settings, Source, Value};
 use crate::error::CliError;
+use crate::notice::Notice;
 use crate::output::{Cell, Render, Table, Ui};
 
 pub(crate) fn run(command: &ConfigCommand, context: &mut Context<'_>) -> Result<(), CliError> {
@@ -19,6 +20,12 @@ pub(crate) fn run(command: &ConfigCommand, context: &mut Context<'_>) -> Result<
             let key = Key::from_name(key)?;
             let value = key.parse(value)?;
             let profile = context.settings()?.profile_name().to_owned();
+            if key == Key::BaseUrl && jev_client::BaseUrl::parse(&value.to_string()).is_err() {
+                context.notify(
+                    &Notice::warning("insecure_http", "this base URL is plain http:// to a host that is not localhost")
+                        .hint("every command using it will need --insecure-allow-http, and will send the API key unencrypted"),
+                );
+            }
             context.store()?.update(|file| {
                 file.set(&profile, key, &value);
                 Ok(())
