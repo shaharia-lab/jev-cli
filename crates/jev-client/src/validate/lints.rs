@@ -10,32 +10,85 @@ use super::rules::{QuestionView, RequestView};
 /// index into 20 items was read correctly, while 10 of 60 were wrong.
 const LONG_ARRAY_ITEMS: usize = 20;
 
-/// Option names that give the model a way out when nothing fits.
-const ESCAPE_OPTIONS: [&str; 24] = [
+// The escape-option lint compares normalised names (see `normalise`) word by word, so that
+// `Not enough information`, `nobody-not-stated` and `other_team` all count, while look-alikes such
+// as `another`, `otherwise`, `nonessential` or `not_urgent` do not. A false positive teaches people
+// to ignore the lint, but a missed escape option costs answer quality, so the lists stay specific.
+
+/// Words that make an option a way out wherever they appear in its name.
+const ESCAPE_WORDS: [&str; 21] = [
     "other",
     "others",
     "else",
-    "something_else",
     "none",
-    "none_of_the_above",
-    "none_of_these",
     "neither",
-    "no_match",
-    "not_stated",
-    "not_specified",
-    "not_mentioned",
-    "not_applicable",
-    "not_sure",
-    "na",
-    "n_a",
+    "nobody",
+    "noone",
     "unknown",
     "unclear",
     "unsure",
     "uncertain",
     "ambiguous",
     "undetermined",
+    "indeterminate",
+    "unspecified",
+    "unstated",
+    "unanswerable",
+    "inapplicable",
+    "irrelevant",
+    "idk",
+    "unmatched",
+];
+
+/// Runs of whole words that make an option a way out wherever they appear in its name.
+const ESCAPE_PHRASES: [&str; 33] = [
+    "n_a",
+    "no_one",
+    "no_match",
+    "no_fit",
+    "no_answer",
+    "off_topic",
+    "does_not_apply",
+    "doesn_t_apply",
+    "not_stated",
+    "not_specified",
+    "not_mentioned",
+    "not_given",
+    "not_provided",
+    "not_listed",
+    "not_applicable",
+    "not_relevant",
+    "not_sure",
+    "not_clear",
+    "not_known",
+    "not_determined",
     "cannot_tell",
-    "insufficient_information",
+    "can_t_tell",
+    "cant_tell",
+    "cannot_say",
+    "can_t_say",
+    "cannot_determine",
+    "can_t_determine",
+    "unable_to_tell",
+    "unable_to_determine",
+    "don_t_know",
+    "dont_know",
+    "do_not_know",
+    "hard_to_say",
+];
+
+/// A way out when one of these comes right before one of `INFORMATION_WORDS`: `not_enough_data`,
+/// `insufficient_context`. Alone they are ordinary categories (`insufficient_funds`).
+const LACKING_PHRASES: [&str; 5] = ["not_enough", "insufficient", "no", "missing", "lacking"];
+
+const INFORMATION_WORDS: [&str; 7] = [
+    "info",
+    "information",
+    "data",
+    "context",
+    "detail",
+    "details",
+    "evidence",
 ];
 
 const YES_NO_PAIRS: [[&str; 2]; 3] = [["yes", "no"], ["true", "false"], ["y", "n"]];
@@ -93,11 +146,25 @@ fn normalise(name: &str) -> String {
     normalised.trim_matches('_').to_owned()
 }
 
+/// Whether a name, already passed through `normalise`, gives the model a way out.
 fn is_escape_option(normalised: &str) -> bool {
-    ESCAPE_OPTIONS.contains(&normalised)
-        || ["other_", "none_of_", "not_stated_", "unknown_"]
-            .iter()
-            .any(|prefix| normalised.starts_with(prefix))
+    // `na` alone is "n/a"; as one word of many it is more likely a region (`na_east`).
+    if normalised == "na"
+        || normalised
+            .split('_')
+            .any(|word| ESCAPE_WORDS.contains(&word))
+    {
+        return true;
+    }
+    // Padding with underscores makes `contains` match whole words only.
+    let padded = format!("_{normalised}_");
+    let has_phrase = |phrase: &str| padded.contains(&format!("_{phrase}_"));
+    ESCAPE_PHRASES.iter().any(|phrase| has_phrase(phrase))
+        || LACKING_PHRASES.iter().any(|lacking| {
+            INFORMATION_WORDS
+                .iter()
+                .any(|information| has_phrase(&format!("{lacking}_{information}")))
+        })
 }
 
 fn check_escape_option(
@@ -341,12 +408,37 @@ mod tests {
             "other",
             "none_of_the_above",
             "not_stated",
-            "n_a",
+            "N/A",
+            "na",
             "unknown",
             "other_reason",
             "none_of_these_teams",
+            "billing_or_other",
+            "something-else",
+            "Not enough information",
+            "not_enough_data",
+            "insufficient_information",
+            "insufficient context",
+            "no_info",
+            "missing-details",
+            "nobody_not_stated",
+            "Nobody",
+            "no one",
+            "UNKNOWN_SENDER",
+            "unclear",
+            "cannot tell",
+            "can't determine",
+            "don't know",
+            "does not apply",
+            "Not applicable",
+            "not_listed",
+            "off-topic",
+            "irrelevant",
+            "no_match",
+            "neither",
+            "IDK",
         ] {
-            assert!(is_escape_option(name), "{name}");
+            assert!(is_escape_option(&normalise(name)), "{name}");
         }
         for name in [
             "billing",
@@ -355,8 +447,17 @@ mod tests {
             "nonessential",
             "no",
             "otherwise",
+            "known_issue",
+            "insufficient_funds",
+            "not_enough_stock",
+            "missing_item",
+            "na_east",
+            "banana",
+            "enough_information",
+            "detailed",
+            "unknowns_resolved",
         ] {
-            assert!(!is_escape_option(name), "{name}");
+            assert!(!is_escape_option(&normalise(name)), "{name}");
         }
     }
 
