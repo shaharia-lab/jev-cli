@@ -1,7 +1,7 @@
 # Release: builds `jev` for six targets, packs the archives, and publishes them to the GitHub
 # Release of a tag. Stages run in order, and each stage only starts when the one before succeeded:
 #
-#   plan → build (6 targets) → package → publish (draft) → verify → finalize → stable
+#   plan → build (6 targets) → package → publish (sign, draft) → attest → verify → finalize → stable
 #
 # How a run starts, and what it does:
 #
@@ -19,9 +19,16 @@
 # wholesale, and once it is published they are never changed again. Re-running failed jobs is the
 # normal way to recover.
 #
-# Later stages attach here: signing belongs between `package` and `publish`; crates.io and the
-# Homebrew tap go after `stable`, so they never run for a pre-release and never point at an asset
-# that did not pass verification.
+# Every asset and SHA256SUMS is signed with minisign in `publish`, the only job that can reach the
+# signing key: it runs in the `release` environment, which admits `v*` tags only and waits for the
+# owner's approval. `attest` records GitHub build provenance for every asset and every binary.
+# `verify` downloads the draft's assets and checks them, their signatures (with the standard
+# minisign CLI, against crates/jev-cli/keys/release-primary.pub) and their attestations; nothing
+# is published unless it passes. SECURITY.md documents the design, verification by hand and key
+# rotation.
+#
+# Later stages attach here: crates.io and the Homebrew tap go after `stable`, so they never run for
+# a pre-release and never point at an asset that did not pass verification.
 
 name: Release
 
@@ -35,6 +42,7 @@ on:
       - .github/workflows/release.yml
       - .github/workflows/release-please.yml
       - scripts/release/**
+      - crates/jev-cli/keys/**
       - release-please-config.json
       - Cargo.toml
       - Cargo.lock
@@ -164,6 +172,7 @@ jobs:
       # Man pages and completions come from the command tree, which is the same on every target,
       # so they are generated once here.
       - run: make dist-assets DIR=target/dist-assets
+      - run: scripts/release/install-cargo-cyclonedx.sh
       - name: Pack one archive per target
         run: |
           for dir in bin/bin-*; do
@@ -171,9 +180,10 @@ jobs:
             scripts/release/package.sh "$VERSION" "$target" "$(find "$dir" -type f -name 'jev*')" \
               target/dist-assets dist
           done
-      - name: Add the JSON Schemas and SHA256SUMS
+      - name: Add the JSON Schemas, the SBOM and SHA256SUMS
         run: |
           cp schemas/*.schema.json dist/
+          scripts/release/sbom.sh "$VERSION" dist
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
       - run: scripts/release/verify-assets.sh dist "$VERSION"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -184,11 +194,12 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish draft release
+    name: Sign and publish draft release
     needs: [plan, package]
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    # The owner approves every release here; the environment also only admits `v*` tags.
+    # The owner approves every release here; the environment also only admits `v*` tags. It holds
+    # the signing key, so no other job may use it.
     environment: release
     permissions:
       contents: write
@@ -206,15 +217,59 @@ jobs:
           name: release-assets
           path: dist
       - run: scripts/release/verify-assets.sh dist "$VERSION"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      # The secrets are given to this step alone. sign.sh never passes them as arguments or prints
+      # them; GitHub also masks them in the log.
+      - name: Sign every asset and SHA256SUMS
+        run: scripts/release/sign.sh dist "$VERSION"
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+      # A key that does not match the committed public key fails here, before anything is uploaded.
+      - run: scripts/release/verify-assets.sh dist "$VERSION" crates/jev-cli/keys/release-primary.pub
       - run: scripts/release/publish.sh "$TAG" dist
+
+  attest:
+    name: Attest build provenance
+    needs: [plan, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # to sign the attestations through Sigstore
+      attestations: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: bin-*
+          path: bin
+      # Every published asset, SHA256SUMS included, and the binary in each archive (the same bytes
+      # that package.sh packed), so `gh attestation verify` also works on an installed `jev`.
+      - name: List the subjects
+        run: |
+          (cd dist && sha256sum -- *) > subjects
+          for dir in bin/bin-*; do
+            binary=$(find "$dir" -type f -name 'jev*')
+            echo "$(sha256sum < "$binary" | cut -d' ' -f1)  jev-$VERSION-${dir#bin/bin-}/$(basename "$binary")" >> subjects
+          done
+          cat subjects
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: subjects
 
   verify:
     name: Verify published assets
-    needs: [plan, publish]
+    needs: [plan, publish, attest]
     runs-on: ubuntu-latest
     # Reading a draft release takes write access; this job only reads.
     permissions:
       contents: write
+      attestations: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -226,14 +281,27 @@ jobs:
           persist-credentials: false
       - name: Download every asset of the release
         run: gh release download "$TAG" --dir published
-      - run: scripts/release/verify-assets.sh published "$VERSION"
-      - name: The published Linux binary runs on Alpine and reports the release version
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      - name: Every asset is intact and signed by the committed primary key
+        run: scripts/release/verify-assets.sh published "$VERSION" crates/jev-cli/keys/release-primary.pub
+      - name: Every asset has a build provenance attestation from this workflow
+        run: |
+          for asset in SHA256SUMS $(sed -E 's/^[0-9a-f]{64} [ *]//' published/SHA256SUMS); do
+            gh attestation verify "published/$asset" --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/release.yml" \
+              --source-ref "refs/tags/$TAG" > /dev/null
+            echo "$asset: attestation verified"
+          done
+      - name: The published Linux binary runs on Alpine, reports the release version and is attested
         run: |
           tar -xzf "published/jev-$VERSION-x86_64-unknown-linux-musl.tar.gz" -C published
           reported=$(docker run --rm --volume "$PWD/published/jev-$VERSION-x86_64-unknown-linux-musl:/dist:ro" \
             alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 \
             /dist/jev version --field version)
           test "$reported" = "$VERSION"
+          gh attestation verify "published/jev-$VERSION-x86_64-unknown-linux-musl/jev" --repo "$GH_REPO" \
+            --signer-workflow "$GH_REPO/.github/workflows/release.yml" \
+            --source-ref "refs/tags/$TAG" > /dev/null
 
   finalize:
     name: Publish release

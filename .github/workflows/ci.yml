@@ -153,6 +153,9 @@ jobs:
         run: scripts/ci/check-client-deps.sh
       - name: The pull request title rule accepts and rejects what it should
         run: scripts/ci/check-pr-title.sh --self-test
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      - name: Release keys are well-formed and documented; signing rejects tampered assets
+        run: scripts/release/self-test.sh
       # Keeps .pre-commit-config.yaml valid and applies the hygiene hooks to every file, including
       # for contributors who did not install the hooks. The branch guard is meaningless in CI and
       # the cargo hooks already run in the jobs above.

@@ -46,11 +46,103 @@ as the corresponding feature lands.
 - **No telemetry.** `jev` contacts the TypeSafe API endpoint you configure and, for updates,
   GitHub Releases for this repository. Nothing else.
 - **Updates are verified before they are installed**: a signature and a SHA-256 checksum are
-  checked against a public key compiled into the binary, and automatic updates never downgrade.
-  The full design, including key rotation, will be documented here when release signing lands.
+  checked against the release public keys compiled into the binary, and automatic updates never
+  downgrade. See [Release signing](#release-signing) below.
 - **The MCP server cannot touch files by default.** File access must be granted per directory when
   the server is started.
 - **No `unsafe` code**: both crates use `#![forbid(unsafe_code)]`.
+
+## Verifying a release
+
+Every file attached to a [GitHub Release](https://github.com/shaharia-lab/jev-cli/releases) is
+signed with [minisign](https://jedisct1.github.io/minisign/): an asset `<name>` comes with
+`<name>.minisig`. A release holds one archive per platform, the JSON Schemas, a CycloneDX SBOM
+(`jev-<version>.cdx.json`), and `SHA256SUMS`, which lists the checksum of every other asset and is
+signed as well.
+
+The release public keys:
+
+| Key | Key id | Public key |
+| --- | --- | --- |
+| Primary (signs every release) | `3CE95B4C3B9987B8` | `RWS4h5k7TFvpPJt8wAoJCpoWgejSO8eVKRs+CqEdFIQAP2E0QwyyDDcU` |
+| Next (for rotation, signs nothing yet) | `A3D8DB2C6870B308` | `RWQIs3BoLNvYo0e6bXIBfp7hoYpwkQSJuAWcSD7itrj0ULCXWULmDMx4` |
+
+The same keys are in the repository as
+[`crates/jev-cli/keys/release-primary.pub`](crates/jev-cli/keys/release-primary.pub) and
+[`release-next.pub`](crates/jev-cli/keys/release-next.pub); CI fails if they and this table ever
+differ.
+
+To verify a download by hand (Linux or macOS; minisign also has Windows builds):
+
+```sh
+version=0.1.0 target=x86_64-unknown-linux-musl    # see the release for the file names
+base=https://github.com/shaharia-lab/jev-cli/releases/download/v$version
+archive=jev-$version-$target.tar.gz
+for file in "$archive" SHA256SUMS; do
+  curl -fsSLO "$base/$file" && curl -fsSLO "$base/$file.minisig"
+done
+
+key=RWS4h5k7TFvpPJt8wAoJCpoWgejSO8eVKRs+CqEdFIQAP2E0QwyyDDcU
+minisign -Vm "$archive" -P "$key"
+minisign -Vm SHA256SUMS -P "$key"
+sha256sum --check --ignore-missing SHA256SUMS    # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
+```
+
+Each `minisign` command must print `Signature and comment signature verified` and a trusted
+comment holding `file:<name>` and `version:<version>`: check that they are the file and version
+you downloaded, because the comment is what ties a signature to one file of one release. The checksum
+command must print `OK` for the archive.
+
+Each release also has [build provenance](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
+attestations, which prove that an asset was built from this repository by its release workflow.
+With the [GitHub CLI](https://cli.github.com/), for an archive or for the `jev` binary inside it:
+
+```sh
+gh attestation verify "$archive" --repo shaharia-lab/jev-cli
+```
+
+## Release signing
+
+- Releases are built and signed by the release workflow in this repository, never on a
+  maintainer's machine. Signing happens in one job, which runs only for a `v*` tag and only after
+  a maintainer has approved that release in a protected deployment environment. The encrypted
+  secret key and its password are available to that job alone: not to pull requests, and not to
+  the other jobs of the release.
+- A signature's trusted comment names the file and the version it was made for, so a valid
+  signature cannot be passed off for another file or replayed from an older release.
+- The release stays a draft, invisible to users and to the updater, until a separate job has
+  downloaded every published asset and checked it with the standard minisign CLI against the
+  committed primary key, checked every checksum, and verified the build provenance attestations.
+  If any check fails, nothing is published and no later stage (crates.io, Homebrew) runs.
+- `jev` compiles in both public keys, primary and next, and its updater accepts a release signed
+  by either of them. Nothing else can change which keys it trusts.
+
+### Key rotation
+
+There are always two key pairs. The **primary** key signs every release. The **next** key was
+generated in advance: its public half is already published above and compiled into every `jev`,
+and its secret half is not available to the release workflow and has never signed anything.
+
+To rotate, planned or because the primary key may be compromised:
+
+1. Promote the next key: from now on the release workflow signs with it.
+2. Generate a new next key pair, and commit its public key.
+3. Ship a release signed with the promoted key that compiles in the promoted key as primary and
+   the new key as next. Installed copies already trust the promoted key, so they accept this
+   release, and from then on trust the new pair only.
+4. Update the table above in the same pull request.
+
+### If a signing key is compromised
+
+1. Rotate immediately, as above, and publish the new release.
+2. Publish a GitHub security advisory that names the compromised key id, the affected releases,
+   and the new keys.
+3. Delete any release that the compromised key signed and that was not built by the release
+   workflow (its build provenance attestation is missing or does not verify).
+
+If both keys could be compromised at once, installed copies cannot be moved to new keys by an
+update. The advisory then says so, and asks users to reinstall by hand after verifying the new
+release with the keys published in it and in this file.
 
 ## Supply chain
 
@@ -58,6 +150,8 @@ as the corresponding feature lands.
 - `cargo deny` gates advisories, licences, banned crates and crate sources on every pull request;
   `cargo audit` runs there too, and both run daily against new advisories.
 - Every third-party GitHub Action is pinned to a full commit SHA, checked in CI.
+- Each release publishes a CycloneDX SBOM and build provenance attestations, and every asset is
+  signed (see [Verifying a release](#verifying-a-release)).
 - Commits to `main` must be signed and arrive through a pull request.
 
 `jev` is an unofficial project and is not affiliated with TypeSafe AI. Problems with the TypeSafe

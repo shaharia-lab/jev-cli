@@ -293,7 +293,15 @@ crates.io. Package-manager installs never self-update.
 
 `release-please.yml` tags and drafts a release as the `jev-release-bot` App (a tag or pull request
 made with `GITHUB_TOKEN` triggers no workflow), and the tag starts `release.yml`. It is staged: plan → build
-(six native runners) → package → publish (draft, `release` environment) → verify → finalize →
-`stable`. Any other ref is a dry run. The archive layout and the full asset list are checked by
-`scripts/release/verify-assets.sh`; change it with the matrix. Signing goes between package and
-publish; crates.io and the tap hang off `stable`, which pre-releases skip.
+(six native runners) → package (+ CycloneDX SBOM) → publish (sign, draft, `release` environment)
+→ attest (build provenance) → verify → finalize → `stable`. Any other ref is a dry run. The
+archive layout, the full asset list and the signatures are checked by
+`scripts/release/verify-assets.sh`; change it with the matrix. crates.io and the tap hang off
+`stable`, which pre-releases skip.
+
+Every release asset and `SHA256SUMS` is signed with **minisign** (PRD Q1) by the one release job
+that can reach the signing key (the `release` environment: `v*` tags, owner approval). The public
+keys are `crates/jev-cli/keys/release-primary.pub` (signs) and `release-next.pub` (rotation); the
+updater must trust both and only those. Each signature's trusted comment is
+`file:<name>\tversion:<version>`, and verification checks it. `SECURITY.md` lists the keys, and
+`scripts/release/self-test.sh` fails when the two disagree.
