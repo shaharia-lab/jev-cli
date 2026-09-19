@@ -446,12 +446,8 @@ pub(crate) struct BatchRunArgs {
     #[arg(long, value_name = "PATH", help_heading = "Results")]
     pub(crate) summary_json: Option<String>,
 
-    /// Report progress on stderr every few seconds even when it is not a terminal
-    #[arg(long, help_heading = "Results")]
-    pub(crate) progress: bool,
-
     /// Check every row and print the number of requests and their estimated cost; send nothing
-    #[arg(long, conflicts_with_all = ["summary_json", "ordered", "progress"], help_heading = "Sending")]
+    #[arg(long, conflicts_with_all = ["summary_json", "ordered"], help_heading = "Sending")]
     pub(crate) dry_run: bool,
 
     /// Requests in flight at once, 1 to 64; shared keys get rate limited above about 8 [default: 4]

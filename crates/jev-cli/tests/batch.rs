@@ -1203,3 +1203,48 @@ async fn a_terminal_gets_a_progress_bar_that_is_erased_before_the_summary() {
         "the bar is erased before the summary: {seen:?}"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pipe_gets_a_progress_line_every_few_seconds_unless_quiet() {
+    // Twelve rows one at a time, half a second each: past the 5 s between lines.
+    let server = slow_mock(Duration::from_millis(500)).await;
+    let dir = scratch("progress-lines");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(12, &[]));
+    let command = |quiet: bool| {
+        let mut command = jev(Some(&server));
+        command.args([
+            "batch",
+            "run",
+            "-f",
+            &questions,
+            "--input",
+            &input,
+            "--state-field",
+            "text",
+            "--concurrency",
+            "1",
+        ]);
+        if quiet {
+            command.arg("--quiet");
+        }
+        command
+    };
+
+    let (default, quiet) = tokio::join!(run(command(false)), run(command(true)));
+
+    for run in [&default, &quiet] {
+        assert_eq!(run.code, 0, "{}", run.stderr);
+        let records = lines_of(&run.stdout);
+        assert_eq!(records.len(), 12, "stdout is the records and nothing else");
+        assert!(records.iter().all(|record| record["status"] == "ok"));
+    }
+    let progress: Vec<Value> = lines_of(&default.stderr)
+        .into_iter()
+        .filter(|line| line.get("progress").is_some())
+        .collect();
+    assert!(!progress.is_empty(), "{}", default.stderr);
+    assert_eq!(progress[0]["progress"]["rows_total"], 12);
+    assert!(progress[0]["progress"]["elapsed_ms"].as_u64().unwrap() >= 5000);
+    assert!(!quiet.stderr.contains("progress"), "{}", quiet.stderr);
+}

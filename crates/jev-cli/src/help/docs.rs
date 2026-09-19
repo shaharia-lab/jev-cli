@@ -270,8 +270,8 @@ run unless --fail-fast or --max-errors says so. The summary goes to stderr (one 
 `failed`, `skipped`, `already_ok` (not sent: --resume found them answered), `input_tokens`, \
 `cost_usd` (an estimate), `wall_time_ms`, `rows_per_second`, `retries`, `models` and `stopped_by` \
 (`fail_fast`, `max_errors`, `invalid_input`, `output_closed`, `interrupted` or null). On a \
-terminal, stderr shows a progress bar; elsewhere --progress writes a line every 5 s (`{\"progress\": \
-...}` for a program), and --quiet silences both. --dry-run sends nothing and needs no key: stdout \
+terminal, stderr shows a progress bar; elsewhere it gets a line every 5 s once a run has taken that \
+long (`{\"progress\": ...}` for a program), and --quiet silences both. --dry-run sends nothing and needs no key: stdout \
 gets `{dry_run, rows_total, requests, already_ok, invalid_rows, estimated_input_tokens, \
 estimated_cost_usd, requested_model, problems}`; the cost is null for an alias such as \
 `jev-latest`, which has no price.",
