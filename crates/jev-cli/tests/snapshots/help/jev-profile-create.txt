@@ -1,0 +1,86 @@
+Create a profile; --base-url, --model, --output, --timeout and --max-retries become its settings
+
+When to use:
+Use `jev profile create` to keep a separate set of defaults, e.g. for a staging endpoint or for CI.
+Use `jev config set --profile NAME` to change one setting of an existing profile, and `jev auth
+login --profile NAME` to give it a key.
+
+Input:
+NAME: letters, digits, `-` and `_`. --base-url, --model, --output, --timeout and --max-retries given
+on the same command line become its settings.
+
+Output:
+`profile` and `action`, which is `created`.
+
+Usage: jev profile create [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>
+          Name for the new profile: letters, digits, `-` and `_`
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+Global options:
+      --profile <NAME>
+          Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+
+  -o, --output <FORMAT>
+          Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
+
+          Possible values:
+          - table: Readable text for a person at a terminal
+          - json:  One pretty-printed JSON document. The default when stdout is not a terminal
+          - yaml:  One YAML document
+          - jsonl: Compact JSON, one record per line
+
+      --field <PATH>
+          Print one raw value from the output, e.g. `answers.is_urgent.noul`
+
+      --model <MODEL>
+          Model alias or versioned id, e.g. `jev-latest` or `jev-1.13.0`
+
+      --base-url <URL>
+          API root [default: https://api.typesafe.ai]
+
+      --timeout <DURATION>
+          Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
+
+      --max-retries <N>
+          Retries after the first attempt; 0 disables retrying [default: 2]
+
+      --no-input
+          Never ask for input; fail with an error naming the flag to use instead
+
+          [env: JEV_NO_INPUT=]
+
+      --no-color
+          Disable colour (also honours the `NO_COLOR` environment variable)
+
+      --ascii
+          Use only ASCII characters in human-readable output
+
+      --insecure-allow-http
+          Allow a plain http:// base URL to a host other than localhost (the API key travels
+          unencrypted)
+
+      --debug-bodies
+          Log request and response bodies with -v; `state` may contain sensitive data
+
+  -q, --quiet
+          Print errors only; suppress notices and warnings on stderr
+
+  -v, --verbose...
+          Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    the name is taken or not valid, or the configuration cannot be written
+
+Examples:
+  # A profile for a staging endpoint with a pinned model
+  jev profile create staging --base-url https://staging.example.com --model jev-1.13.0
+
+  # A profile with a longer timeout
+  jev profile create ci --timeout 60s -o json

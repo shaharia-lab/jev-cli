@@ -1,0 +1,118 @@
+Check a request file offline; nothing is sent or billed
+
+When to use:
+Use `jev validate` while writing a request file, in CI, or before a large batch: it runs every check
+`jev eval` runs before sending, offline, with no API key and no cost. Use `jev eval --dry-run` to
+also see the exact request body that would be sent.
+
+Input:
+A request file (-f), JSON or YAML; `-` reads stdin. `state` and `model` may be left out. --state or
+--state-file adds a state, so that the size of the request can be estimated. Nothing is read from a
+pipe unless asked for with `-`.
+
+Output:
+`file`, `valid`, `strict`, `summary` (counts of `errors` and `warnings`), `findings` (each with
+`severity`, `rule`, `question`, `path` as a JSON Pointer, `message` and `suggestion`) and `size`,
+the estimated input tokens when there is a state.
+
+Usage: jev validate [OPTIONS] --file <FILE>
+
+Options:
+  -f, --file <FILE>
+          Request file, JSON or YAML; `state` and `model` may be left out; `-` reads stdin
+
+      --input-format <FORMAT>
+          Format of the request file [default: by extension; for stdin, JSON if it starts with `{`]
+
+          [possible values: json, yaml]
+
+      --state <TEXT>
+          Check the request with this state, as text, so that its size can be estimated
+
+      --state-file <PATH>
+          Check the request with the state in this file, or on stdin with `-`
+
+      --state-format <FORMAT>
+          How to read a state given outside the request file
+
+          Possible values:
+          - auto: JSON for a `.json` file, text for everything else
+          - text: Send the content as one string
+          - json: Parse the content as JSON and send the object or array
+
+          [default: auto]
+
+      --strict
+          Count warnings as errors, so that any finding makes the request invalid
+
+      --skip-size-check
+          Skip the offline estimate of the request's size
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Global options:
+      --profile <NAME>
+          Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+
+  -o, --output <FORMAT>
+          Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
+
+          Possible values:
+          - table: Readable text for a person at a terminal
+          - json:  One pretty-printed JSON document. The default when stdout is not a terminal
+          - yaml:  One YAML document
+          - jsonl: Compact JSON, one record per line
+
+      --field <PATH>
+          Print one raw value from the output, e.g. `answers.is_urgent.noul`
+
+      --model <MODEL>
+          Model alias or versioned id, e.g. `jev-latest` or `jev-1.13.0`
+
+      --base-url <URL>
+          API root [default: https://api.typesafe.ai]
+
+      --timeout <DURATION>
+          Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
+
+      --max-retries <N>
+          Retries after the first attempt; 0 disables retrying [default: 2]
+
+      --no-input
+          Never ask for input; fail with an error naming the flag to use instead
+
+          [env: JEV_NO_INPUT=]
+
+      --no-color
+          Disable colour (also honours the `NO_COLOR` environment variable)
+
+      --ascii
+          Use only ASCII characters in human-readable output
+
+      --insecure-allow-http
+          Allow a plain http:// base URL to a host other than localhost (the API key travels
+          unencrypted)
+
+      --debug-bodies
+          Log request and response bodies with -v; `state` may contain sensitive data
+
+  -q, --quiet
+          Print errors only; suppress notices and warnings on stderr
+
+  -v, --verbose...
+          Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    the request is valid; warnings allowed unless --strict
+  2    the request is not valid, or the command line is wrong
+
+Examples:
+  # Check a request file while writing it
+  jev validate -f triage.yaml
+
+  # Fail CI on any finding, warnings included, with a state for the size check
+  jev validate -f triage.yaml --state-file ticket.txt --strict -o json
+
+  # List the rules a file breaks
+  jev validate -f triage.yaml -o json | jq -r '.findings[].rule'

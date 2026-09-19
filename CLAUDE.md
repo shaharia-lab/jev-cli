@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`,
-`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -103,7 +103,18 @@ the four formats, and text on a terminal versus JSON on a pipe. Every failure is
 `CliError::from(jev_client::Error)` in `error.rs` is the only mapping to exit codes. Errors are
 printed once, in `lib.rs`: text for a person, one JSON object for a program. `Interaction` is the only
 code that decides whether a prompt is allowed. To give a pending command its behaviour, replace its
-`Pending` arguments in `cli.rs`, add a module under `commands/`, and route it in `commands::run`.
+`Pending` arguments in `cli.rs`, add a module under `commands/`, route it in `commands::run`, and
+give it a `Doc` in `help/docs.rs`.
+
+Help follows one standard (product rule 1). In `cli.rs` a command has only its one-line purpose (a
+one-paragraph doc comment) and its arguments; everything else is its `Doc`: when to use it versus
+its siblings, input, output, exit codes, and 2 to 4 examples, one machine-readable. `help::apply`
+attaches the docs to the tree that is parsed, so `--help` and `jev spec` cannot disagree. The lint
+test in `help/lint.rs` fails, naming what is missing, when a command with real arguments has no
+complete doc, when help text is written in `cli.rs` instead, or when an example does not parse
+against the real tree or would wrap. A `Pending` placeholder is exempt until it gets arguments. Every
+`--help` and `jev spec` are snapshots in `tests/snapshots/`; after an intended change, run
+`JEV_UPDATE_SNAPSHOTS=1 cargo test -p jev-cli --all-features --test help` and review the diff.
 
 Every evaluation goes through `evaluate.rs`: `prepare` (resolve the model as flag > request file >
 env > profile > default, fill in the state, validate offline, build the typed request) and `send`

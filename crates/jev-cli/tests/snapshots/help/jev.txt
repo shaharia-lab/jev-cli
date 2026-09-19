@@ -1,0 +1,113 @@
+jev sends a `state` (text or structured data) and typed questions to TypeSafe AI's Jev model and
+returns calibrated probabilities, never generated text.
+
+Three question types: `noul` (yes/no, the probability of yes), `choice` (one of up to 255 options)
+and `score` (a position on a rubric of 2 to 10 levels).
+
+stdout carries data only: readable text on a terminal, JSON when piped. Everything else goes to
+stderr. Exit codes are a stable contract (listed under Exit codes).
+
+Agents and tooling: `jev spec` prints every command, flag, exit code and example as JSON, and `jev
+<command> --help` says when to use each command.
+
+This is an unofficial community tool, not affiliated with TypeSafe AI.
+
+Usage: jev [OPTIONS] <COMMAND>
+
+Commands:
+  eval        Evaluate a full request (state + many questions) in one API call
+  noul        Ask one yes/no question; returns the probability of yes
+  choice      Pick one option from a set you define
+  score       Rate the state on an ordered rubric of 2 to 10 levels
+  validate    Check a request file offline; nothing is sent or billed
+  batch       Apply one question set to every row of a JSONL or CSV file
+  models      List the models available to the account
+  auth        Store, inspect or remove the API key for a profile
+  config      Read and change configuration
+  profile     Manage named profiles
+  schema      Print JSON Schemas for request files and for jev's own output
+  spec        Dump the entire command tree as JSON, for agents and tooling
+  mcp         Run as a Model Context Protocol server
+  update      Update jev, check for an update, or roll one back
+  completion  Print a shell completion script
+  version     Print the version, commit, build date and target
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+Global options:
+      --profile <NAME>
+          Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+
+  -o, --output <FORMAT>
+          Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
+
+          Possible values:
+          - table: Readable text for a person at a terminal
+          - json:  One pretty-printed JSON document. The default when stdout is not a terminal
+          - yaml:  One YAML document
+          - jsonl: Compact JSON, one record per line
+
+      --field <PATH>
+          Print one raw value from the output, e.g. `answers.is_urgent.noul`
+
+      --model <MODEL>
+          Model alias or versioned id, e.g. `jev-latest` or `jev-1.13.0`
+
+      --base-url <URL>
+          API root [default: https://api.typesafe.ai]
+
+      --timeout <DURATION>
+          Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
+
+      --max-retries <N>
+          Retries after the first attempt; 0 disables retrying [default: 2]
+
+      --no-input
+          Never ask for input; fail with an error naming the flag to use instead
+
+          [env: JEV_NO_INPUT=]
+
+      --no-color
+          Disable colour (also honours the `NO_COLOR` environment variable)
+
+      --ascii
+          Use only ASCII characters in human-readable output
+
+      --insecure-allow-http
+          Allow a plain http:// base URL to a host other than localhost (the API key travels
+          unencrypted)
+
+      --debug-bodies
+          Log request and response bodies with -v; `state` may contain sensitive data
+
+  -q, --quiet
+          Print errors only; suppress notices and warnings on stderr
+
+  -v, --verbose...
+          Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  1    internal error: a bug in jev, please report it
+  2    usage or validation error; nothing was sent
+  3    no API key, or the API refused it
+  4    the API rejected the request
+  5    rate limited or overloaded, after retries
+  6    network failure, timeout or server error, after retries
+  7    a batch finished, but some rows failed
+  10   evaluated, and the gate condition is false (never an error)
+  11   evaluated, and the answer is inside the abstain band
+  20   a newer version is available
+  130  interrupted
+
+Examples:
+  # Ask a yes/no question about a file; exit 10 when the answer is probably no
+  jev noul "Is the customer asking for a refund?" --state-file ticket.txt --fail-under 0.7
+
+  # Every command, flag and exit code as JSON, for agents and tooling
+  jev spec | jq -r '.commands[].path'

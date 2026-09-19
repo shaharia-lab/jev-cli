@@ -15,6 +15,7 @@ mod error;
 mod evaluate;
 mod exit;
 mod gate;
+mod help;
 mod input;
 mod interaction;
 mod logging;
@@ -26,8 +27,8 @@ use std::io::{self, IsTerminal, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::process::ExitCode;
 
+use clap::FromArgMatches;
 use clap::error::ErrorKind as ClapErrorKind;
-use clap::{CommandFactory, Parser};
 
 use crate::cli::Cli;
 use crate::client::Connection;
@@ -40,10 +41,11 @@ use crate::interaction::Interaction;
 use crate::notice::Notifier;
 use crate::output::{Format, Output, Ui};
 
-/// The command tree, for tooling that generates documentation or completions from it.
+/// The command tree with its full help, for tooling that generates documentation or completions
+/// from it.
 #[must_use]
 pub fn command() -> clap::Command {
-    Cli::command()
+    cli::command()
 }
 
 /// Runs `jev` with the process's arguments, environment and standard streams.
@@ -101,8 +103,13 @@ struct Failure {
 }
 
 fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result<Exit, Failure> {
-    let cli =
-        Cli::try_parse_from(arguments).map_err(|error| parse_failure(&error, early_format))?;
+    // Parsed with the help attached, so that `--help` shows it.
+    let cli = cli::command()
+        .try_get_matches_from(arguments)
+        .and_then(|matches| {
+            Cli::from_arg_matches(&matches).map_err(|error| error.format(&mut cli::command()))
+        })
+        .map_err(|error| parse_failure(&error, early_format))?;
     let global = &cli.global;
     let env = Env::from_process();
 

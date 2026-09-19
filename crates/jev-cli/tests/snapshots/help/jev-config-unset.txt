@@ -1,0 +1,86 @@
+Remove a setting from the selected profile, restoring its default
+
+When to use:
+Use `jev config unset` to remove a setting from the selected profile, so that the environment or the
+built-in default applies again. Use `jev config set` to change it instead, and `jev config get` to
+see the value that now applies.
+
+Input:
+KEY, as for `jev config get`. --profile chooses the profile to change.
+
+Output:
+`profile`, `key`, `value` (null) and `changed`, false when the profile did not set it.
+
+Usage: jev config unset [OPTIONS] <KEY>
+
+Arguments:
+  <KEY>
+          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or
+          `warn_unpinned`
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+Global options:
+      --profile <NAME>
+          Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+
+  -o, --output <FORMAT>
+          Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
+
+          Possible values:
+          - table: Readable text for a person at a terminal
+          - json:  One pretty-printed JSON document. The default when stdout is not a terminal
+          - yaml:  One YAML document
+          - jsonl: Compact JSON, one record per line
+
+      --field <PATH>
+          Print one raw value from the output, e.g. `answers.is_urgent.noul`
+
+      --model <MODEL>
+          Model alias or versioned id, e.g. `jev-latest` or `jev-1.13.0`
+
+      --base-url <URL>
+          API root [default: https://api.typesafe.ai]
+
+      --timeout <DURATION>
+          Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
+
+      --max-retries <N>
+          Retries after the first attempt; 0 disables retrying [default: 2]
+
+      --no-input
+          Never ask for input; fail with an error naming the flag to use instead
+
+          [env: JEV_NO_INPUT=]
+
+      --no-color
+          Disable colour (also honours the `NO_COLOR` environment variable)
+
+      --ascii
+          Use only ASCII characters in human-readable output
+
+      --insecure-allow-http
+          Allow a plain http:// base URL to a host other than localhost (the API key travels
+          unencrypted)
+
+      --debug-bodies
+          Log request and response bodies with -v; `state` may contain sensitive data
+
+  -q, --quiet
+          Print errors only; suppress notices and warnings on stderr
+
+  -v, --verbose...
+          Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    not a setting, or the configuration cannot be written
+
+Examples:
+  # Back to the default timeout
+  jev config unset timeout
+
+  # Stop pinning a model in the ci profile
+  jev config unset model --profile ci -o json

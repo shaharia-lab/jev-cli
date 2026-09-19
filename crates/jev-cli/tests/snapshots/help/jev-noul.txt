@@ -1,0 +1,160 @@
+Ask one yes/no question; returns the probability of yes
+
+When to use:
+Use `jev noul` when the answer is yes or no about one property: does this hold? The probability is
+absolute: it can be low even when nothing fits better, and several nouls can all be high, so ask one
+noul per label when several labels can apply at once. Use `jev choice` when exactly one of several
+options must be picked (which one?), and `jev score` for a position on a described scale (how
+much?). A value near 0.5 means the model cannot tell, not "medium".
+
+Input:
+QUESTION in plain words, or --instructions-file with structured instructions. --true and --false (or
+--criteria-file) say what yes and no mean. The state is --state or --state-file (`-` for stdin),
+else a pipe. Jev reads literally and cannot count, do arithmetic or compare dates: keep those in
+code.
+
+Output:
+`noul`, the probability of yes from 0 to 1, then `model`, `requested_model`, `usage`, `cost_usd` (an
+estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was used. `--field noul` prints
+just the number.
+
+Usage: jev noul [OPTIONS] [QUESTION]
+
+Arguments:
+  [QUESTION]
+          The question, in plain words
+
+Options:
+      --instructions-file <FILE>
+          Structured instructions (JSON or YAML: `what`, `not_for`, `examples`, ...) instead of
+          QUESTION
+
+      --true <TEXT>
+          What a yes (a value near 1) means
+
+      --false <TEXT>
+          What a no (a value near 0) means
+
+      --criteria-file <FILE>
+          Structured criteria (JSON or YAML) with `true` and `false`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Gating:
+      --fail-under <P>
+          Exit 10 when P(yes) is below this
+
+      --fail-over <P>
+          Exit 10 when P(yes) is above this
+
+      --abstain-band <LO,HI>
+          Exit 11 when P(yes) is inside `LO,HI`, e.g. `0.4,0.6`: near 0.5 the model cannot tell
+
+State:
+      --state <TEXT>
+          The state to evaluate, as text
+
+      --state-file <PATH>
+          Read the state from a file, or from stdin with `-`
+
+      --state-format <FORMAT>
+          How to read the state: `json` sends an object or array, `text` one string
+
+          Possible values:
+          - auto: JSON for a `.json` file, text for everything else
+          - text: Send the content as one string
+          - json: Parse the content as JSON and send the object or array
+
+          [default: auto]
+
+Sending:
+      --dry-run
+          Validate, print the exact request body and a size estimate, and send nothing
+
+      --strict
+          Treat validation warnings as errors
+
+      --skip-size-check
+          Skip the offline estimate of the request's size
+
+      --warn-unpinned
+          Remind me on stderr to pin a versioned model id when the request used an alias
+
+      --raw
+          Print the API response body exactly as received, ignoring --output
+
+Global options:
+      --profile <NAME>
+          Named profile to use (its API key, base URL and defaults) [env: `JEV_PROFILE`]
+
+  -o, --output <FORMAT>
+          Output format [default: table on a terminal, json when piped] [env: `JEV_OUTPUT`]
+
+          Possible values:
+          - table: Readable text for a person at a terminal
+          - json:  One pretty-printed JSON document. The default when stdout is not a terminal
+          - yaml:  One YAML document
+          - jsonl: Compact JSON, one record per line
+
+      --field <PATH>
+          Print one raw value from the output, e.g. `answers.is_urgent.noul`
+
+      --model <MODEL>
+          Model alias or versioned id, e.g. `jev-latest` or `jev-1.13.0`
+
+      --base-url <URL>
+          API root [default: https://api.typesafe.ai]
+
+      --timeout <DURATION>
+          Time allowed per attempt, e.g. `30`, `30s`, `500ms` or `2m` [default: 30s]
+
+      --max-retries <N>
+          Retries after the first attempt; 0 disables retrying [default: 2]
+
+      --no-input
+          Never ask for input; fail with an error naming the flag to use instead
+
+          [env: JEV_NO_INPUT=]
+
+      --no-color
+          Disable colour (also honours the `NO_COLOR` environment variable)
+
+      --ascii
+          Use only ASCII characters in human-readable output
+
+      --insecure-allow-http
+          Allow a plain http:// base URL to a host other than localhost (the API key travels
+          unencrypted)
+
+      --debug-bodies
+          Log request and response bodies with -v; `state` may contain sensitive data
+
+  -q, --quiet
+          Print errors only; suppress notices and warnings on stderr
+
+  -v, --verbose...
+          Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and the condition holds (or no gate was given)
+  2    usage or validation error; nothing was sent
+  3    no API key, or the API refused it
+  4    the API rejected the request
+  5    rate limited or overloaded, after retries
+  6    network failure, timeout or server error, after retries
+  10   evaluated, and P(yes) is below --fail-under or above --fail-over (never an error)
+  11   evaluated, and P(yes) is inside --abstain-band: the model cannot tell
+
+Examples:
+  # Branch in a shell script: exit 0 when P(yes) >= 0.7, exit 10 when it is lower
+  if git log -1 --pretty=%B | jev noul "Does this commit describe a user-facing change?" \
+       --fail-under 0.7; then
+    echo "needs a changelog entry"
+  fi
+
+  # Just the probability
+  jev noul "Is the customer angry?" --state-file ticket.txt --field noul
+
+  # Route uncertain answers to a person: exit 11 when the model cannot tell
+  jev noul "Is this spam?" --state "$MESSAGE" --fail-under 0.6 --abstain-band 0.4,0.6
