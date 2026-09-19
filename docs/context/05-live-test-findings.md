@@ -19,6 +19,8 @@ Where these contradict the upstream docs, the server's behaviour is what the cod
   that level, so an object or array level comes back as an object or array. (Docs: `map<string, string>`.)
 - **A `null` Score level is rejected with 422**, although the docs list `null` as accepted for score
   levels. `null` is accepted for a Choice option and for Noul `criteria.true` / `criteria.false`.
+- **An 11-level Score is refused with `400 {"detail": "Too many score levels. Must have at most 10 levels."}`**
+  (re-checked 2026-09-19; earlier notes said a server error).
 - **`state` must be a string, object or array.** `null` reads as "field required" (422); a number is a 422.
 - **`instructions` is optional in practice.** A Noul or Choice with only `criteria` returns 200. A Noul
   with neither returns `400 {"detail": "Noul question must have criteria or instructions: <id>"}`.
@@ -49,3 +51,9 @@ Where these contradict the upstream docs, the server's behaviour is what the cod
   `crates/jev-client/tests/fixtures/token-calibration.json`, which stores real counts.
 - Practical consequence for users: numeric and id-heavy state is expensive. 3,000 six-digit numbers
   cost 20k tokens.
+
+## Keeping these current
+
+`crates/jev-cli/tests/live.rs` asserts the quirks above against the live API every night
+(`.github/workflows/live-smoke.yml`). When it fails, the server changed: update this file and the
+validation that depends on the finding.
