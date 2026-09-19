@@ -426,13 +426,33 @@ pub(crate) struct BatchRunArgs {
     #[arg(long, value_name = "NAME", help_heading = "Rows")]
     pub(crate) id_field: Option<String>,
 
-    /// Write the records to this file instead of stdout; it must not exist yet, or be empty
+    /// Read only the first N rows of the input
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..), help_heading = "Rows")]
+    pub(crate) limit: Option<u64>,
+
+    /// Write the records to this file instead of stdout; it must not exist yet, or be empty, unless --resume
     #[arg(long, value_name = "PATH", help_heading = "Results")]
     pub(crate) out: Option<String>,
+
+    /// Continue into --out: skip rows it records `ok`, send the rest again, append their records
+    #[arg(long, requires = "out", help_heading = "Results")]
+    pub(crate) resume: bool,
+
+    /// Write the records in input order instead of as rows finish; slower when one row is slow
+    #[arg(long, help_heading = "Results")]
+    pub(crate) ordered: bool,
 
     /// Also write the end-of-run summary to this file, as one JSON object
     #[arg(long, value_name = "PATH", help_heading = "Results")]
     pub(crate) summary_json: Option<String>,
+
+    /// Report progress on stderr every few seconds even when it is not a terminal
+    #[arg(long, help_heading = "Results")]
+    pub(crate) progress: bool,
+
+    /// Check every row and print the number of requests and their estimated cost; send nothing
+    #[arg(long, conflicts_with_all = ["summary_json", "ordered", "progress"], help_heading = "Sending")]
+    pub(crate) dry_run: bool,
 
     /// Requests in flight at once, 1 to 64; shared keys get rate limited above about 8 [default: 4]
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=64))]

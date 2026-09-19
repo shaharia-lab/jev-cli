@@ -29,9 +29,7 @@ pub(crate) enum Exit {
     /// `jev update --check` found a newer version.
     #[allow(dead_code)] // Reserved by the contract; first used by `jev update`.
     UpdateAvailable = 20,
-    /// Interrupted by SIGINT.
-    #[allow(dead_code)]
-    // Reserved by the contract; first used by the commands that run for long.
+    /// Interrupted by SIGINT or SIGTERM.
     Interrupted = 130,
 }
 

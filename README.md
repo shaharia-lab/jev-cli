@@ -28,7 +28,8 @@ Planned for the first version:
 
 - `jev eval`, `jev noul`, `jev choice`, `jev score` with answers mapped to exit codes
 - Offline validation before anything is sent or billed
-- `jev batch run` over JSONL and CSV with bounded concurrency, retries and resume
+- `jev batch run` over JSONL and CSV with bounded concurrency, pool-wide back-off when rate
+  limited, `--dry-run` cost estimates, and `--resume` after a crash or Ctrl-C
 - Human output on a terminal, JSON when piped, and stable exit codes
 - For AI agents: intent-oriented help, a machine-readable command spec, JSON Schemas, and an MCP
   server mode

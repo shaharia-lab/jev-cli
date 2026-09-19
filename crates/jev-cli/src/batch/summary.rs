@@ -19,6 +19,8 @@ pub(crate) enum StopReason {
     InvalidInput,
     /// Whoever read the records stopped reading them.
     OutputClosed,
+    /// SIGINT or SIGTERM: the rows in flight were given a moment to finish.
+    Interrupted,
 }
 
 /// The end-of-run summary. This shape is versioned public API, like a result record.
@@ -32,6 +34,8 @@ pub(crate) struct Summary {
     pub(crate) failed: u64,
     /// Rows not attempted because the run stopped early.
     pub(crate) skipped: u64,
+    /// Rows not sent because the output already records them `ok` (`--resume`).
+    pub(crate) already_ok: u64,
     /// Input tokens over every answered row. Only input tokens are billed.
     pub(crate) input_tokens: u64,
     /// The estimated cost in US dollars, or `null` when an answering model's price is not known.
@@ -51,7 +55,9 @@ pub(crate) struct Summary {
 impl Summary {
     /// Fills in the figures that depend on the whole run.
     pub(crate) fn finish(&mut self, elapsed: Duration) {
-        self.skipped = self.rows_total.saturating_sub(self.ok + self.failed);
+        self.skipped = self
+            .rows_total
+            .saturating_sub(self.ok + self.failed + self.already_ok);
         // A sum of many small estimates gathers floating-point noise in its last digits.
         self.cost_usd = self.cost_usd.map(|cost| (cost * 1e9).round() / 1e9);
         self.wall_time_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
@@ -75,6 +81,9 @@ impl Summary {
             self.failed,
             self.skipped
         );
+        if self.already_ok > 0 {
+            let _ = write!(text, ", {} already ok", self.already_ok);
+        }
         if let Some(reason) = self.stopped_by {
             let _ = write!(
                 text,
@@ -84,6 +93,7 @@ impl Summary {
                     StopReason::MaxErrors => "stopped by --max-errors",
                     StopReason::InvalidInput => "stopped at a row that cannot be used",
                     StopReason::OutputClosed => "stopped: the output was closed",
+                    StopReason::Interrupted => "interrupted",
                 }
             );
         }
@@ -126,9 +136,10 @@ mod tests {
     #[test]
     fn a_finished_summary_counts_the_skipped_rows_and_the_throughput() {
         let mut summary = Summary {
-            rows_total: 10,
+            rows_total: 12,
             ok: 5,
             failed: 1,
+            already_ok: 2,
             input_tokens: 1500,
             cost_usd: Some(0.000_063),
             retries: 1,
@@ -143,7 +154,7 @@ mod tests {
         assert!((summary.rows_per_second - 3.0).abs() < f64::EPSILON);
         assert_eq!(
             summary.human(Ui::plain()),
-            "batch: 10 rows: 5 ok, 1 failed, 4 skipped (stopped by --fail-fast)\n  \
+            "batch: 12 rows: 5 ok, 1 failed, 4 skipped, 2 already ok (stopped by --fail-fast)\n  \
              1500 input tokens | est. cost $0.000063 | 2.0 s | 3 rows/s | 1 retry\n  model jev-1.13.0"
         );
         let json = serde_json::to_value(&summary).unwrap();

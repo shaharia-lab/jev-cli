@@ -19,7 +19,12 @@ const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-7a1e";
 
 /// `jev`, isolated from the environment of whoever runs the tests, pointed at `server`.
 fn jev(server: Option<&MockServer>) -> Command {
-    let mut command = Command::cargo_bin("jev").unwrap();
+    Command::from_std(process(server))
+}
+
+/// The same, as a process to start and stop by hand.
+fn process(server: Option<&MockServer>) -> std::process::Command {
+    let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("jev"));
     for variable in [
         "CI",
         "NO_COLOR",
@@ -626,4 +631,575 @@ async fn a_million_rows_stay_under_100_mb_of_memory() {
     let _ = fs::remove_dir_all(&dir);
     assert!(output.status.success());
     assert!(peak_kb < 100 * 1024, "peak RSS {peak_kb} kB");
+}
+
+/// Starts `jev batch run` in the background, writing to `out`.
+fn start(server: &MockServer, arguments: &[&str]) -> std::process::Child {
+    process(Some(server))
+        .args(["batch", "run"])
+        .args(arguments)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap()
+}
+
+/// Waits until `out` holds at least `count` complete records.
+async fn wait_for_records(out: &Path, count: usize) {
+    for _ in 0..600 {
+        let written = fs::read_to_string(out).unwrap_or_default();
+        if written.matches('\n').count() >= count {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("{} never held {count} records", out.display());
+}
+
+/// The id of the row each request was sent for: row n's state is `fine n`.
+async fn sent_ids(server: &MockServer) -> Vec<u64> {
+    sent(server)
+        .await
+        .iter()
+        .map(|body| {
+            let state = body["state"].as_str().unwrap();
+            state.rsplit_once(' ').unwrap().1.parse().unwrap()
+        })
+        .collect()
+}
+
+/// A mock that answers every row after `delay`.
+async fn slow_mock(delay: Duration) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(delay)
+                .set_body_json(answer()),
+        )
+        .mount(&server)
+        .await;
+    server
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_killed_run_resumed_never_sends_a_finished_row_again() {
+    let dir = scratch("resume-after-kill");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(40, &[]));
+    let out = dir.join("results.jsonl");
+    let out_path = out.to_str().unwrap();
+    let arguments = [
+        "-f",
+        &questions,
+        "--input",
+        &input,
+        "--state-field",
+        "text",
+        "--concurrency",
+        "2",
+        "--out",
+        out_path,
+    ];
+    let first = slow_mock(Duration::from_millis(50)).await;
+    let mut child = start(&first, &arguments);
+    wait_for_records(&out, 6).await;
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let done: BTreeSet<u64> = lines_of(&fs::read_to_string(&out).unwrap())
+        .iter()
+        .map(|record| record["id"].as_u64().unwrap())
+        .collect();
+    assert!(done.len() >= 6 && done.len() < 40, "{done:?}");
+
+    let second = mock(true).await;
+    let resumed = run({
+        let mut command = jev(Some(&second));
+        command.args(["batch", "run", "--resume"]).args(arguments);
+        command
+    })
+    .await;
+
+    assert_eq!(resumed.code, 0, "{}", resumed.stderr);
+    let resent: BTreeSet<u64> = sent_ids(&second).await.into_iter().collect();
+    assert!(resent.is_disjoint(&done), "finished rows were sent again");
+    assert_eq!(resent.len() + done.len(), 40);
+    let records = lines_of(&fs::read_to_string(&out).unwrap());
+    let mut ok: Vec<u64> = records
+        .iter()
+        .filter(|record| record["status"] == "ok")
+        .map(|record| record["id"].as_u64().unwrap())
+        .collect();
+    ok.sort_unstable();
+    assert_eq!(
+        ok,
+        (1..=40).collect::<Vec<_>>(),
+        "exactly one ok record per id"
+    );
+    let summary = &json_of(&resumed.stderr)["summary"];
+    assert_eq!(summary["already_ok"], done.len());
+    assert_eq!(summary["ok"], 40 - done.len());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cut_off_last_line_is_discarded_and_failed_rows_are_retried_on_resume() {
+    let server = mock(true).await;
+    let dir = scratch("resume-truncated");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(5, &[]));
+    let out = write(
+        &dir,
+        "results.jsonl",
+        "{\"id\":1,\"status\":\"ok\"}\n{\"id\":2,\"status\":\"error\",\"error\":{}}\n{\"id\":3,\"status\":\"ok\"}\n{\"id\":4,\"status\":\"o",
+    );
+    let mut command = jev(Some(&server));
+    command.args([
+        "batch",
+        "run",
+        "-f",
+        &questions,
+        "--input",
+        &input,
+        "--state-field",
+        "text",
+        "--out",
+        &out,
+        "--resume",
+    ]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let mut resent = sent_ids(&server).await;
+    resent.sort_unstable();
+    assert_eq!(resent, [2, 4, 5]);
+    let records = lines_of(&fs::read_to_string(&out).unwrap());
+    assert_eq!(records.len(), 6, "every line is a whole record");
+    let stderr = lines_of(&run.stderr);
+    assert_eq!(stderr[0]["warning"]["code"], "partial_record_discarded");
+    assert_eq!(
+        (
+            &stderr[1]["summary"]["ok"],
+            &stderr[1]["summary"]["already_ok"]
+        ),
+        (&json!(3), &json!(2))
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn sigint_finishes_the_rows_in_flight_prints_the_summary_and_exits_130() {
+    let server = slow_mock(Duration::from_millis(300)).await;
+    let dir = scratch("sigint");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(40, &[]));
+    let out = dir.join("results.jsonl");
+    let child = start(
+        &server,
+        &[
+            "-f",
+            &questions,
+            "--input",
+            &input,
+            "--state-field",
+            "text",
+            "--concurrency",
+            "2",
+            "--out",
+            out.to_str().unwrap(),
+        ],
+    );
+    wait_for_records(&out, 2).await;
+    let status = std::process::Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let output = tokio::task::spawn_blocking(move || child.wait_with_output().unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(130));
+    assert!(output.stdout.is_empty());
+    let records = lines_of(&fs::read_to_string(&out).unwrap());
+    assert!(
+        records.len() >= 2 && records.len() < 40,
+        "{}",
+        records.len()
+    );
+    assert!(records.iter().all(|record| record["status"] == "ok"));
+    let stderr = lines_of(&String::from_utf8(output.stderr).unwrap());
+    assert_eq!(stderr[0]["warning"]["code"], "interrupted");
+    let summary = &stderr[1]["summary"];
+    assert_eq!(summary["stopped_by"], "interrupted");
+    assert_eq!(
+        summary["ok"],
+        records.len(),
+        "the rows in flight were recorded"
+    );
+    assert_eq!(summary["skipped"], 40 - records.len());
+    assert_eq!(
+        sent(&server).await.len(),
+        records.len(),
+        "nothing sent after"
+    );
+}
+
+/// Answers 429 with `retry-after: 1` to the first request, then 200 after 50 ms, and remembers
+/// when each request arrived.
+struct RateLimited {
+    arrivals: std::sync::Mutex<Vec<std::time::Instant>>,
+}
+
+impl wiremock::Respond for RateLimited {
+    fn respond(&self, _: &wiremock::Request) -> ResponseTemplate {
+        let mut arrivals = self.arrivals.lock().unwrap();
+        arrivals.push(std::time::Instant::now());
+        if arrivals.len() == 1 {
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "1")
+                .set_body_json(json!({ "detail": { "error_type": "rate_limit_error", "message": "Slow down." } }))
+        } else {
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_millis(50))
+                .set_body_json(answer())
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_429_on_one_worker_pauses_every_worker_for_its_retry_after() {
+    let server = MockServer::start().await;
+    let arrivals = std::sync::Arc::new(RateLimited {
+        arrivals: std::sync::Mutex::new(Vec::new()),
+    });
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .respond_with(Shared(std::sync::Arc::clone(&arrivals)))
+        .mount(&server)
+        .await;
+    let dir = scratch("rate-limited");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(12, &[]));
+    let mut command = jev(Some(&server));
+    command.args([
+        "batch",
+        "run",
+        "-f",
+        &questions,
+        "--input",
+        &input,
+        "--state-field",
+        "text",
+        "--concurrency",
+        "4",
+    ]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let records = lines_of(&run.stdout);
+    assert_eq!(records.len(), 12);
+    assert!(
+        records.iter().all(|record| record["status"] == "ok"),
+        "no 429 went unrecovered"
+    );
+    let arrivals = arrivals.arrivals.lock().unwrap().clone();
+    assert_eq!(arrivals.len(), 13, "one retry");
+    let refused = arrivals[0];
+    // Only the other workers' first requests, already on their way, arrive during the server's
+    // second; after it, requests start one at a time, spaced out.
+    let mut since: Vec<Duration> = arrivals
+        .iter()
+        .map(|arrival| arrival.duration_since(refused))
+        .collect();
+    since.sort_unstable();
+    let (paused, later) = since.split_at(4);
+    assert!(paused[3] < Duration::from_millis(990), "{since:?}");
+    assert!(later[0] >= Duration::from_millis(990), "{since:?}");
+    for pair in later.windows(2).take(3) {
+        assert!(
+            pair[1].saturating_sub(pair[0]) >= Duration::from_millis(50),
+            "{since:?}"
+        );
+    }
+    assert_eq!(json_of(&run.stderr)["summary"]["retries"], 1);
+}
+
+/// Lets a test keep a handle on a responder it mounts.
+struct Shared<T>(std::sync::Arc<T>);
+
+impl<T: wiremock::Respond> wiremock::Respond for Shared<T> {
+    fn respond(&self, request: &wiremock::Request) -> ResponseTemplate {
+        self.0.respond(request)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dry_run_counts_and_prices_the_requests_without_a_key_or_a_request() {
+    let server = mock(true).await;
+    let dir = scratch("dry-run");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(10, &[]));
+    let out = write(
+        &dir,
+        "results.jsonl",
+        "{\"id\":1,\"status\":\"ok\"}\n{\"id\":2,\"status\":\"ok\"}\n",
+    );
+
+    let planned = run({
+        let mut command = jev(Some(&server));
+        command.env_remove("TYPESAFE_API_KEY").args([
+            "batch",
+            "run",
+            "-f",
+            &questions,
+            "--input",
+            &input,
+            "--state-field",
+            "text",
+            "--model",
+            "jev-1.13.0",
+            "--out",
+            &out,
+            "--resume",
+            "--limit",
+            "8",
+            "--dry-run",
+        ]);
+        command
+    })
+    .await;
+    let field = run({
+        let mut command = jev(Some(&server));
+        command.args([
+            "batch",
+            "run",
+            "-f",
+            &questions,
+            "--input",
+            &input,
+            "--dry-run",
+            "--field",
+            "requests",
+        ]);
+        command
+    })
+    .await;
+
+    assert_eq!(planned.code, 0, "{}", planned.stderr);
+    let plan = json_of(&planned.stdout);
+    assert_eq!(plan["dry_run"], true);
+    assert_eq!(
+        (
+            &plan["rows_total"],
+            &plan["requests"],
+            &plan["already_ok"],
+            &plan["invalid_rows"]
+        ),
+        (&json!(8), &json!(6), &json!(2), &json!(0))
+    );
+    let tokens = plan["estimated_input_tokens"].as_u64().unwrap();
+    assert!(tokens > 6 * 10, "{plan}");
+    #[allow(clippy::cast_precision_loss)]
+    let expected = tokens as f64 * 0.042 / 1e6;
+    assert!(
+        (plan["estimated_cost_usd"].as_f64().unwrap() - expected).abs() < 1e-9,
+        "{plan}"
+    );
+    assert_eq!(plan["requested_model"], "jev-1.13.0");
+    assert_eq!(
+        fs::read_to_string(&out).unwrap().lines().count(),
+        2,
+        "untouched"
+    );
+    assert_eq!(
+        (field.code, field.stdout.trim()),
+        (0, "10"),
+        "{}",
+        field.stderr
+    );
+    assert!(sent(&server).await.is_empty(), "a dry run sends nothing");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dry_run_lists_the_rows_that_cannot_be_used_and_exits_2() {
+    let server = mock(true).await;
+    let dir = scratch("dry-run-invalid");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let bad = write(
+        &dir,
+        "bad.jsonl",
+        "{\"text\": \"fine\"}\n{\"body\": \"SENTINEL-STATE\"}\n",
+    );
+
+    let invalid = run({
+        let mut command = jev(Some(&server));
+        command.args([
+            "batch",
+            "run",
+            "-f",
+            &questions,
+            "--input",
+            &bad,
+            "--state-field",
+            "text",
+            "--dry-run",
+        ]);
+        command
+    })
+    .await;
+
+    assert_eq!(invalid.code, 2);
+    let problems = &json_of(&invalid.stdout)["problems"];
+    assert_eq!(
+        problems,
+        &json!([{ "line": 2, "message": "the row has no field `text`" }])
+    );
+    assert!(
+        json_of(&invalid.stderr)["error"]["message"]
+            .as_str()
+            .unwrap()
+            .ends_with("nothing was sent")
+    );
+    assert!(
+        !invalid.stdout.contains("SENTINEL-STATE") && !invalid.stderr.contains("SENTINEL-STATE")
+    );
+    assert!(sent(&server).await.is_empty(), "a dry run sends nothing");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ordered_records_follow_the_input_when_the_first_row_is_the_slowest() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .and(body_string_contains("fine 1\""))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_millis(300))
+                .set_body_json(answer()),
+        )
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(answer()))
+        .mount(&server)
+        .await;
+    let dir = scratch("ordered");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(8, &[]));
+    let arguments = [
+        "batch",
+        "run",
+        "-f",
+        &questions,
+        "--input",
+        &input,
+        "--state-field",
+        "text",
+    ];
+
+    let ordered = run({
+        let mut command = jev(Some(&server));
+        command.args(arguments).arg("--ordered");
+        command
+    })
+    .await;
+    let unordered = run({
+        let mut command = jev(Some(&server));
+        command.args(arguments);
+        command
+    })
+    .await;
+
+    let ids = |stdout: &str| -> Vec<u64> {
+        lines_of(stdout)
+            .iter()
+            .map(|record| record["id"].as_u64().unwrap())
+            .collect()
+    };
+    assert_eq!(ordered.code, 0, "{}", ordered.stderr);
+    assert_eq!(ids(&ordered.stdout), (1..=8).collect::<Vec<_>>());
+    assert_eq!(
+        ids(&unordered.stdout).last(),
+        Some(&1),
+        "without --ordered, the slow row is last"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_terminal_gets_a_progress_bar_that_is_erased_before_the_summary() {
+    use std::io::Read as _;
+
+    let server = slow_mock(Duration::from_millis(20)).await;
+    let dir = scratch("progress-bar");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(20, &[]));
+    let out = dir.join("results.jsonl");
+    let (mut pty, pts) = pty_process::blocking::open().unwrap();
+    pty.resize(pty_process::Size::new(40, 120)).unwrap();
+    let mut command = pty_process::blocking::Command::new(assert_cmd::cargo::cargo_bin("jev"))
+        .args([
+            "batch",
+            "run",
+            "-f",
+            &questions,
+            "--input",
+            &input,
+            "--state-field",
+            "text",
+        ])
+        .args(["--concurrency", "2", "--out"])
+        .arg(&out)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null());
+    for variable in [
+        "CI",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "JEV_OUTPUT",
+        "JEV_NO_INPUT",
+    ] {
+        command = command.env_remove(variable);
+    }
+    let mut child = command
+        .env("TERM", "xterm-256color")
+        .env("NO_COLOR", "1")
+        .env("JEV_CONFIG_DIR", dir.join("config"))
+        .env("TYPESAFE_API_KEY", SENTINEL_KEY)
+        .env("TYPESAFE_BASE_URL", server.uri())
+        .spawn(pts)
+        .unwrap();
+
+    let seen = tokio::task::spawn_blocking(move || {
+        let mut seen = Vec::new();
+        let mut buffer = [0_u8; 4096];
+        while let Ok(read) = pty.read(&mut buffer) {
+            if read == 0 {
+                break;
+            }
+            seen.extend(buffer.iter().take(read));
+        }
+        String::from_utf8(seen).unwrap()
+    })
+    .await
+    .unwrap();
+
+    assert!(child.wait().unwrap().success());
+    assert!(!seen.contains(SENTINEL_KEY));
+    let bar = "\r\u{1b}[2K";
+    assert!(seen.contains(&format!("{bar}#")), "{seen:?}");
+    assert!(seen.contains("/20 rows | "), "{seen:?}");
+    assert!(
+        seen.contains(&format!(
+            "{bar}{{\"summary\":{{\"rows_total\":20,\"ok\":20,"
+        )),
+        "the bar is erased before the summary: {seen:?}"
+    );
 }

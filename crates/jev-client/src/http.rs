@@ -18,6 +18,7 @@ use crate::request::Request;
 use crate::response::Response;
 use crate::retry::{RetryPolicy, server_delay};
 use crate::secret::ApiKey;
+use crate::throttle::Throttle;
 use crate::transport::{Reply, ReplyMeta, Transport};
 
 /// The response header carrying the id of a request.
@@ -69,6 +70,7 @@ pub struct HttpTransport {
     retry: RetryPolicy,
     clock: Arc<dyn Clock>,
     log_bodies: bool,
+    throttle: Option<Arc<Throttle>>,
 }
 
 impl HttpTransport {
@@ -97,6 +99,15 @@ impl HttpTransport {
         &self.retry
     }
 
+    /// Paces every call through this transport, and its clones, with `throttle`: a 429 or 529 on
+    /// one call then slows all of them. Share one [`Throttle`] between transports to pace them
+    /// together.
+    #[must_use]
+    pub fn with_throttle(mut self, throttle: Arc<Throttle>) -> Self {
+        self.throttle = Some(throttle);
+        self
+    }
+
     /// Sends one kind of request until it succeeds, fails for good, or runs out of retries.
     async fn call<T: DeserializeOwned>(
         &self,
@@ -115,12 +126,18 @@ impl HttpTransport {
         let mut retry = 0;
         loop {
             let attempt = retry + 1;
+            if let Some(throttle) = &self.throttle {
+                throttle.wait(self.clock.as_ref()).await;
+            }
             let outcome = self
                 .attempt::<T>(&method, &url, body.as_deref(), attempt)
                 .await;
 
             let failure = match outcome {
                 Ok((parsed, request_id, raw_body)) => {
+                    if let Some(throttle) = &self.throttle {
+                        throttle.speed_up();
+                    }
                     let latency = self.clock.now().duration_since(started);
                     let meta = ReplyMeta::new(request_id, latency, attempt);
                     return Ok(Reply::new(parsed, meta).with_raw_body(raw_body));
@@ -128,16 +145,20 @@ impl HttpTransport {
                 Err(failure) => failure,
             };
 
+            let delay = self
+                .retry
+                .delay(retry, failure.retry_after(), fastrand::f64());
+            if let (Some(throttle), ErrorKind::RateLimit | ErrorKind::Overloaded) =
+                (&self.throttle, failure.kind())
+            {
+                throttle.slow_down(self.clock.now(), delay);
+            }
             if retry >= self.retry.max_retries || !self.should_retry(&failure) {
                 if failure.is_retryable() {
                     tracing::debug!(attempt, "giving up: no retries left");
                 }
                 return Err(failure.with_attempts(attempt));
             }
-
-            let delay = self
-                .retry
-                .delay(retry, failure.retry_after(), fastrand::f64());
             tracing::debug!(
                 attempt,
                 max_retries = self.retry.max_retries,
@@ -287,6 +308,7 @@ impl fmt::Debug for HttpTransport {
             .field("api_key", &self.api_key)
             .field("retry", &self.retry)
             .field("log_bodies", &self.log_bodies)
+            .field("throttle", &self.throttle)
             .finish_non_exhaustive()
     }
 }
@@ -402,6 +424,7 @@ impl HttpTransportBuilder {
             retry: self.retry,
             clock: self.clock,
             log_bodies: self.log_bodies,
+            throttle: None,
         })
     }
 }

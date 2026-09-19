@@ -4,26 +4,39 @@ When to use:
 Use `jev batch run` to ask the same questions about many states: tickets, messages, records. It
 sends one request per row, a few at a time, and writes one result record per row. Use `jev eval` for
 one state and several questions, `jev noul`, `jev choice` or `jev score` for one state and one
-question, and `jev validate` to check the question set without sending anything.
+question, and `jev validate` to check the question set without sending anything. Run it with
+--dry-run first to see how many requests a run makes and what it should cost.
 
 Input:
 A request file (-f), JSON or YAML, whose `questions` (and `model`, if present) are used for every
 row; any `state` in it is replaced by each row's. The rows are --input, a JSONL file (one JSON value
-per line) or a CSV file with a header row, or JSONL piped on stdin. A row's state is the whole row,
-one field of it (--state-field) or an object of some fields (--state-fields); its id is --id-field,
-else its line number. Before anything is sent the question set is validated and every row of a file
-is checked: a malformed row, a missing field or a repeated id is exit 2. Piped rows can be read only
-once, so they are checked as they arrive, and such a row stops sending there.
+per line) or a CSV file with a header row, or JSONL piped on stdin; --limit reads only the first N.
+A row's state is the whole row, one field of it (--state-field) or an object of some fields
+(--state-fields); its id is --id-field, else its line number. Before anything is sent the question
+set is validated and every row of a file is checked: a malformed row, a missing field or a repeated
+id is exit 2. Piped rows can be read only once, so they are checked as they arrive, and such a row
+stops sending there. --resume continues into an existing --out file: rows it records `ok` are not
+sent again, rows it records `error` are, and an incomplete last line left by a crash is removed
+first. A 429 or 529 on any request pauses every worker for the server's `retry-after` and then
+spaces requests out until they succeed again. SIGINT or SIGTERM stops sending, gives the requests in
+flight up to 10 s to finish and be recorded, and exits 130; a second signal exits at once.
 
 Output:
-JSON Lines on stdout, or appended to --out: one record per row, in the order rows finish, whatever
---output says. An answered row is `{id, status: "ok", model, answers, usage, cost_usd, request_id,
-latency_ms}`; a failed one is `{id, status: "error", error}`, where `error` has the shape of every
-JSON error (`code`, `exit_code`, `error_type`, `message`, `hint`, `request_id`, ...). A failed row
-does not stop the run unless --fail-fast or --max-errors says so. The summary goes to stderr (one
-`{"summary": ...}` JSON line when the output is for a program) and to --summary-json: `rows_total`,
-`ok`, `failed`, `skipped`, `input_tokens`, `cost_usd` (an estimate), `wall_time_ms`,
-`rows_per_second`, `retries`, `models` and `stopped_by`.
+JSON Lines on stdout, or appended to --out: one record per row, in the order rows finish (--ordered:
+in input order), whatever --output says. Each record is written whole with its newline, so the
+output is valid JSONL even after an interruption. An answered row is `{id, status: "ok", model,
+answers, usage, cost_usd, request_id, latency_ms}`; a failed one is `{id, status: "error", error}`,
+where `error` has the shape of every JSON error (`code`, `exit_code`, `error_type`, `message`,
+`hint`, `request_id`, ...). A failed row does not stop the run unless --fail-fast or --max-errors
+says so. The summary goes to stderr (one `{"summary": ...}` JSON line when the output is for a
+program) and to --summary-json: `rows_total`, `ok`, `failed`, `skipped`, `already_ok` (not sent:
+--resume found them answered), `input_tokens`, `cost_usd` (an estimate), `wall_time_ms`,
+`rows_per_second`, `retries`, `models` and `stopped_by` (`fail_fast`, `max_errors`, `invalid_input`,
+`output_closed`, `interrupted` or null). On a terminal, stderr shows a progress bar; elsewhere
+--progress writes a line every 5 s (`{"progress": ...}` for a program), and --quiet silences both.
+--dry-run sends nothing and needs no key: stdout gets `{dry_run, rows_total, requests, already_ok,
+invalid_rows, estimated_input_tokens, estimated_cost_usd, requested_model, problems}`; the cost is
+null for an alias such as `jev-latest`, which has no price.
 
 Usage: jev batch run [OPTIONS] --file <FILE>
 
@@ -65,14 +78,30 @@ Rows:
       --id-field <NAME>
           Field that identifies each row in the results; must be unique [default: the line number]
 
+      --limit <N>
+          Read only the first N rows of the input
+
 Results:
       --out <PATH>
-          Write the records to this file instead of stdout; it must not exist yet, or be empty
+          Write the records to this file instead of stdout; it must not exist yet, or be empty,
+          unless --resume
+
+      --resume
+          Continue into --out: skip rows it records `ok`, send the rest again, append their records
+
+      --ordered
+          Write the records in input order instead of as rows finish; slower when one row is slow
 
       --summary-json <PATH>
           Also write the end-of-run summary to this file, as one JSON object
 
+      --progress
+          Report progress on stderr every few seconds even when it is not a terminal
+
 Sending:
+      --dry-run
+          Check every row and print the number of requests and their estimated cost; send nothing
+
       --strict
           Treat validation warnings as errors
 
@@ -135,20 +164,25 @@ Global options:
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
 
 Exit codes:
-  0    every row was answered
+  0    every row was answered, or a dry run found every row usable
   2    usage error, or a bad question set or input row; nothing was sent for a file
   3    no API key, or the API refused it
-  7    the run finished, but some rows failed: see their error records
+  7    the run finished, but some rows failed: see their error records, then --resume
+  130  interrupted by SIGINT or SIGTERM; rerun with --resume to finish
 
 Examples:
   # Label tickets: the `body` field is the state, records keyed by ticket_id
   jev batch run -f triage.yaml --input tickets.jsonl --state-field body \
       --id-field ticket_id --out results.jsonl
 
-  # Send two columns of a CSV export, and keep a machine-readable summary
-  jev batch run -f triage.yaml --input export.csv --state-fields subject,body \
-      --out results.jsonl --summary-json summary.json
+  # See how many requests the run makes and its estimated cost, sending nothing
+  jev batch run -f triage.yaml --input tickets.jsonl --state-field body \
+      --model jev-1.13.0 --dry-run
 
-  # Rows from a pipeline, stopping at the first failure; list the failed ids
-  jq -c '.items[]' dump.json | jev batch run -f triage.yaml --fail-fast \
+  # Continue an interrupted or partly failed run: only unanswered rows are sent
+  jev batch run -f triage.yaml --input export.csv --state-fields subject,body \
+      --out results.jsonl --resume --summary-json summary.json
+
+  # Rows from a pipeline, in input order, stopping at the first failure
+  jq -c '.items[]' dump.json | jev batch run -f triage.yaml --ordered --fail-fast \
       | jq -r 'select(.status == "error") | .id'

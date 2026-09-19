@@ -55,6 +55,8 @@ pub(crate) struct Notifier {
     pub(crate) format: Format,
     pub(crate) ui: Ui,
     pub(crate) quiet: bool,
+    /// Whether stderr is a terminal, where something can be redrawn in place.
+    pub(crate) terminal: bool,
 }
 
 impl Notifier {

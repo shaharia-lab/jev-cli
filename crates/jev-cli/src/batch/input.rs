@@ -5,6 +5,7 @@ use std::io::{self, BufRead, BufReader, Read};
 use std::path::Path;
 
 use clap::ValueEnum;
+use serde::Serialize;
 use serde_json::{Map, Value};
 
 use crate::error::CliError;
@@ -69,7 +70,7 @@ pub(crate) struct Row {
 }
 
 /// A row that cannot be used. The message never quotes the row, which may hold customer data.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct RowProblem {
     /// The line it is on, when it is known.
     pub(crate) line: Option<u64>,
