@@ -15,6 +15,13 @@ authors = ["Shaharia Lab"]
 keywords = ["jev", "typesafe", "cli", "ai"]
 categories = ["command-line-utilities"]
 
+# What the release archives ship (NFR-SIZE-1: at most 15 MB per target): one optimised,
+# link-time-optimised unit with symbols stripped. `cargo install` builds this profile too.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+
 [workspace.dependencies]
 jev-client = { path = "crates/jev-client", version = "0.0.0" }
 

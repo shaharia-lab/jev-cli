@@ -1,0 +1,25 @@
+# Pull request titles must be Conventional Commit headers: squash merging makes the title the
+# commit on main, and release-please reads those commits to pick the next version and write the
+# changelog. Runs again whenever the title is edited.
+
+name: PR title
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/ci/check-pr-title.sh "$TITLE"
+        env:
+          TITLE: ${{ github.event.pull_request.title }}

@@ -1,0 +1,265 @@
+# Release: builds `jev` for six targets, packs the archives, and publishes them to the GitHub
+# Release of a tag. Stages run in order, and each stage only starts when the one before succeeded:
+#
+#   plan → build (6 targets) → package → publish (draft) → verify → finalize → stable
+#
+# How a run starts, and what it does:
+#
+# - release-please (.github/workflows/release-please.yml) merges the release pull request, creates
+#   the tag and a draft release, and dispatches this workflow on the tag. A tag or release created
+#   with the default GITHUB_TOKEN triggers no workflow, but a dispatch does, and it runs on the tag
+#   ref, which the `release` environment requires.
+# - `gh workflow run release.yml --ref v0.2.0-rc.1` publishes a tag by hand, for a pre-release or
+#   to resume a release whose run can no longer be re-run.
+# - Any other ref (a branch dispatch, or a pull request that changes the release plumbing) is a
+#   dry run: every target is built, checked and packed, and nothing is published.
+#
+# Publishing is idempotent. The release stays a draft, invisible to users and to `jev update`,
+# until its downloaded assets pass verification; while it is a draft a re-run replaces its assets
+# wholesale, and once it is published they are never changed again. Re-running failed jobs is the
+# normal way to recover.
+#
+# Later stages attach here: signing belongs between `package` and `publish`; crates.io and the
+# Homebrew tap go after `stable`, so they never run for a pre-release and never point at an asset
+# that did not pass verification.
+
+name: Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+      - .github/workflows/release-please.yml
+      - scripts/release/**
+      - release-please-config.json
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - crates/jev-cli/build.rs
+      - crates/jev-cli/examples/dist-assets.rs
+
+# One run per ref at a time; a release run is never cancelled half way.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      tag: ${{ steps.plan.outputs.tag }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: plan
+        run: scripts/release/plan.sh "$GITHUB_REF" | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Native runners only, so every binary is also run on its own platform before it ships.
+      # The list must match TARGETS in scripts/release/verify-assets.sh.
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      BIN: target/${{ matrix.target }}/release/jev${{ contains(matrix.target, 'windows') && '.exe' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No build cache: a release is built from a clean slate.
+      - run: rustup toolchain install && rustup target add "$TARGET"
+      - name: Install the musl C toolchain (ring compiles C and assembly)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          # `jev version` reports the commit and a build date that is the commit's, not the clock's.
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) JEV_BUILD_COMMIT=$(git rev-parse --short=12 HEAD) \
+            cargo build --release --locked --target "$TARGET" -p jev-cli --bin jev
+      - name: Check size (NFR-SIZE-1, at most 15 MB)
+        run: |
+          size=$(wc -c < "$BIN" | tr -d ' ')
+          echo "$BIN is $size bytes"
+          test "$size" -le 15000000
+      - name: Check the binary reports this version and target
+        run: |
+          test "$("$BIN" version --field version)" = "$VERSION"
+          test "$("$BIN" version --field target)" = "$TARGET"
+      - name: Check the binary is statically linked and runs on Alpine
+        if: runner.os == 'Linux'
+        run: |
+          file "$BIN"
+          if readelf --dynamic "$BIN" | grep -q NEEDED; then
+            echo "::error::$BIN links shared libraries:"; readelf --dynamic "$BIN" | grep NEEDED; exit 1
+          fi
+          ldd "$BIN" 2>&1 | tee /dev/stderr | grep -Eq 'not a dynamic executable|statically linked'
+          docker run --rm --volume "$PWD/$(dirname "$BIN"):/dist:ro" \
+            alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 \
+            /dist/jev version
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bin-${{ matrix.target }}
+          path: ${{ env.BIN }}
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: bin-*
+          path: bin
+      # Man pages and completions come from the command tree, which is the same on every target,
+      # so they are generated once here.
+      - run: make dist-assets DIR=target/dist-assets
+      - name: Pack one archive per target
+        run: |
+          for dir in bin/bin-*; do
+            target=${dir#bin/bin-}
+            scripts/release/package.sh "$VERSION" "$target" "$(find "$dir" -type f -name 'jev*')" \
+              target/dist-assets dist
+          done
+      - name: Add the JSON Schemas and SHA256SUMS
+        run: |
+          cp schemas/*.schema.json dist/
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+      - run: scripts/release/verify-assets.sh dist "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish draft release
+    needs: [plan, package]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    # The owner approves every release here; the environment also only admits `v*` tags.
+    environment: release
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: dist
+      - run: scripts/release/verify-assets.sh dist "$VERSION"
+      - run: scripts/release/publish.sh "$TAG" dist
+
+  verify:
+    name: Verify published assets
+    needs: [plan, publish]
+    runs-on: ubuntu-latest
+    # Reading a draft release takes write access; this job only reads.
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download every asset of the release
+        run: gh release download "$TAG" --dir published
+      - run: scripts/release/verify-assets.sh published "$VERSION"
+      - name: The published Linux binary runs on Alpine and reports the release version
+        run: |
+          tar -xzf "published/jev-$VERSION-x86_64-unknown-linux-musl.tar.gz" -C published
+          reported=$(docker run --rm --volume "$PWD/published/jev-$VERSION-x86_64-unknown-linux-musl:/dist:ro" \
+            alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 \
+            /dist/jev version --field version)
+          test "$reported" = "$VERSION"
+
+  finalize:
+    name: Publish release
+    needs: [plan, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+    steps:
+      - name: Take the release out of draft
+        run: |
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != true ]; then
+            echo "::notice::$TAG is already published"
+            exit 0
+          fi
+          latest=true
+          [ "$PRERELEASE" = true ] && latest=false
+          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$latest"
+
+  # The gate for every stage that must never run for a pre-release (crates.io, the Homebrew tap).
+  # Those jobs declare `needs: stable`: when this job is skipped, so are they.
+  stable:
+    name: Stable release gate
+    needs: [plan, finalize]
+    if: needs.plan.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$TAG is a stable release"
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
