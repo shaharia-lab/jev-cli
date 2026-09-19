@@ -163,6 +163,12 @@ fn every_script_parses_in_its_shell() {
     std::fs::create_dir_all(&directory).unwrap();
 
     for shell in ["bash", "zsh", "fish", "powershell"] {
+        // On Windows `bash` is often the WSL launcher, which cannot read a Windows path; the
+        // POSIX shells are checked on Linux and macOS.
+        if cfg!(windows) && shell != "powershell" {
+            eprintln!("skipped: {shell} is not checked on Windows");
+            continue;
+        }
         let path = directory.join(format!("jev.{shell}"));
         std::fs::write(&path, script(shell)).unwrap();
 
