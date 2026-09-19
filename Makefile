@@ -19,9 +19,11 @@ fmt-check:
 
 lint:
 	cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+	cargo clippy -p jev-cli --all-targets --locked -- -D warnings  # the configuration that ships
 
 test:
 	cargo test --workspace --all-features --locked
+	cargo test -p jev-cli --locked  # the configuration that ships: no internal test hooks
 
 msrv:
 	rustup toolchain install $(MSRV) --profile minimal

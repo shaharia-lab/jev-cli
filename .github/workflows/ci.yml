@@ -58,8 +58,12 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       # Clippy runs on every OS so platform-specific code is linted too.
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      # The configuration that ships: default features, so without the internal test hooks.
+      - run: cargo clippy -p jev-cli --all-targets --locked -- -D warnings
       - run: cargo build --workspace --locked
       - run: cargo test --workspace --all-features --locked
+      # The configuration that ships: default features, so without the internal test hooks.
+      - run: cargo test -p jev-cli --locked
 
   msrv:
     name: Minimum supported Rust version

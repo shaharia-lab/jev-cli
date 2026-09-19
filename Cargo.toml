@@ -18,6 +18,8 @@ categories = ["command-line-utilities"]
 [workspace.dependencies]
 jev-client = { path = "crates/jev-client", version = "0.0.0" }
 
+anstyle = "1.0.14"
+clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
 fastrand = "2.5"
 httpdate = "1.0.3"
 indexmap = { version = "2.14", features = ["serde"] }
@@ -29,16 +31,21 @@ rustls-platform-verifier = "0.7"
 schemars = { version = "1.2", features = ["indexmap2", "preserve_order"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
+serde-saphyr = "1.3"
 thiserror = "2.0.20"
 tokio = { version = "1.53", default-features = false }
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "ansi", "registry", "tracing-log"] }
+unicode-width = "0.2.2"
 url = "2.5.8"
 zeroize = { version = "1.9", features = ["derive"] }
 
 # Test-only.
+assert_cmd = "2.2.2"
 jsonschema = { version = "0.56", default-features = false }
+predicates = "3.1.4"
+pty-process = "0.5.3"
 tracing-log = "0.2"
-tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "tracing-log"] }
 wiremock = "0.6.5"
 
 [workspace.lints.rust]

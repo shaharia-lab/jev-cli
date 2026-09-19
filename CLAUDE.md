@@ -10,8 +10,10 @@ typed questions (`noul` = yes/no probability, `choice` = one of up to 255 option
 a 2–10 level rubric) and get calibrated probabilities back. The CLI makes that usable from a terminal,
 shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (including an MCP server mode).
 
-Status: **early implementation.** The workspace, CI and governance files exist; the command surface
-does not yet (the `jev` binary only prints its version). Work is tracked in epic
+Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
+transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
+exit-code contract, but only `jev version` does anything; every other command answers
+"not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -94,6 +96,20 @@ no `aws-lc`, no OpenSSL). Redirects are never followed. Server-supplied error te
 key and never quotes a body of unknown shape, because a 422 echoes `state`. Tests run against
 `wiremock` with a fake `Clock`, so nothing sleeps; `tests/http_transport.rs` holds the sentinel-key
 leak test, which must keep passing at `TRACE` level.
+
+In `jev-cli`, a command never prints. It returns a value implementing `output::Render` (`Serialize`
+for the machine formats plus a hand-written human form) and `Output::emit` does the rest: `--field`,
+the four formats, and text on a terminal versus JSON on a pipe. Every failure is a `CliError`, and
+`CliError::from(jev_client::Error)` in `error.rs` is the only mapping to exit codes. Errors are
+printed once, in `lib.rs`: text for a person, one JSON object for a program. `Interaction` is the only
+code that decides whether a prompt is allowed. To give a pending command its behaviour, replace its
+`Pending` arguments in `cli.rs`, add a module under `commands/`, and route it in `commands::run`.
+
+Test hooks live behind the `internal-test-hooks` cargo feature (`jev debug render|error|prompt|panic`).
+CI turns it on with `--all-features`; a second, default-features test run proves that release builds
+do not contain them. Tests must isolate the environment (`CI`, `NO_COLOR`, `TERM`, `LANG`, `JEV_*`,
+`TYPESAFE_*`): CI sets `CI=true`, and a developer's shell has a UTF-8 locale. What a person sees is
+tested on a real pseudo-terminal in `tests/terminal.rs` (Unix only).
 
 Commands depend on traits (`Transport`, `CredentialStore`, `Clock`, `UpdateSource`) so they are testable
 with fakes. Errors use `thiserror` in the library; the binary has one error → exit-code mapping.

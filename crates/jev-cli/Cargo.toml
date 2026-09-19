@@ -12,12 +12,41 @@ keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
 
+build = "build.rs"
+
+[lib]
+name = "jev_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "jev"
 path = "src/main.rs"
 
+[features]
+# Hidden `jev debug ...` commands that let the test suite drive code paths no real command reaches
+# yet (rendering a canned response, forcing a panic, a would-be prompt, a synthetic API error).
+# CI enables it through `--all-features`; release builds never do, so the hooks do not ship.
+internal-test-hooks = []
+
 [dependencies]
+anstyle.workspace = true
+clap.workspace = true
+indexmap.workspace = true
 jev-client.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+unicode-width.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+pty-process.workspace = true
 
 [lints]
 workspace = true
