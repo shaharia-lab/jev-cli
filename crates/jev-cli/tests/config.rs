@@ -63,6 +63,8 @@ impl Sandbox {
             command.env_remove(variable);
         }
         command.env("JEV_CONFIG_DIR", &self.0);
+        // Never the real keychain of whoever runs the tests.
+        command.env("JEV_NO_KEYCHAIN", "1");
         command
     }
 }

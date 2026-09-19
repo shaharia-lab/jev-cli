@@ -81,6 +81,8 @@ pub(crate) fn run(command: &ProfileCommand, context: &mut Context<'_>) -> Result
                 }
                 Ok(())
             })?;
+            // A profile's stored key goes with it.
+            super::auth::forget(name, context)?;
             context.output.emit(
                 &Outcome {
                     profile: name.clone(),

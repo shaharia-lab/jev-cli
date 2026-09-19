@@ -31,6 +31,8 @@ fn jev() -> Command {
         "JEV_CONFIG_DIR",
         std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-config"),
     );
+    // Never the real keychain of whoever runs the tests.
+    command.env("JEV_NO_KEYCHAIN", "1");
     command
 }
 
@@ -250,7 +252,6 @@ fn commands_without_behaviour_say_so_whatever_flags_follow() {
             "batch run",
             13,
         ),
-        (vec!["auth", "login"], "auth login", 10),
         (vec!["schema", "batch-record"], "schema batch-record", 16),
         (vec!["mcp", "serve", "--allow-dir", "."], "mcp serve", 18),
         (vec!["completion", "zsh"], "completion", 17),

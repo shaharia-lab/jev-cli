@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`,
-`jev models list`, `jev config`, `jev profile` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -126,6 +126,13 @@ before sending (unknown question id, a choice compared with `>=`, an option that
 gate that could never be decided costs nothing. The shortcuts flatten their one answer to the top
 level so `--field noul|choice|score` works; `jev eval` adds `gate` to its envelope only when
 `--assert` was used.
+
+The API key is looked for in `TYPESAFE_API_KEY`, then the OS keychain (`keyring`, pure-Rust Secret
+Service on Linux), then the `credentials` file (`0600` in a `0700` directory, refused if others can
+read it). All of that is `credentials.rs`; commands get a key through `Context::transport`. Never
+format a `keyring::Error`: two of its variants carry the secret. Only the last four characters of a
+key are ever shown (`fingerprint`). **Every integration test helper sets `JEV_NO_KEYCHAIN=1`**, so no
+test can read or write the real keychain of whoever runs the suite; keep that when adding a helper.
 
 Settings come from one resolver, `config::Settings::resolve`: **flag > environment > profile >
 default**, each value carrying its `Source`. A command reads `context.settings()?`; it never reads a

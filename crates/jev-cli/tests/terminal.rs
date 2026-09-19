@@ -41,7 +41,9 @@ fn on_a_terminal(arguments: &[&str], environment: &[(&str, &str)]) -> String {
     for (name, value) in environment {
         command = command.env(name, value);
     }
-    command = command.env("JEV_CONFIG_DIR", NO_CONFIG);
+    command = command
+        .env("JEV_CONFIG_DIR", NO_CONFIG)
+        .env("JEV_NO_KEYCHAIN", "1");
     let mut child = command.spawn(pts).unwrap();
 
     // Reading ends with an error (EIO on Linux) once the child has exited and closed its side.
@@ -65,6 +67,7 @@ fn piped(arguments: &[&str]) -> String {
     }
     let output = command
         .env("JEV_CONFIG_DIR", NO_CONFIG)
+        .env("JEV_NO_KEYCHAIN", "1")
         .args(arguments)
         .stdin(Stdio::null())
         .output()
