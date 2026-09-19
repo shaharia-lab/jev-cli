@@ -1,0 +1,1088 @@
+{
+ "about": "Real input-token counts from the live API (jev-1.13.0, 2026-09-19), used to hold the offline size estimate to a stated accuracy. Every sample was sent as `state` with the same single question; `baseline_input_tokens` is that request with an empty state. The content is synthetic.",
+ "question": {
+  "type": "noul",
+  "instructions": "Does this mention a failed payout?"
+ },
+ "baseline_input_tokens": 273,
+ "samples": [
+  {
+   "name": "prose",
+   "input_tokens": 798,
+   "state": "And any escalation any tickets billing escalation that integration. Integration three three of not account the of access invoices refunds. To refunds refunds the replied failing the three reported that monday access that replied the access integration opened to opened. Been has since support outage support account has invoices any tickets reported invoices. Reported of of monday monday replied payouts integration tickets about about the monday. Billing about support support replied not reported has. Of to billing that not any account refunds billing three integration to has outage any since billing. The outage to any any account the the failing refunds payouts access customer escalation. Any integration opened that about three not to payouts to integration failing billing integration that tickets about replied opened. About outage escalation of since of has opened monday of account tickets any about to. Integration has not been monday access since the customer payouts tickets integration three escalation replied account any outage to support. Since about to replied any refunds access to account not of. Outage customer access monday and replied outage account that replied about about account escalation any since replied outage. Escalation not access invoices to escalation reported tickets since integration. Support that been invoices billing not payouts replied outage the reported the replied the of. Three account been failing that three customer refunds of. Opened refunds tickets support payouts the and opened the the refunds outage. About invoices escalation payouts of failing to the payouts escalation three integration about any monday. Not opened have outage payouts account account outage the. Any not has account payouts any account been has the escalation that. Integration reported customer access support tickets support outage refunds escalation the the any to. Opened monday replied and outage that to escalation replied the three account have. The any been not three and replied three failing opened. Reported of has customer been tickets outage have customer tickets of outage access customer replied billing refunds tickets been. About opened integration the payouts tickets any been account integration any integration escalation payouts have. Billing have has since not of not billing reported has monday have support have since replied to refunds. Monday replied have and any to replied that any account any account since access. Billing been failing the escalation reported integration replied tickets. Not of account access billing billing opened have escalation the support billing have. Of opened the account of been that three about since of refunds the. Been the monday the since opened of payouts that account since that escalation not have that opened customer refunds. Invoices account have tickets tickets that any and since the access reported monday. Have since since reported the not billing integration integration refunds since not escalation. Customer that failing the monday that that opened. The outage billing support and refunds replied three tickets tickets about three customer outage has and."
+  },
+  {
+   "name": "records",
+   "input_tokens": 1754,
+   "state": [
+    {
+     "id": "tx_00000",
+     "amount_cents": 79763,
+     "status": "ok",
+     "note": "Three replied not opened integration."
+    },
+    {
+     "id": "tx_00001",
+     "amount_cents": 15755,
+     "status": "pending",
+     "note": "Support billing any opened outage."
+    },
+    {
+     "id": "tx_00002",
+     "amount_cents": 33074,
+     "status": "failed",
+     "note": "Monday escalation access support customer."
+    },
+    {
+     "id": "tx_00003",
+     "amount_cents": 96488,
+     "status": "pending",
+     "note": "Not integration the monday about."
+    },
+    {
+     "id": "tx_00004",
+     "amount_cents": 43425,
+     "status": "failed",
+     "note": "Invoices escalation refunds account outage."
+    },
+    {
+     "id": "tx_00005",
+     "amount_cents": 16132,
+     "status": "failed",
+     "note": "Refunds not and the integration."
+    },
+    {
+     "id": "tx_00006",
+     "amount_cents": 2756,
+     "status": "pending",
+     "note": "Escalation and been of customer."
+    },
+    {
+     "id": "tx_00007",
+     "amount_cents": 94691,
+     "status": "ok",
+     "note": "Have three that that customer."
+    },
+    {
+     "id": "tx_00008",
+     "amount_cents": 16573,
+     "status": "pending",
+     "note": "Support three tickets tickets monday."
+    },
+    {
+     "id": "tx_00009",
+     "amount_cents": 3874,
+     "status": "failed",
+     "note": "The payouts support not has."
+    },
+    {
+     "id": "tx_00010",
+     "amount_cents": 49538,
+     "status": "ok",
+     "note": "Refunds not opened failing refunds."
+    },
+    {
+     "id": "tx_00011",
+     "amount_cents": 16511,
+     "status": "ok",
+     "note": "Of the opened about outage."
+    },
+    {
+     "id": "tx_00012",
+     "amount_cents": 71053,
+     "status": "pending",
+     "note": "Of has integration since account."
+    },
+    {
+     "id": "tx_00013",
+     "amount_cents": 19457,
+     "status": "ok",
+     "note": "The the since of to."
+    },
+    {
+     "id": "tx_00014",
+     "amount_cents": 54872,
+     "status": "failed",
+     "note": "Escalation and payouts escalation tickets."
+    },
+    {
+     "id": "tx_00015",
+     "amount_cents": 77910,
+     "status": "ok",
+     "note": "Access have of customer tickets."
+    },
+    {
+     "id": "tx_00016",
+     "amount_cents": 67477,
+     "status": "failed",
+     "note": "And tickets any refunds invoices."
+    },
+    {
+     "id": "tx_00017",
+     "amount_cents": 41715,
+     "status": "ok",
+     "note": "Opened access the tickets failing."
+    },
+    {
+     "id": "tx_00018",
+     "amount_cents": 61775,
+     "status": "ok",
+     "note": "Failing opened any billing payouts."
+    },
+    {
+     "id": "tx_00019",
+     "amount_cents": 97773,
+     "status": "failed",
+     "note": "About support escalation account failing."
+    },
+    {
+     "id": "tx_00020",
+     "amount_cents": 73708,
+     "status": "failed",
+     "note": "And billing been support support."
+    },
+    {
+     "id": "tx_00021",
+     "amount_cents": 60297,
+     "status": "pending",
+     "note": "Replied of account to integration."
+    },
+    {
+     "id": "tx_00022",
+     "amount_cents": 88364,
+     "status": "pending",
+     "note": "Monday been have tickets not."
+    },
+    {
+     "id": "tx_00023",
+     "amount_cents": 20256,
+     "status": "failed",
+     "note": "Integration the escalation support access."
+    },
+    {
+     "id": "tx_00024",
+     "amount_cents": 68680,
+     "status": "pending",
+     "note": "Not account customer tickets have."
+    },
+    {
+     "id": "tx_00025",
+     "amount_cents": 11137,
+     "status": "failed",
+     "note": "Support of invoices since payouts."
+    },
+    {
+     "id": "tx_00026",
+     "amount_cents": 93779,
+     "status": "pending",
+     "note": "That integration the of been."
+    },
+    {
+     "id": "tx_00027",
+     "amount_cents": 91273,
+     "status": "pending",
+     "note": "Monday the customer escalation has."
+    },
+    {
+     "id": "tx_00028",
+     "amount_cents": 49983,
+     "status": "pending",
+     "note": "Escalation any account tickets opened."
+    },
+    {
+     "id": "tx_00029",
+     "amount_cents": 20815,
+     "status": "pending",
+     "note": "That reported payouts invoices has."
+    }
+   ]
+  },
+  {
+   "name": "numbers",
+   "input_tokens": 2693,
+   "state": [
+    349815,
+    574085,
+    274143,
+    325498,
+    43608,
+    773146,
+    621513,
+    694435,
+    825484,
+    198995,
+    170090,
+    942577,
+    307141,
+    309635,
+    567452,
+    299451,
+    374575,
+    140514,
+    407489,
+    197863,
+    783289,
+    660411,
+    9907,
+    888467,
+    635385,
+    679248,
+    503329,
+    984840,
+    443183,
+    372934,
+    851578,
+    809888,
+    945948,
+    814193,
+    919552,
+    563476,
+    179186,
+    757051,
+    541264,
+    30946,
+    188348,
+    329957,
+    565283,
+    151776,
+    171901,
+    29798,
+    930288,
+    122366,
+    540008,
+    700137,
+    925183,
+    738599,
+    674658,
+    804062,
+    2089,
+    882809,
+    392751,
+    66689,
+    385872,
+    317350,
+    226693,
+    557980,
+    161717,
+    628617,
+    639650,
+    260209,
+    132670,
+    111431,
+    342141,
+    508103,
+    112610,
+    916431,
+    877841,
+    761920,
+    76683,
+    399715,
+    275325,
+    646923,
+    316140,
+    679000,
+    123259,
+    364693,
+    497424,
+    953679,
+    522976,
+    126813,
+    582581,
+    544154,
+    259026,
+    868895,
+    376100,
+    716737,
+    854883,
+    478081,
+    962265,
+    613747,
+    361883,
+    86559,
+    72388,
+    816889,
+    92135,
+    847688,
+    518848,
+    815751,
+    327183,
+    278191,
+    789884,
+    694270,
+    237028,
+    176518,
+    340789,
+    453610,
+    530864,
+    588855,
+    347825,
+    338368,
+    951169,
+    941737,
+    759010,
+    688967,
+    898893,
+    517151,
+    422648,
+    328919,
+    185328,
+    206030,
+    845548,
+    485498,
+    230865,
+    907457,
+    722637,
+    964418,
+    365477,
+    795685,
+    825422,
+    367111,
+    429601,
+    872018,
+    842257,
+    618516,
+    400165,
+    223216,
+    161877,
+    463126,
+    779122,
+    594091,
+    688748,
+    771867,
+    133781,
+    452246,
+    280629,
+    344953,
+    876238,
+    123570,
+    335580,
+    279399,
+    882041,
+    908886,
+    466038,
+    276428,
+    152423,
+    571596,
+    657327,
+    281203,
+    245673,
+    347887,
+    150433,
+    588565,
+    809943,
+    129222,
+    280924,
+    307724,
+    602289,
+    480314,
+    663949,
+    420735,
+    418854,
+    22775,
+    576438,
+    751265,
+    345159,
+    706862,
+    429559,
+    353199,
+    99621,
+    712166,
+    804419,
+    967724,
+    518714,
+    952675,
+    711146,
+    888517,
+    663734,
+    999007,
+    881879,
+    700058,
+    801499,
+    572953,
+    541789,
+    220109,
+    445053,
+    369266,
+    679713,
+    346497,
+    62947,
+    967721,
+    419182,
+    759626,
+    181371,
+    11026,
+    280027,
+    586071,
+    735777,
+    264423,
+    136943,
+    350238,
+    607074,
+    675667,
+    641426,
+    434763,
+    873381,
+    816003,
+    841052,
+    499062,
+    892685,
+    932377,
+    506375,
+    355201,
+    12324,
+    39316,
+    794055,
+    230551,
+    667177,
+    126710,
+    692769,
+    893273,
+    987756,
+    281693,
+    342479,
+    18652,
+    817648,
+    219387,
+    829155,
+    479342,
+    539955,
+    290360,
+    653080,
+    660780,
+    387379,
+    82824,
+    582761,
+    726069,
+    196768,
+    565141,
+    806290,
+    11946,
+    100236,
+    163396,
+    346012,
+    230062,
+    988900,
+    485977,
+    216395,
+    635523,
+    705841,
+    179073,
+    739787,
+    324479,
+    88376,
+    595198,
+    437297,
+    746406,
+    547147,
+    714227,
+    617674,
+    586319,
+    139725,
+    113304,
+    29679,
+    284032,
+    984643,
+    439915,
+    46639,
+    194257,
+    576960,
+    769917,
+    538366,
+    242592,
+    989315,
+    954687,
+    493637,
+    689842,
+    695259,
+    357843,
+    360246,
+    364288,
+    333256,
+    636072,
+    502993,
+    267753,
+    512036,
+    926165,
+    342919,
+    879714,
+    262251,
+    38498,
+    674860,
+    513807,
+    139706,
+    22831,
+    504028,
+    848246,
+    383975,
+    266183,
+    877151,
+    791635,
+    488759,
+    208387,
+    385395,
+    286926,
+    537178,
+    883160,
+    767710,
+    419352,
+    318837,
+    228898,
+    610001,
+    56819,
+    854526,
+    430816,
+    904851,
+    67690,
+    761151,
+    757138,
+    676809,
+    693276,
+    533684,
+    715188,
+    558127,
+    803049,
+    899695,
+    313110,
+    506039,
+    646352,
+    95125,
+    894487,
+    534390,
+    547821,
+    624773,
+    340889
+   ]
+  },
+  {
+   "name": "chat",
+   "input_tokens": 1080,
+   "state": [
+    {
+     "role": "agent",
+     "text": "Opened and support have reported of billing account have refunds since escalation escalation escalation billing any any billing has tickets."
+    },
+    {
+     "role": "user",
+     "text": "The replied failing been not any billing any payouts any been account billing since refunds billing."
+    },
+    {
+     "role": "agent",
+     "text": "Of opened access billing and support tickets has of three invoices of been payouts."
+    },
+    {
+     "role": "user",
+     "text": "Payouts account access account opened the customer account opened billing customer since account monday."
+    },
+    {
+     "role": "user",
+     "text": "Since escalation of about support payouts replied have have about customer refunds have opened."
+    },
+    {
+     "role": "user",
+     "text": "Tickets three to outage of escalation the monday failing any support integration of reported replied opened invoices not payouts integration and payouts about."
+    },
+    {
+     "role": "user",
+     "text": "The customer that support the billing about about access access since and refunds the have any been billing access reported not opened not been access."
+    },
+    {
+     "role": "user",
+     "text": "Failing opened escalation to been support have of billing not invoices not replied billing support about been."
+    },
+    {
+     "role": "agent",
+     "text": "Outage escalation of three to reported integration integration been invoices been that refunds reported support about opened three about have that have been tickets."
+    },
+    {
+     "role": "agent",
+     "text": "Integration escalation escalation not the of payouts tickets integration outage tickets account since monday invoices support."
+    },
+    {
+     "role": "agent",
+     "text": "To any replied integration since access support to payouts that."
+    },
+    {
+     "role": "user",
+     "text": "Support replied has three tickets the customer outage about opened of and refunds since escalation opened reported."
+    },
+    {
+     "role": "agent",
+     "text": "Support of access account any access any escalation that access since monday customer reported the customer reported any outage replied the that has account."
+    },
+    {
+     "role": "agent",
+     "text": "Of the payouts integration and payouts the that has reported have of billing since the customer invoices reported refunds three any that invoices escalation billing."
+    },
+    {
+     "role": "agent",
+     "text": "Monday escalation to failing and about integration replied about failing has failing any billing."
+    },
+    {
+     "role": "agent",
+     "text": "Customer to failing three have replied been refunds that the to the has to any the to escalation been has invoices customer any."
+    },
+    {
+     "role": "agent",
+     "text": "Monday failing billing any and since refunds not billing invoices the the support three."
+    },
+    {
+     "role": "user",
+     "text": "The support account been the reported of have replied has account that account."
+    },
+    {
+     "role": "user",
+     "text": "Has the failing been customer since refunds account have any since outage support reported since have outage outage customer been about access tickets."
+    },
+    {
+     "role": "user",
+     "text": "Of opened customer support escalation integration escalation about replied access escalation any tickets outage customer escalation outage integration billing escalation been tickets tickets to."
+    },
+    {
+     "role": "user",
+     "text": "Reported have tickets reported since been the monday three tickets customer to outage since reported integration about invoices of."
+    },
+    {
+     "role": "user",
+     "text": "To access customer of support failing of has replied reported failing customer the not has of reported."
+    }
+   ]
+  },
+  {
+   "name": "keyed",
+   "input_tokens": 2294,
+   "state": {
+    "k0": {
+     "sku": "SKU-8227",
+     "qty": 40,
+     "ok": true
+    },
+    "k1": {
+     "sku": "SKU-3811",
+     "qty": 16,
+     "ok": true
+    },
+    "k2": {
+     "sku": "SKU-4266",
+     "qty": 33,
+     "ok": false
+    },
+    "k3": {
+     "sku": "SKU-7550",
+     "qty": 18,
+     "ok": null
+    },
+    "k4": {
+     "sku": "SKU-3767",
+     "qty": 30,
+     "ok": true
+    },
+    "k5": {
+     "sku": "SKU-1310",
+     "qty": 23,
+     "ok": true
+    },
+    "k6": {
+     "sku": "SKU-3134",
+     "qty": 37,
+     "ok": null
+    },
+    "k7": {
+     "sku": "SKU-4984",
+     "qty": 31,
+     "ok": null
+    },
+    "k8": {
+     "sku": "SKU-3440",
+     "qty": 21,
+     "ok": true
+    },
+    "k9": {
+     "sku": "SKU-9109",
+     "qty": 36,
+     "ok": true
+    },
+    "k10": {
+     "sku": "SKU-3272",
+     "qty": 1,
+     "ok": false
+    },
+    "k11": {
+     "sku": "SKU-2467",
+     "qty": 32,
+     "ok": null
+    },
+    "k12": {
+     "sku": "SKU-7858",
+     "qty": 37,
+     "ok": false
+    },
+    "k13": {
+     "sku": "SKU-9393",
+     "qty": 23,
+     "ok": true
+    },
+    "k14": {
+     "sku": "SKU-1344",
+     "qty": 17,
+     "ok": true
+    },
+    "k15": {
+     "sku": "SKU-2893",
+     "qty": 25,
+     "ok": true
+    },
+    "k16": {
+     "sku": "SKU-5976",
+     "qty": 39,
+     "ok": null
+    },
+    "k17": {
+     "sku": "SKU-3943",
+     "qty": 20,
+     "ok": null
+    },
+    "k18": {
+     "sku": "SKU-9704",
+     "qty": 1,
+     "ok": true
+    },
+    "k19": {
+     "sku": "SKU-6612",
+     "qty": 12,
+     "ok": null
+    },
+    "k20": {
+     "sku": "SKU-8506",
+     "qty": 38,
+     "ok": true
+    },
+    "k21": {
+     "sku": "SKU-4975",
+     "qty": 31,
+     "ok": true
+    },
+    "k22": {
+     "sku": "SKU-9234",
+     "qty": 31,
+     "ok": true
+    },
+    "k23": {
+     "sku": "SKU-2106",
+     "qty": 9,
+     "ok": true
+    },
+    "k24": {
+     "sku": "SKU-9641",
+     "qty": 20,
+     "ok": true
+    },
+    "k25": {
+     "sku": "SKU-7679",
+     "qty": 17,
+     "ok": true
+    },
+    "k26": {
+     "sku": "SKU-8279",
+     "qty": 39,
+     "ok": false
+    },
+    "k27": {
+     "sku": "SKU-3466",
+     "qty": 25,
+     "ok": null
+    },
+    "k28": {
+     "sku": "SKU-1082",
+     "qty": 29,
+     "ok": null
+    },
+    "k29": {
+     "sku": "SKU-2990",
+     "qty": 7,
+     "ok": true
+    },
+    "k30": {
+     "sku": "SKU-6320",
+     "qty": 29,
+     "ok": true
+    },
+    "k31": {
+     "sku": "SKU-7311",
+     "qty": 18,
+     "ok": false
+    },
+    "k32": {
+     "sku": "SKU-8274",
+     "qty": 20,
+     "ok": false
+    },
+    "k33": {
+     "sku": "SKU-8306",
+     "qty": 40,
+     "ok": false
+    },
+    "k34": {
+     "sku": "SKU-8692",
+     "qty": 19,
+     "ok": false
+    },
+    "k35": {
+     "sku": "SKU-3755",
+     "qty": 7,
+     "ok": null
+    },
+    "k36": {
+     "sku": "SKU-9977",
+     "qty": 2,
+     "ok": true
+    },
+    "k37": {
+     "sku": "SKU-4495",
+     "qty": 19,
+     "ok": null
+    },
+    "k38": {
+     "sku": "SKU-7608",
+     "qty": 15,
+     "ok": null
+    },
+    "k39": {
+     "sku": "SKU-6331",
+     "qty": 11,
+     "ok": true
+    },
+    "k40": {
+     "sku": "SKU-4765",
+     "qty": 25,
+     "ok": true
+    },
+    "k41": {
+     "sku": "SKU-6492",
+     "qty": 35,
+     "ok": false
+    },
+    "k42": {
+     "sku": "SKU-4402",
+     "qty": 40,
+     "ok": null
+    },
+    "k43": {
+     "sku": "SKU-5962",
+     "qty": 35,
+     "ok": null
+    },
+    "k44": {
+     "sku": "SKU-7193",
+     "qty": 17,
+     "ok": false
+    },
+    "k45": {
+     "sku": "SKU-8408",
+     "qty": 16,
+     "ok": true
+    },
+    "k46": {
+     "sku": "SKU-9334",
+     "qty": 20,
+     "ok": true
+    },
+    "k47": {
+     "sku": "SKU-4201",
+     "qty": 20,
+     "ok": true
+    },
+    "k48": {
+     "sku": "SKU-8053",
+     "qty": 38,
+     "ok": true
+    },
+    "k49": {
+     "sku": "SKU-8288",
+     "qty": 25,
+     "ok": null
+    },
+    "k50": {
+     "sku": "SKU-9141",
+     "qty": 4,
+     "ok": null
+    },
+    "k51": {
+     "sku": "SKU-6031",
+     "qty": 3,
+     "ok": null
+    },
+    "k52": {
+     "sku": "SKU-9418",
+     "qty": 22,
+     "ok": null
+    },
+    "k53": {
+     "sku": "SKU-5881",
+     "qty": 27,
+     "ok": true
+    },
+    "k54": {
+     "sku": "SKU-9763",
+     "qty": 33,
+     "ok": false
+    },
+    "k55": {
+     "sku": "SKU-9290",
+     "qty": 23,
+     "ok": false
+    },
+    "k56": {
+     "sku": "SKU-7382",
+     "qty": 34,
+     "ok": true
+    },
+    "k57": {
+     "sku": "SKU-1221",
+     "qty": 27,
+     "ok": null
+    },
+    "k58": {
+     "sku": "SKU-8033",
+     "qty": 25,
+     "ok": null
+    },
+    "k59": {
+     "sku": "SKU-6967",
+     "qty": 16,
+     "ok": null
+    }
+   }
+  },
+  {
+   "name": "ticket",
+   "input_tokens": 968,
+   "state": {
+    "ticket": {
+     "id": 48213,
+     "subject": "The has support billing invoices billing billing the.",
+     "messages": [
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "That failing been have to three has to access have not any been support the of reported that that been has that replied three support tickets any integration tickets that."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "Not failing and monday integration the that integration reported refunds and opened payouts replied tickets not that tickets that access access been billing account of billing to and three have."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "That reported support failing payouts replied replied escalation billing outage that outage of account not refunds escalation payouts reported the opened replied not integration reported replied to customer replied to."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "Support invoices that customer not have not tickets reported since about of any failing not that support escalation have the billing payouts three three account monday since refunds account not."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "Account that about failing support outage refunds reported not integration tickets reported the refunds three since and not billing three billing the monday failing invoices access three any have any."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "Not since customer of three since any replied monday not invoices billing billing since been about outage refunds invoices the replied have support access any monday escalation since monday that."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "Billing three failing the outage been three three and about and invoices outage escalation tickets that opened and has tickets not three replied three has opened that support billing access."
+      },
+      {
+       "from": "c@example.com",
+       "ts": "2026-09-01T10:00:00Z",
+       "text": "Not refunds opened replied the and the has support the refunds support has invoices support account since account to the support not replied customer three the billing about monday of."
+      }
+     ]
+    },
+    "account": {
+     "plan": "pro",
+     "mrr_cents": 129900,
+     "flags": [
+      "beta",
+      "priority"
+     ]
+    }
+   }
+  },
+  {
+   "name": "rare_words",
+   "input_tokens": 1039,
+   "state": "otorhinolaryngology electroencephalography electroencephalography immunohistochemistry deinstitutionalization immunohistochemistry deinstitutionalization immunohistochemistry spectrophotometrically immunohistochemistry electroencephalography counterrevolutionary counterrevolutionary electroencephalography electroencephalography counterrevolutionary counterrevolutionary electroencephalography spectrophotometrically immunohistochemistry otorhinolaryngology otorhinolaryngology deinstitutionalization electroencephalography spectrophotometrically otorhinolaryngology otorhinolaryngology otorhinolaryngology spectrophotometrically otorhinolaryngology electroencephalography immunohistochemistry counterrevolutionary electroencephalography deinstitutionalization counterrevolutionary electroencephalography spectrophotometrically electroencephalography electroencephalography electroencephalography otorhinolaryngology spectrophotometrically spectrophotometrically deinstitutionalization electroencephalography counterrevolutionary deinstitutionalization otorhinolaryngology spectrophotometrically electroencephalography immunohistochemistry deinstitutionalization immunohistochemistry otorhinolaryngology spectrophotometrically deinstitutionalization counterrevolutionary electroencephalography deinstitutionalization immunohistochemistry counterrevolutionary immunohistochemistry spectrophotometrically otorhinolaryngology counterrevolutionary otorhinolaryngology deinstitutionalization spectrophotometrically electroencephalography electroencephalography deinstitutionalization otorhinolaryngology deinstitutionalization deinstitutionalization deinstitutionalization spectrophotometrically spectrophotometrically counterrevolutionary electroencephalography immunohistochemistry electroencephalography counterrevolutionary deinstitutionalization counterrevolutionary immunohistochemistry spectrophotometrically deinstitutionalization otorhinolaryngology otorhinolaryngology counterrevolutionary counterrevolutionary immunohistochemistry counterrevolutionary spectrophotometrically immunohistochemistry electroencephalography electroencephalography counterrevolutionary deinstitutionalization deinstitutionalization electroencephalography immunohistochemistry deinstitutionalization electroencephalography electroencephalography immunohistochemistry otorhinolaryngology spectrophotometrically electroencephalography immunohistochemistry otorhinolaryngology counterrevolutionary counterrevolutionary immunohistochemistry immunohistochemistry electroencephalography immunohistochemistry otorhinolaryngology otorhinolaryngology"
+  },
+  {
+   "name": "identifiers",
+   "input_tokens": 1120,
+   "state": "getUserAccountById retry_after_ms_header getUserAccountById payment_intent_succeeded kubernetesNamespaceSelector retry_after_ms_header XMLHttpRequestFactory payment_intent_succeeded payment_intent_succeeded payment_intent_succeeded payment_intent_succeeded retry_after_ms_header XMLHttpRequestFactory getUserAccountById kubernetesNamespaceSelector XMLHttpRequestFactory retry_after_ms_header kubernetesNamespaceSelector XMLHttpRequestFactory payment_intent_succeeded payment_intent_succeeded payment_intent_succeeded XMLHttpRequestFactory kubernetesNamespaceSelector getUserAccountById retry_after_ms_header payment_intent_succeeded retry_after_ms_header XMLHttpRequestFactory retry_after_ms_header getUserAccountById retry_after_ms_header XMLHttpRequestFactory payment_intent_succeeded XMLHttpRequestFactory kubernetesNamespaceSelector getUserAccountById XMLHttpRequestFactory payment_intent_succeeded XMLHttpRequestFactory kubernetesNamespaceSelector kubernetesNamespaceSelector getUserAccountById payment_intent_succeeded XMLHttpRequestFactory getUserAccountById XMLHttpRequestFactory kubernetesNamespaceSelector getUserAccountById kubernetesNamespaceSelector XMLHttpRequestFactory XMLHttpRequestFactory XMLHttpRequestFactory payment_intent_succeeded getUserAccountById getUserAccountById XMLHttpRequestFactory kubernetesNamespaceSelector getUserAccountById payment_intent_succeeded payment_intent_succeeded retry_after_ms_header getUserAccountById getUserAccountById XMLHttpRequestFactory payment_intent_succeeded getUserAccountById XMLHttpRequestFactory getUserAccountById XMLHttpRequestFactory kubernetesNamespaceSelector retry_after_ms_header kubernetesNamespaceSelector XMLHttpRequestFactory retry_after_ms_header retry_after_ms_header payment_intent_succeeded getUserAccountById XMLHttpRequestFactory retry_after_ms_header kubernetesNamespaceSelector kubernetesNamespaceSelector kubernetesNamespaceSelector getUserAccountById XMLHttpRequestFactory XMLHttpRequestFactory payment_intent_succeeded retry_after_ms_header XMLHttpRequestFactory retry_after_ms_header retry_after_ms_header XMLHttpRequestFactory kubernetesNamespaceSelector retry_after_ms_header getUserAccountById getUserAccountById kubernetesNamespaceSelector kubernetesNamespaceSelector getUserAccountById retry_after_ms_header getUserAccountById kubernetesNamespaceSelector payment_intent_succeeded kubernetesNamespaceSelector kubernetesNamespaceSelector getUserAccountById XMLHttpRequestFactory getUserAccountById XMLHttpRequestFactory getUserAccountById payment_intent_succeeded kubernetesNamespaceSelector payment_intent_succeeded payment_intent_succeeded XMLHttpRequestFactory payment_intent_succeeded kubernetesNamespaceSelector getUserAccountById getUserAccountById getUserAccountById retry_after_ms_header kubernetesNamespaceSelector XMLHttpRequestFactory payment_intent_succeeded kubernetesNamespaceSelector payment_intent_succeeded payment_intent_succeeded retry_after_ms_header XMLHttpRequestFactory payment_intent_succeeded"
+  },
+  {
+   "name": "hashes",
+   "input_tokens": 2659,
+   "state": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+    "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+    "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+    "e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683",
+    "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451",
+    "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3",
+    "19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7",
+    "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5",
+    "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8",
+    "6b51d431df5d7f141cbececcf79edf3dd861c3b4069f0b11661a3eefacbba918",
+    "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+    "8527a891e224136950ff32ca212b45bc93f69fbb801c3b1ebedac52775f99e61",
+    "e629fa6598d732768f7c726b4b621285f9c3b85303900aa912017db7617d8bdb",
+    "b17ef6d19c7a5b1ee83b907c595526dcb1eb06db8227d650d5dda0a9f4ce8cd9",
+    "4523540f1504cd17100c4835e85b7eefd49911580f8efff0599a8f283be6b9e3",
+    "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
+    "9400f1b21cb527d7fa3d3eabba93557a18ebe7a2ca4e471cfe5e4c5b4ca7f767",
+    "f5ca38f748a1d6eaf726b8a42fb575c3c71f1864a8143301782de13da2d9202b",
+    "6f4b6612125fb3a0daecd2799dfd6c9c299424fd920f9b308110a2c1fbd8f443",
+    "785f3ec7eb32f30b90cd0fcf3657d388b5ff4297f2f9716ff66e9b69c05ddd09",
+    "535fa30d7e25dd8a49f1536779734ec8286108d115da5045d77f3b4185d8f790",
+    "c2356069e9d1e79ca924378153cfbbfb4d4416b1f99d41a2940bfdb66c5319db",
+    "b7a56873cd771f2c446d369b649430b65a756ba278ff97ec81bb6f55b2e73569",
+    "5f9c4ab08cac7457e9111a30e4664920607ea2c115a1433d7be98e97e64244ca",
+    "670671cd97404156226e507973f2ab8330d3022ca96e0c93bdbdb320c41adcaf",
+    "59e19706d51d39f66711c2653cd7eb1291c94d9b55eb14bda74ce4dc636d015a",
+    "35135aaa6cc23891b40cb3f378c53a17a1127210ce60e125ccf03efcfdaec458",
+    "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+    "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+    "e29c9c180c6279b0b02abd6a1801c7c04082cf486ec027aa13515e4f3884bb6b",
+    "c6f3ac57944a531490cd39902d0f777715fd005efac9a30622d5f5205e7f6894",
+    "86e50149658661312a9e0b35558d84f6c6d3da797f552a9657fe0558ca40cdef",
+    "9f14025af0065b30e47e23ebb3b491d39ae8ed17d33739e5ff3827ffb3634953",
+    "76a50887d8f1c2e9301755428990ad81479ee21c25b43215cf524541e0503269",
+    "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+    "aea92132c4cbeb263e6ac2bf6c183b5d81737f179f21efdc5863739672f0f470",
+    "0b918943df0962bc7a1824c0555a389347b4febdc7cf9d1254406d80ce44e3f9"
+   ]
+  },
+  {
+   "name": "japanese",
+   "input_tokens": 849,
+   "state": "お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。お客様から月曜日以降、支払いが失敗しているとの報告がありました。サポートはまだ返信していません。"
+  },
+  {
+   "name": "french",
+   "input_tokens": 1110,
+   "state": "Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. Le client a signalé que les paiements échouent depuis lundi et que l'équipe n'a pas répondu à ses requêtes déjà envoyées. "
+  },
+  {
+   "name": "multiline",
+   "input_tokens": 904,
+   "state": "line of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here\n        line of text here\n            line of text here\nline of text here\n    line of text here"
+  }
+ ]
+}

@@ -34,3 +34,18 @@ Where these contradict the upstream docs, the server's behaviour is what the cod
 - Field order inside an answer differs from the docs (`confidence` precedes `probabilities`), and Choice
   `probabilities` do not come back in the order the options were asked.
 - `GET /v1/models` returns `name`, `description` and an RFC 3339 `release_date` with microseconds.
+
+## Token-size findings (2026-09-19, while building offline validation)
+
+- **A flat characters-per-token ratio is badly wrong.** Measured: English prose 6.5 chars/token, a chat
+  log 4.2, JSON records 2.1, keyed objects 1.3, an array of numbers 1.0. The ~4.5 in the PRD would
+  estimate a 100k-character JSON state at 22k tokens when it is about 47k.
+- What holds across every kind of content: a common word is one token, a rare long word or an
+  identifier about one token per 4 letters, CJK one token per character, accented Latin about one per
+  3 letters, **every digit and every punctuation character one token**, a line break one token, an
+  indentation run one token, a single space free.
+- Per-request overhead: 258 to 273 tokens (an empty state plus one short Noul is 273).
+- `jev-client`'s estimator implements this and is held to within 15% per sample (5% overall) by
+  `crates/jev-client/tests/fixtures/token-calibration.json`, which stores real counts.
+- Practical consequence for users: numeric and id-heavy state is expensive. 3,000 six-digit numbers
+  cost 20k tokens.

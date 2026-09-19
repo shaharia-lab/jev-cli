@@ -68,7 +68,8 @@
 //!   retry decisions. Bodies are traced only on explicit opt-in, and `Authorization` never is.
 //!
 //! The types describe shapes only. Limits such as 255 choice options or 2 to 10 score levels are
-//! enforced by offline validation, not by parsing.
+//! enforced by [`validate`], which checks a request offline and reports every problem at once, each
+//! with the question it is in, a path, a stable rule id and a suggested fix.
 //!
 //! This project is not affiliated with, endorsed by, or sponsored by TypeSafe AI.
 //!
@@ -90,6 +91,7 @@ mod response;
 mod retry;
 mod secret;
 mod transport;
+pub mod validate;
 
 pub use answer::{Answer, ChoiceAnswer, NoulAnswer, ScoreAnswer};
 pub use base_url::{BaseUrl, InvalidBaseUrl};

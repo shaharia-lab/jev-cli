@@ -80,6 +80,14 @@ type whose doc comment has rustdoc links or examples sets `#[schemars(descriptio
 agents read those descriptions (a test enforces this). Public structs are `#[non_exhaustive]` with
 constructors, so adding a field is not a breaking change.
 
+Offline validation (`jev_client::validate`) checks the raw `Document`, not a typed `Request`, so that
+every problem is reported at once with a question id, a JSON Pointer path, a stable rule id and a
+fix, and so that duplicate keys (which any ordinary parse hides) can be reported. Adding a rule means
+adding it to `Rule`, to `Rule::ALL`, and to `rule_cases()` in `tests/validation.rs`; a test fails if
+any rule has no case. The size estimate is per character class, not a flat ratio, and
+`tests/fixtures/token-calibration.json` holds it to real token counts: re-probe and update that file
+rather than loosening the bound.
+
 `HttpTransport` is the only code that touches the network for the API. TLS is `rustls` with the
 `ring` provider and the platform certificate verifier, built explicitly (no process-global provider,
 no `aws-lc`, no OpenSSL). Redirects are never followed. Server-supplied error text is scrubbed of the
