@@ -2,6 +2,7 @@
 # Release of a tag. Stages run in order, and each stage only starts when the one before succeeded:
 #
 #   plan → build (6 targets) → package → publish (sign, draft) → attest → verify → finalize → stable
+#                                     └→ homebrew-check (macOS, Linux) ─────────────────────┴→ homebrew
 #
 # How a run starts, and what it does:
 #
@@ -27,8 +28,10 @@
 # is published unless it passes. SECURITY.md documents the design, verification by hand and key
 # rotation.
 #
-# Later stages attach here: crates.io and the Homebrew tap go after `stable`, so they never run for
-# a pre-release and never point at an asset that did not pass verification.
+# Later stages attach after `stable`, so they never run for a pre-release and never point at an
+# asset that did not pass verification. `homebrew` writes the formulas to shaharia-lab/homebrew-tap
+# (crates.io will follow). `homebrew-check` runs on every run, dry runs included: Homebrew itself
+# lints, installs and tests the formula against this run's archives before any release depends on it.
 
 name: Release
 
@@ -336,3 +339,113 @@ jobs:
       - run: echo "$TAG is a stable release"
         env:
           TAG: ${{ needs.plan.outputs.tag }}
+
+  # The formula as Homebrew sees it, on every run: `brew style` and `brew audit --strict` on the
+  # formulas a release would publish, then both installed from this run's archives (file:// URLs,
+  # so no release has to exist), `brew test`, and the layout `jev update` relies on to recognise a
+  # managed install: the binary in the keg `Cellar/jev/<version>/bin`, beside INSTALL_RECEIPT.json.
+  homebrew-check:
+    name: Homebrew formula (${{ matrix.os }})
+    needs: [plan, package]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_ENV_HINTS: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: dist
+      - name: Put Homebrew on the PATH
+        if: runner.os == 'Linux'
+        run: echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+      - name: Write the formulas into a local tap
+        run: |
+          brew tap-new --no-git jev-cli/check
+          echo "FORMULAS=$(brew --repository jev-cli/check)/Formula" >> "$GITHUB_ENV"
+      - name: brew style and brew audit --strict
+        run: |
+          scripts/release/homebrew-formula.sh main "$VERSION" dist/SHA256SUMS > "$FORMULAS/jev.rb"
+          scripts/release/homebrew-formula.sh pinned "$VERSION" dist/SHA256SUMS > "$FORMULAS/jev@$VERSION.rb"
+          cat "$FORMULAS/jev.rb"
+          brew style jev-cli/check/jev "jev-cli/check/jev@$VERSION"
+          brew audit --strict jev-cli/check/jev "jev-cli/check/jev@$VERSION"
+      - name: Install both formulas from this run's archives and run their tests
+        run: |
+          for kind in main pinned; do
+            name=jev
+            [ "$kind" = main ] || name="jev@$VERSION"
+            scripts/release/homebrew-formula.sh "$kind" "$VERSION" dist/SHA256SUMS "file://$PWD/dist" > "$FORMULAS/$name.rb"
+            brew install --formula "jev-cli/check/$name"
+            brew test "jev-cli/check/$name"
+          done
+          prefix=$(brew --prefix)
+          test "$("$prefix/bin/jev" version --field version)" = "$VERSION"
+          test "$("$(brew --prefix "jev@$VERSION")/bin/jev" version --field version)" = "$VERSION"
+          for file in share/man/man1/jev.1 etc/bash_completion.d/jev share/zsh/site-functions/_jev \
+            share/fish/vendor_completions.d/jev.fish; do
+            test -e "$prefix/$file" || { echo "::error::the formula did not install $file"; exit 1; }
+          done
+          # Homebrew links bin/jev to the keg with a relative symlink.
+          exe=$(cd "$prefix/bin" && cd "$(dirname "$(readlink jev)")" && pwd -P)/jev
+          echo "jev is installed at $exe"
+          case $exe in
+            */Cellar/jev/"$VERSION"/bin/jev) ;;
+            *) echo "::error::jev is not in the keg Cellar/jev/$VERSION/bin"; exit 1 ;;
+          esac
+          test -f "${exe%/bin/jev}/INSTALL_RECEIPT.json"
+
+  # Publishes the formulas to shaharia-lab/homebrew-tap: Formula/jev.rb, the pinned
+  # Formula/jev@<version>.rb and the tap README's table, with the checksums of the published and
+  # verified release. Stable releases only (`needs: stable`); safe to re-run, see
+  # scripts/release/homebrew-publish.sh.
+  homebrew:
+    name: Update the Homebrew tap
+    needs: [plan, stable, homebrew-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download every asset of the release
+        run: gh release download "$TAG" --dir published
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      # The formulas take their checksums from this SHA256SUMS, so it is checked again here, on
+      # the published release, against the committed key.
+      - run: scripts/release/verify-assets.sh published "$VERSION" crates/jev-cli/keys/release-primary.pub
+      - name: Generate the formulas
+        run: |
+          mkdir formulas
+          scripts/release/homebrew-formula.sh main "$VERSION" published/SHA256SUMS > formulas/jev.rb
+          scripts/release/homebrew-formula.sh pinned "$VERSION" published/SHA256SUMS > "formulas/jev@$VERSION.rb"
+          cat formulas/jev.rb
+      - name: Mint a token for the tap publisher, limited to the tap's contents
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.HOMEBREW_TAP_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+      - run: scripts/release/homebrew-publish.sh "$VERSION" formulas
+        env:
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}

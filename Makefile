@@ -43,6 +43,7 @@ policy:
 	scripts/ci/check-client-deps.sh
 	scripts/ci/check-pr-title.sh --self-test
 	scripts/release/self-test.sh  # the signing round trip needs minisign; skipped without it
+	scripts/release/homebrew-self-test.sh
 	SKIP=no-commit-to-branch,cargo-fmt,cargo-clippy pre-commit run --all-files
 
 # The performance budgets (PRD NFR-PERF-1..3) on a release build, one test at a time: CLI overhead,

@@ -299,6 +299,13 @@ archive layout, the full asset list and the signatures are checked by
 `scripts/release/verify-assets.sh`; change it with the matrix. crates.io and the tap hang off
 `stable`, which pre-releases skip.
 
+The formulas come from `scripts/release/homebrew-formula.sh` (checksums from the verified
+`SHA256SUMS`) and reach the tap through `homebrew-publish.sh` (contents API, idempotent, never moves
+`jev.rb` back to an older release). `homebrew-check` runs on every release run, dry runs included:
+`brew style`, `brew audit --strict`, and `brew install` + `brew test` from that run's archives. The
+formula keeps the binary in the keg (`Cellar/jev/<version>/bin/jev`, beside Homebrew's
+`INSTALL_RECEIPT.json`), which is how `jev update` recognises a managed install.
+
 Every release asset and `SHA256SUMS` is signed with **minisign** (PRD Q1) by the one release job
 that can reach the signing key (the `release` environment: `v*` tags, owner approval). The public
 keys are `crates/jev-cli/keys/release-primary.pub` (signs) and `release-next.pub` (rotation); the
