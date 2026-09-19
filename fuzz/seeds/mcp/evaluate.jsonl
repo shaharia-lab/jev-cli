@@ -1,0 +1,1 @@
+{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "evaluate", "_meta": {"progressToken": 7}, "arguments": {"state": {"a": 1}, "questions": {"q": {"type": "noul", "instructions": "Is it?"}}}}}

@@ -206,6 +206,14 @@ do not contain them. Tests must isolate the environment (`CI`, `NO_COLOR`, `TERM
 `TYPESAFE_*`): CI sets `CI=true`, and a developer's shell has a UTF-8 locale. What a person sees is
 tested on a real pseudo-terminal in `tests/terminal.rs` (Unix only).
 
+Every parser of outside input is fuzzed (`fuzz/`, cargo-fuzz on nightly, a workspace of its own).
+Entry points live in each crate's `src/fuzz.rs` behind `#[cfg(any(test, fuzzing))]`, so they reach
+private code and the crates' tests keep them compiling; a new parser gets an entry point and a
+target there. A crash is fixed with a regression test next to the code. The performance budgets
+(NFR-PERF-1..3) are `#[ignore]`d benchmarks in `tests/performance.rs` and `tests/batch.rs`, run on a
+release build by CI's `performance` job (`make bench`); their regression guards are set from CI's
+Linux runner, so raise one only after finding out why it tripped.
+
 The agent skill for *users'* agents is `skills/jev-cli/SKILL.md`, installable with `npx skills add`
 and as a Claude Code plugin (`.claude-plugin/marketplace.json`, whose plugin is that one directory).
 It teaches a workflow and defers the contract to `jev spec`, `--help` and `jev schema`.

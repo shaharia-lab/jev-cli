@@ -1,0 +1,67 @@
+# Fuzz targets for `cargo fuzz` (nightly). A workspace of its own, so that `cargo build`, `cargo
+# test` and `make check` in the repository never build it. See README.md.
+[package]
+name = "jev-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+jev-cli = { path = "../crates/jev-cli" }
+jev-client = { path = "../crates/jev-client" }
+libfuzzer-sys = "0.4"
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "request"
+path = "fuzz_targets/request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "response"
+path = "fuzz_targets/response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "request_file"
+path = "fuzz_targets/request_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "output"
+path = "fuzz_targets/output.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "batch_rows"
+path = "fuzz_targets/batch_rows.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config"
+path = "fuzz_targets/config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp"
+path = "fuzz_targets/mcp.rs"
+test = false
+doc = false
+bench = false

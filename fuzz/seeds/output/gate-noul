@@ -1,0 +1,40 @@
+answers.is_urgent.noul
+is_urgent >= 0.5
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "is_urgent": {
+      "type": "noul",
+      "noul": 0.94
+    },
+    "department": {
+      "type": "choice",
+      "choice": "billing",
+      "confidence": 0.89,
+      "probabilities": {
+        "other": 0.0,
+        "billing": 0.93,
+        "technical": 0.07
+      }
+    },
+    "frustration": {
+      "type": "score",
+      "score": 1.2,
+      "confidence": 0.68,
+      "legend": {
+        "0": "Calm",
+        "1": "Frustrated",
+        "2": "Very angry"
+      },
+      "probabilities": {
+        "0": 0.01,
+        "1": 0.78,
+        "2": 0.21
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 459,
+    "output_tokens": 73
+  }
+}

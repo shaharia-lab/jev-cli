@@ -83,6 +83,9 @@ mod clock;
 mod content;
 mod de;
 mod error;
+#[cfg(any(test, fuzzing))]
+#[doc(hidden)]
+pub mod fuzz;
 mod http;
 mod models;
 pub mod pricing;

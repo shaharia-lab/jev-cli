@@ -7,7 +7,7 @@ mod config;
 #[cfg(feature = "internal-test-hooks")]
 pub(crate) mod debug;
 mod eval;
-mod mcp;
+pub(crate) mod mcp;
 mod models;
 mod profile;
 mod schema;

@@ -1,0 +1,16 @@
+# jev configuration
+schema_version = 1
+active_profile = "work"
+
+[profiles.default]
+model = "jev-latest"
+output = "json"
+
+[profiles.work]
+base_url = "https://api.typesafe.ai"
+timeout = "30s"
+max_retries = 2
+concurrency = 4
+
+[pricing]
+usd_per_mtok = 0.042

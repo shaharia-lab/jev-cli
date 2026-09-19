@@ -128,6 +128,48 @@ pub(crate) fn serve(arguments: &McpServeArgs, context: &mut Context<'_>) -> Resu
     Ok(())
 }
 
+/// Answers each line of `input` as [`serve`] would, and throws the answers away: what the MCP fuzz
+/// target calls. The server has no API key and no `--allow-dir`, so nothing reaches the network or
+/// the file system. It is built once per thread and then kept, as a real one lives for a session.
+#[cfg(any(test, fuzzing))]
+pub(crate) fn answer_offline(input: &[u8]) {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static SERVER: RefCell<Option<Server<jev_client::HttpTransport>>> = const { RefCell::new(None) };
+    }
+    SERVER.with_borrow_mut(|server| {
+        if server.is_none() {
+            let (Ok(settings), Ok(runtime)) = (
+                crate::fuzz::default_settings(),
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build(),
+            ) else {
+                return;
+            };
+            *server = Some(Server {
+                session: Session {
+                    settings,
+                    transport: Err(CliError::auth("no_api_key", "no API key")),
+                    price_override: None,
+                    max_cost_usd_per_call: Some(0.01),
+                    spend: Spend::default(),
+                    runtime,
+                    batch: None,
+                },
+                tools: tools::all(None),
+            });
+        }
+        let Some(server) = server else {
+            return;
+        };
+        for line in input.split(|byte| *byte == b'\n') {
+            let _ = server.handle(line, &mut std::io::sink());
+        }
+    });
+}
+
 /// The protocol side: messages in, messages out.
 struct Server<T> {
     session: Session<T>,

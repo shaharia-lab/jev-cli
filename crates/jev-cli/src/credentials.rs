@@ -245,12 +245,7 @@ impl FileStore {
     /// The key stored for `profile`, if there is one.
     pub(crate) fn get(&self, profile: &str) -> Result<Option<ApiKey>, CliError> {
         let document = self.load()?;
-        let Some(key) = document
-            .get("profiles")
-            .and_then(|profiles| profiles.get(profile))
-            .and_then(|entry| entry.get("api_key"))
-            .and_then(Item::as_str)
-        else {
+        let Some(key) = stored_key(&document, profile) else {
             return Ok(None);
         };
         ApiKey::new(key.to_owned()).map(Some).map_err(|error| {
@@ -302,6 +297,15 @@ impl FileStore {
         }
         Ok(removed)
     }
+}
+
+/// The key a credentials file holds for `profile`, as written.
+pub(crate) fn stored_key<'a>(document: &'a DocumentMut, profile: &str) -> Option<&'a str> {
+    document
+        .get("profiles")
+        .and_then(|profiles| profiles.get(profile))
+        .and_then(|entry| entry.get("api_key"))
+        .and_then(Item::as_str)
 }
 
 /// The last four characters of a key, which is all of it that is ever shown.

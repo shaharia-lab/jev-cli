@@ -1,7 +1,7 @@
 # Local equivalents of the CI jobs. `make check` runs everything a pull request must pass.
 # On Windows without make, run the cargo commands below directly.
 
-.PHONY: check hooks fmt fmt-check lint test msrv doc deny audit policy schemas dist-assets
+.PHONY: check hooks fmt fmt-check lint test msrv doc deny audit policy bench schemas dist-assets
 
 MSRV := $(shell sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
 
@@ -43,6 +43,12 @@ policy:
 	scripts/ci/check-client-deps.sh
 	scripts/ci/check-pr-title.sh --self-test
 	SKIP=no-commit-to-branch,cargo-fmt,cargo-clippy pre-commit run --all-files
+
+# The performance budgets (PRD NFR-PERF-1..3) on a release build, one test at a time: CLI overhead,
+# commands that need no network, and batch memory over a million rows (Linux only, a few minutes).
+# Not part of `check`; CI runs it in the `performance` job.
+bench:
+	cargo test --release --locked -p jev-cli --test performance --test batch -- --ignored --nocapture --test-threads=1
 
 # Regenerates the published JSON Schemas in schemas/ from this build. A test fails when they are
 # out of date, and releases attach them for editor integration.
