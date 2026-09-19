@@ -7,10 +7,14 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://github.com/shaharia-lab/jev-cli#readme"
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
+# The published crate holds what builds `jev`, nothing else: the tests and the `dist-assets`
+# example need files from the rest of the repository. The release public keys are compiled in.
+include = ["/src", "/build.rs", "/keys/*.pub", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE"]
 
 build = "build.rs"
 
@@ -21,6 +25,27 @@ path = "src/lib.rs"
 [[bin]]
 name = "jev"
 path = "src/main.rs"
+
+# `cargo binstall jev-cli` downloads the release archive for the host from GitHub Releases
+# (scripts/release/package.sh names them) instead of compiling, and checks its minisign signature
+# against the primary release key, which must be keys/release-primary.pub
+# (scripts/release/self-test.sh checks that).
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/jev-{ version }-{ target }{ archive-suffix }"
+bin-dir = "jev-{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+disabled-strategies = ["quick-install"]
+
+[package.metadata.binstall.signing]
+algorithm = "minisign"
+pubkey = "RWS4h5k7TFvpPJt8wAoJCpoWgejSO8eVKRs+CqEdFIQAP2E0QwyyDDcU"
+file = "{ url }.minisig"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-fmt = "zip"
 
 [features]
 # Hidden `jev debug ...` commands that let the test suite drive code paths no real command reaches

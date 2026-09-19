@@ -12,5 +12,5 @@ This project is not affiliated with, endorsed by, or sponsored by TypeSafe AI.
 
 ## Licence
 
-Licensed under either of [Apache License, Version 2.0](../../LICENSE-APACHE) or
-[MIT license](../../LICENSE-MIT) at your option.
+Licensed under either of [Apache License, Version 2.0](https://github.com/shaharia-lab/jev-cli/blob/main/LICENSE-APACHE)
+or [MIT license](https://github.com/shaharia-lab/jev-cli/blob/main/LICENSE-MIT) at your option.

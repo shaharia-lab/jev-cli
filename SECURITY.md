@@ -128,6 +128,9 @@ gh attestation verify "$archive" --repo shaharia-lab/jev-cli
   installing it, install nothing unless every check passes, and never use `sudo` or ask for
   elevation. Without `minisign` the checksum proves only that the download is intact, and the
   scripts say so.
+- `cargo binstall jev-cli` downloads the same archives and checks their minisign signature against
+  the primary key, which the crate's metadata names. The crates are published to crates.io by the
+  release workflow alone, for stable releases, after the release assets were verified.
 
 ### Key rotation
 
@@ -139,7 +142,8 @@ To rotate, planned or because the primary key may be compromised:
 
 1. Promote the next key: from now on the release workflow signs with it.
 2. Generate a new next key pair, and commit its public key, in `crates/jev-cli/keys` and in the
-   install scripts.
+   install scripts. Put the promoted key in `[package.metadata.binstall.signing]` in
+   `crates/jev-cli/Cargo.toml`, which is how `cargo binstall` checks the archives.
 3. Ship a release signed with the promoted key that compiles in the promoted key as primary and
    the new key as next. Installed copies already trust the promoted key, so they accept this
    release, and from then on trust the new pair only.

@@ -101,6 +101,16 @@ versions or `CHANGELOG.md` by hand.
    provenance is attested for every asset and binary. The assets are then downloaded again and
    verified (checksums, signatures against `crates/jev-cli/keys/release-primary.pub` with the
    standard minisign CLI, and attestations), and only then is the release published.
+4. A stable release then goes to the Homebrew tap and to crates.io: `jev-client` first, then
+   `jev-cli` once the index has `jev-client`, through `scripts/release/crates-publish.sh` with the
+   `CARGO_REGISTRY_TOKEN` of the `release` environment (so the owner approves that job as well).
+   A crates.io version can never be replaced, so the script skips a crate whose version is
+   already there, and re-running the job after a partial publish is safe.
+   `[package.metadata.binstall]` in `crates/jev-cli/Cargo.toml` points `cargo binstall` at the
+   release archives and the primary signing key. Every pull request runs
+   `cargo publish --workspace --dry-run` (`make package`), which builds both crates from exactly
+   what would be uploaded; `crates/jev-cli` ships only `src/`, `build.rs`, the public keys, its
+   README and the licences.
 
 The install scripts at the repository root, `install.sh` and `install.ps1`, download from GitHub
 Releases and are served to users straight from `main`, so a change to them ships when it is

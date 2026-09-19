@@ -5,7 +5,8 @@
 #
 # 1. The committed public keys (crates/jev-cli/keys) are well-formed minisign keys whose key ids
 #    match their comments, differ from each other, and are the ones SECURITY.md tells people to
-#    verify with; and no minisign secret key is tracked by git.
+#    verify with; the primary key is the one `cargo binstall` checks with; and no minisign secret
+#    key is tracked by git.
 # 2. With a throwaway key pair: sign.sh signs a fake release, verify-assets.sh accepts it, and
 #    rejects every kind of tampering (an altered asset, a regenerated SHA256SUMS, another key, a
 #    missing, swapped or replayed signature). The signing password never reaches the output.
@@ -48,6 +49,12 @@ for role in primary next; do
   grep -qF "$id" "$root/SECURITY.md" || fail "SECURITY.md does not name the $role key id $id"
   ids+=("$id")
 done
+# cargo binstall checks archives against the primary key given in the crate's metadata.
+primary=$(sed -n 2p "$keys/release-primary.pub")
+binstall=$(sed -n '/^\[package\.metadata\.binstall\.signing\]/,/^\[/s/^pubkey *= *"\(.*\)"/\1/p' \
+  "$root/crates/jev-cli/Cargo.toml")
+[ "$binstall" = "$primary" ] ||
+  fail "crates/jev-cli/Cargo.toml: [package.metadata.binstall.signing] pubkey is '$binstall', not the primary key $primary"
 [ "${#ids[@]}" -ne 2 ] || [ "${ids[0]}" != "${ids[1]}" ] || fail "the primary and next keys are the same key"
 
 if leaked=$(git -C "$root" grep -lE '^untrusted comment: minisign .*secret key' -- . 2> /dev/null); then

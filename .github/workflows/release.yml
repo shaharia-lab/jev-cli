@@ -1,8 +1,8 @@
 # Release: builds `jev` for six targets, packs the archives, and publishes them to the GitHub
 # Release of a tag. Stages run in order, and each stage only starts when the one before succeeded:
 #
-#   plan → build (6 targets) → package → publish (sign, draft) → attest → verify → finalize → stable
-#                                     └→ homebrew-check (macOS, Linux) ─────────────────────┴→ homebrew
+#   plan → build (6 targets) → package → publish (sign, draft) → attest → verify → finalize → stable ┬→ crates
+#                                     └→ homebrew-check (macOS, Linux) ──────────────────────────────┴→ homebrew
 #
 # How a run starts, and what it does:
 #
@@ -30,7 +30,8 @@
 #
 # Later stages attach after `stable`, so they never run for a pre-release and never point at an
 # asset that did not pass verification. `homebrew` writes the formulas to shaharia-lab/homebrew-tap
-# (crates.io will follow). `homebrew-check` runs on every run of a stable version, dry runs included:
+# and `crates` publishes jev-client and jev-cli to crates.io (CI packages both on every pull
+# request). `homebrew-check` runs on every run of a stable version, dry runs included:
 # Homebrew itself lints, installs and tests the formula against this run's archives before any
 # release depends on it. A pre-release has no formula to check, so it skips the job.
 
@@ -203,7 +204,7 @@ jobs:
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     # The owner approves every release here; the environment also only admits `v*` tags. It holds
-    # the signing key, so no other job may use it.
+    # the signing key, which no other job is given (`crates` takes only the crates.io token).
     environment: release
     permissions:
       contents: write
@@ -452,3 +453,26 @@ jobs:
       - run: scripts/release/homebrew-publish.sh "$VERSION" formulas
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+
+  # Publishes jev-client, then jev-cli, to crates.io, whose `cargo binstall` metadata points at this
+  # release's archives. Stable releases only (`needs: stable`), after the assets were verified. The
+  # crates.io token is a secret of the `release` environment, so the owner approves this job too.
+  # A published crate version is permanent; re-running skips what is already there, see
+  # scripts/release/crates-publish.sh.
+  crates:
+    name: Publish to crates.io
+    needs: [plan, verify, stable]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: scripts/release/crates-publish.sh "$VERSION"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
