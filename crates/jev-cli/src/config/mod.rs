@@ -8,7 +8,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 pub(crate) use file::ConfigFile;
 pub(crate) use paths::{CONFIG_FILE, config_dir};
@@ -108,31 +108,34 @@ impl ConfigStore {
     /// writers that keeps moving is waited for however long it is, and only a holder that makes
     /// no progress for the whole timeout is given up on.
     fn lock(&self, timeout: Duration) -> io::Result<File> {
+        self.lock_with(timeout, &mut RealWaiter::new(self.file_path()))
+    }
+
+    /// [`lock`](Self::lock), with the passage of time and the sight of other writers behind a
+    /// [`Waiter`], so that a test can drive both exactly instead of racing a loaded machine.
+    fn lock_with(&self, timeout: Duration, waiter: &mut impl Waiter) -> io::Result<File> {
         let path = self.dir.join("config.lock");
         let lock = OpenOptions::new()
             .create(true)
             .truncate(false)
             .write(true)
             .open(&path)?;
-        let last_write = || {
-            fs::metadata(self.file_path())
-                .ok()
-                .map(|metadata| (metadata.modified().ok(), metadata.len()))
-        };
-        let mut seen = last_write();
-        let mut started = Instant::now();
+        let mut seen = waiter.progress();
+        let mut started = waiter.now();
         let mut jitter = Jitter::new();
         let mut pause = LOCK_POLL_MIN;
         loop {
             match lock.try_lock() {
                 Ok(()) => return Ok(lock),
-                Err(fs::TryLockError::WouldBlock) if started.elapsed() < timeout => {
-                    std::thread::sleep(jitter.between(pause / 2, pause));
+                Err(fs::TryLockError::WouldBlock)
+                    if waiter.now().duration_since(started) < timeout =>
+                {
+                    waiter.sleep(jitter.between(pause / 2, pause));
                     pause = (pause * 2).min(LOCK_POLL_MAX);
-                    let now = last_write();
+                    let now = waiter.progress();
                     if now != seen {
                         seen = now;
-                        started = Instant::now();
+                        started = waiter.now();
                     }
                 }
                 Err(fs::TryLockError::WouldBlock) => {
@@ -148,6 +151,56 @@ impl ConfigStore {
                 Err(fs::TryLockError::Error(error)) => return Err(error),
             }
         }
+    }
+}
+
+/// What the last write to the configuration left behind. Two writes are told apart by when the
+/// file was last changed and how long it is; a queue of writers changes at least one of the two.
+#[derive(Debug, PartialEq, Eq)]
+struct Written {
+    modified: Option<SystemTime>,
+    len: u64,
+}
+
+/// Everything the waiting half of [`ConfigStore::lock_with`] takes from the outside world: the
+/// clock it measures the timeout on, the pause between two attempts, and the sight of another
+/// writer making progress.
+trait Waiter {
+    /// A monotonic instant.
+    fn now(&mut self) -> Instant;
+
+    /// Waits for `pause` before the next attempt.
+    fn sleep(&mut self, pause: Duration);
+
+    /// The state of the configuration file, or `None` while there is no readable file.
+    fn progress(&mut self) -> Option<Written>;
+}
+
+/// The real thing: the system clock, a real sleep, and the configuration file on disk.
+struct RealWaiter {
+    config: PathBuf,
+}
+
+impl RealWaiter {
+    const fn new(config: PathBuf) -> Self {
+        Self { config }
+    }
+}
+
+impl Waiter for RealWaiter {
+    fn now(&mut self) -> Instant {
+        Instant::now()
+    }
+
+    fn sleep(&mut self, pause: Duration) {
+        std::thread::sleep(pause);
+    }
+
+    fn progress(&mut self) -> Option<Written> {
+        fs::metadata(&self.config).ok().map(|metadata| Written {
+            modified: metadata.modified().ok(),
+            len: metadata.len(),
+        })
     }
 }
 
@@ -202,12 +255,93 @@ fn write_atomically(path: &Path, content: &[u8]) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::fs::{self, File};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
-    use super::{ConfigStore, Jitter, Key, Value};
+    use super::{ConfigStore, Jitter, Key, Value, Waiter, Written};
+
+    /// The timeout the lock tests are written against. Nothing sleeps for it: [`Waiting`] hands
+    /// the loop a clock of its own, so a long, realistic timeout costs a few hundred iterations.
+    const TIMEOUT: Duration = super::LOCK_TIMEOUT;
+
+    /// A [`Waiter`] on a clock of its own. Time passes only when the lock loop asks to sleep, and
+    /// the writer it is waiting behind makes its progress on that same clock, so the test cannot
+    /// race the machine it runs on.
+    struct Waiting {
+        /// The origin of the clock: `Instant` has no constructor of its own, and only differences
+        /// from this point are ever read.
+        origin: Instant,
+        elapsed: Duration,
+        /// Writes the queue has still to make, and how long each one takes.
+        left: u32,
+        every: Duration,
+        since: Duration,
+        /// Stands in for the file the queue appends to: every write makes it one byte longer.
+        len: u64,
+        /// The lock the queue holds, released once the last writer is done.
+        held: Option<File>,
+    }
+
+    impl Waiting {
+        /// A queue of `writers` that each take `every` to finish, and then let the lock go.
+        fn queue(held: File, writers: u32, every: Duration) -> Self {
+            Self {
+                origin: Instant::now(),
+                elapsed: Duration::ZERO,
+                left: writers,
+                every,
+                since: Duration::ZERO,
+                len: 0,
+                held: Some(held),
+            }
+        }
+
+        /// A holder that never writes anything and never lets the lock go.
+        fn stuck() -> Self {
+            Self {
+                origin: Instant::now(),
+                elapsed: Duration::ZERO,
+                left: 0,
+                every: Duration::MAX,
+                since: Duration::ZERO,
+                len: 0,
+                held: None,
+            }
+        }
+
+        /// How long the lock loop has waited, on this clock.
+        fn elapsed(&self) -> Duration {
+            self.elapsed
+        }
+    }
+
+    impl Waiter for Waiting {
+        fn now(&mut self) -> Instant {
+            self.origin + self.elapsed
+        }
+
+        fn sleep(&mut self, pause: Duration) {
+            self.elapsed += pause;
+            self.since += pause;
+            while self.left > 0 && self.since >= self.every {
+                self.since -= self.every;
+                self.left -= 1;
+                self.len += 1;
+            }
+            if self.left == 0 {
+                self.held = None;
+            }
+        }
+
+        fn progress(&mut self) -> Option<Written> {
+            (self.len > 0).then_some(Written {
+                modified: None,
+                len: self.len,
+            })
+        }
+    }
 
     /// A fresh directory under the build's temporary directory.
     fn scratch(name: &str) -> PathBuf {
@@ -313,31 +447,50 @@ mod tests {
     fn a_queue_of_writers_that_keeps_moving_is_waited_for_past_the_timeout() {
         let store = ConfigStore::new(scratch("moving"));
         fs::create_dir_all(store.dir()).unwrap();
-        let held = store.lock(Duration::from_secs(1)).unwrap();
-        let holder = {
-            let store = store.clone();
-            std::thread::spawn(move || {
-                // Stands in for other writers finishing one after another, well past the timeout.
-                // It appends rather than rewrites: on ext4, truncating a file flushes it on close,
-                // which can stall for longer than the timeout on a busy disk. It closes the file
-                // each time, because Windows may not report the new size of a file still open.
-                for _ in 0..20 {
-                    std::thread::sleep(Duration::from_millis(100));
-                    let mut file = fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(store.file_path())
-                        .unwrap();
-                    std::io::Write::write_all(&mut file, b"#").unwrap();
-                }
-                drop(held);
-            })
-        };
+        let held = store.lock(TIMEOUT).unwrap();
+        // Twenty writers, each taking a fifth of the timeout to finish: four times as long, all
+        // told, as a holder that made no progress would be given.
+        let mut queue = Waiting::queue(held, 20, TIMEOUT / 5);
 
-        let taken = store.lock(Duration::from_secs(1));
+        let taken = store.lock_with(TIMEOUT, &mut queue);
 
-        holder.join().unwrap();
         assert!(taken.is_ok(), "{taken:?}");
+        assert!(queue.elapsed() > TIMEOUT * 3, "{:?}", queue.elapsed());
+    }
+
+    #[test]
+    fn a_holder_that_makes_no_progress_is_given_up_on_after_the_timeout() {
+        let store = ConfigStore::new(scratch("stuck"));
+        fs::create_dir_all(store.dir()).unwrap();
+        let _held = store.lock(TIMEOUT).unwrap();
+        let mut stuck = Waiting::stuck();
+
+        let error = store.lock_with(TIMEOUT, &mut stuck).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        // The timeout is waited out, and not much more than it.
+        assert!(
+            (TIMEOUT..TIMEOUT + super::LOCK_POLL_MAX * 2).contains(&stuck.elapsed()),
+            "{:?}",
+            stuck.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_write_to_the_configuration_is_what_counts_as_progress() {
+        let store = ConfigStore::new(scratch("progress"));
+        fs::create_dir_all(store.dir()).unwrap();
+        let mut waiter = super::RealWaiter::new(store.file_path());
+
+        let missing = waiter.progress();
+        fs::write(store.file_path(), "# one").unwrap();
+        let written = waiter.progress();
+        fs::write(store.file_path(), "# one, then a longer second line").unwrap();
+        let rewritten = waiter.progress();
+
+        assert_eq!(missing, None);
+        assert_ne!(written, missing);
+        assert_ne!(rewritten, written);
     }
 
     #[test]
