@@ -16,8 +16,14 @@ pub(crate) use settings::{DEFAULT_PROFILE, Flags, Key, Setting, Settings, Source
 
 use crate::error::CliError;
 
-/// How long to wait for another `jev` process to finish writing before giving up.
-const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long another `jev` process may hold the lock, without the configuration changing, before
+/// giving up. The only holder is another short `jev` write, but each one syncs the file to disk,
+/// which can take seconds on a busy disk; failing a `config set` for that would be worse than waiting.
+const LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The first and the longest pause between two attempts to take the lock.
+const LOCK_POLL_MIN: Duration = Duration::from_millis(10);
+const LOCK_POLL_MAX: Duration = Duration::from_millis(100);
 
 /// The configuration directory and the file in it.
 #[derive(Clone, Debug)]
@@ -77,9 +83,15 @@ impl ConfigStore {
         };
         fs::create_dir_all(&self.dir).map_err(|error| cannot_write("create", &error))?;
 
-        let _lock = self
-            .lock()
-            .map_err(|error| cannot_write("lock the configuration in", &error))?;
+        let _lock = self.lock(LOCK_TIMEOUT).map_err(|error| {
+            if error.kind() == io::ErrorKind::TimedOut {
+                CliError::usage(error.to_string()).hint(
+                    "wait for the other jev process to finish and try again; the lock is released when it exits",
+                )
+            } else {
+                cannot_write("lock the configuration in", &error)
+            }
+        })?;
         let mut file = self.load()?;
         let outcome = change(&mut file)?;
         write_atomically(&self.file_path(), file.to_toml().as_bytes())
@@ -89,28 +101,76 @@ impl ConfigStore {
 
     /// Takes the exclusive lock, which is released when the returned file is dropped. The lock is
     /// on a file of its own, because the configuration file itself is replaced on every write.
-    fn lock(&self) -> io::Result<File> {
+    ///
+    /// Waiters poll with a jittered, growing pause, so that a crowd of them started together does
+    /// not keep retrying in step and missing the moment the lock is released. The timeout counts
+    /// from the last time the configuration file changed, not from the first attempt: a queue of
+    /// writers that keeps moving is waited for however long it is, and only a holder that makes
+    /// no progress for the whole timeout is given up on.
+    fn lock(&self, timeout: Duration) -> io::Result<File> {
+        let path = self.dir.join("config.lock");
         let lock = OpenOptions::new()
             .create(true)
             .truncate(false)
             .write(true)
-            .open(self.dir.join("config.lock"))?;
-        let started = Instant::now();
+            .open(&path)?;
+        let last_write = || {
+            fs::metadata(self.file_path())
+                .ok()
+                .map(|metadata| (metadata.modified().ok(), metadata.len()))
+        };
+        let mut seen = last_write();
+        let mut started = Instant::now();
+        let mut jitter = Jitter::new();
+        let mut pause = LOCK_POLL_MIN;
         loop {
             match lock.try_lock() {
                 Ok(()) => return Ok(lock),
-                Err(fs::TryLockError::WouldBlock) if started.elapsed() < LOCK_TIMEOUT => {
-                    std::thread::sleep(Duration::from_millis(20));
+                Err(fs::TryLockError::WouldBlock) if started.elapsed() < timeout => {
+                    std::thread::sleep(jitter.between(pause / 2, pause));
+                    pause = (pause * 2).min(LOCK_POLL_MAX);
+                    let now = last_write();
+                    if now != seen {
+                        seen = now;
+                        started = Instant::now();
+                    }
                 }
                 Err(fs::TryLockError::WouldBlock) => {
                     return Err(io::Error::new(
                         io::ErrorKind::TimedOut,
-                        "another jev process is holding the lock",
+                        format!(
+                            "gave up after {} s: another jev process has held {} all that time",
+                            timeout.as_secs_f32(),
+                            path.display()
+                        ),
                     ));
                 }
                 Err(fs::TryLockError::Error(error)) => return Err(error),
             }
         }
+    }
+}
+
+/// A cheap pseudo-random source for spreading out lock retries; it needs to differ between
+/// processes and calls, not to be unpredictable.
+struct Jitter(u64);
+
+impl Jitter {
+    fn new() -> Self {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.subsec_nanos());
+        // xorshift must not start from zero.
+        Self((u64::from(nanos) << 32 | u64::from(std::process::id())) | 1)
+    }
+
+    /// A duration in `low..=high`.
+    fn between(&mut self, low: Duration, high: Duration) -> Duration {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        let span = u64::try_from(high.saturating_sub(low).as_micros()).unwrap_or(u64::MAX);
+        low + Duration::from_micros(self.0 % span.saturating_add(1))
     }
 }
 
@@ -145,8 +205,9 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};
+    use std::time::Duration;
 
-    use super::{ConfigStore, Key, Value};
+    use super::{ConfigStore, Jitter, Key, Value};
 
     /// A fresh directory under the build's temporary directory.
     fn scratch(name: &str) -> PathBuf {
@@ -230,6 +291,63 @@ mod tests {
         }
 
         assert_eq!(store.load().unwrap().profiles.len(), 8);
+    }
+
+    #[test]
+    fn a_lock_held_too_long_times_out_naming_the_lock_file() {
+        let store = ConfigStore::new(scratch("held"));
+        fs::create_dir_all(store.dir()).unwrap();
+        let _held = store.lock(Duration::from_secs(1)).unwrap();
+
+        let error = store.lock(Duration::from_millis(200)).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        let lock_file = store.dir().join("config.lock");
+        assert!(
+            error.to_string().contains(&lock_file.display().to_string()),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_queue_of_writers_that_keeps_moving_is_waited_for_past_the_timeout() {
+        let store = ConfigStore::new(scratch("moving"));
+        fs::create_dir_all(store.dir()).unwrap();
+        let held = store.lock(Duration::from_secs(1)).unwrap();
+        let holder = {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                // Stands in for other writers finishing one after another, well past the timeout.
+                // It appends rather than rewrites: on ext4, truncating a file flushes it on close,
+                // which can stall for longer than the timeout on a busy disk. It closes the file
+                // each time, because Windows may not report the new size of a file still open.
+                for _ in 0..20 {
+                    std::thread::sleep(Duration::from_millis(100));
+                    let mut file = fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(store.file_path())
+                        .unwrap();
+                    std::io::Write::write_all(&mut file, b"#").unwrap();
+                }
+                drop(held);
+            })
+        };
+
+        let taken = store.lock(Duration::from_secs(1));
+
+        holder.join().unwrap();
+        assert!(taken.is_ok(), "{taken:?}");
+    }
+
+    #[test]
+    fn lock_retries_are_spread_within_their_bounds() {
+        let mut jitter = Jitter::new();
+        let (low, high) = (Duration::from_millis(5), Duration::from_millis(10));
+        let pauses: Vec<Duration> = (0..200).map(|_| jitter.between(low, high)).collect();
+
+        assert!(pauses.iter().all(|pause| (low..=high).contains(pause)));
+        assert!(pauses.iter().any(|pause| *pause != pauses[0]), "{pauses:?}");
     }
 
     #[test]
