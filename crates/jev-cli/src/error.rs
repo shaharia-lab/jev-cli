@@ -26,6 +26,10 @@ pub(crate) struct CliError {
     pub(crate) request_id: Option<String>,
     pub(crate) http_status: Option<u16>,
     pub(crate) retryable: bool,
+    /// Structured detail for a program, such as the findings of a failed validation.
+    pub(crate) details: Option<Value>,
+    /// Extra lines for a person, shown between the message and the hint.
+    pub(crate) lines: Vec<String>,
 }
 
 impl CliError {
@@ -39,12 +43,19 @@ impl CliError {
             request_id: None,
             http_status: None,
             retryable: false,
+            details: None,
+            lines: Vec::new(),
         }
     }
 
     /// The command line, a flag value or a request file is wrong.
     pub(crate) fn usage(message: impl Into<String>) -> Self {
         Self::new("usage", Exit::Usage, message)
+    }
+
+    /// There is no usable API key.
+    pub(crate) fn auth(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(code, Exit::Auth, message)
     }
 
     /// Something that should never happen did.
@@ -92,6 +103,9 @@ impl CliError {
     /// The text printed on stderr for a person.
     pub(crate) fn to_human(&self, ui: Ui) -> String {
         let mut text = format!("{} {}", ui.error_label("error:"), self.message);
+        for line in &self.lines {
+            let _ = write!(text, "\n  {line}");
+        }
         if let Some(hint) = &self.hint {
             let _ = write!(text, "\n  {} {hint}", ui.dim("hint:"));
         }
@@ -114,6 +128,7 @@ struct ErrorBody<'a> {
     request_id: Option<&'a str>,
     http_status: Option<u16>,
     retryable: bool,
+    details: Option<&'a Value>,
 }
 
 impl<'a> From<&'a CliError> for ErrorBody<'a> {
@@ -127,6 +142,7 @@ impl<'a> From<&'a CliError> for ErrorBody<'a> {
             request_id: error.request_id.as_deref(),
             http_status: error.http_status,
             retryable: error.retryable,
+            details: error.details.as_ref(),
         }
     }
 }
@@ -205,6 +221,8 @@ impl From<jev_client::Error> for CliError {
             request_id: error.request_id().map(str::to_owned),
             http_status: error.status(),
             retryable: error.is_retryable(),
+            details: None,
+            lines: Vec::new(),
         }
     }
 }
@@ -300,14 +318,15 @@ mod tests {
                 "hint": "wait and try again; for batch work lower --concurrency",
                 "request_id": "req_1",
                 "http_status": 429,
-                "retryable": true
+                "retryable": true,
+                "details": null
             }})
         );
         assert_eq!(
             CliError::usage("bad flag").to_json(),
             json!({ "error": {
                 "code": "usage", "exit_code": 2, "error_type": null, "message": "bad flag",
-                "hint": null, "request_id": null, "http_status": null, "retryable": false
+                "hint": null, "request_id": null, "http_status": null, "retryable": false, "details": null
             }})
         );
     }

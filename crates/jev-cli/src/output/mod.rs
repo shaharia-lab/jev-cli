@@ -14,8 +14,6 @@ use clap::ValueEnum;
 use serde::Serialize;
 use serde_json::Value;
 
-// First used outside the test hooks by `jev eval` (issue #9).
-#[cfg_attr(not(feature = "internal-test-hooks"), allow(unused_imports))]
 pub(crate) use envelope::ResultEnvelope;
 pub(crate) use table::{Cell, Table};
 pub(crate) use ui::Ui;

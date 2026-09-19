@@ -101,6 +101,7 @@ fn render(arguments: &RenderArgs, context: &mut Context<'_>) -> Result<(), CliEr
         &arguments.requested_model,
         arguments.request_id.clone(),
         Duration::from_millis(arguments.latency_ms),
+        None,
     );
     context.output.emit(&envelope, context.stdout)
 }

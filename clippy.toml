@@ -7,3 +7,8 @@ allow-indexing-slicing-in-tests = true
 
 # Proper nouns that `doc_markdown` would otherwise want in backticks. ".." keeps clippy's defaults.
 doc-valid-idents = ["TypeSafe", ".."]
+
+# `result_large_err` protects hot paths, where a large `Err` slows every successful call. The CLI's
+# error is built at most once per process and carries what a person or an agent needs to act on it
+# (message, hint, request id, validation findings), so richness wins over size. The default is 128.
+large-error-threshold = 256

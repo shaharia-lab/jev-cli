@@ -145,6 +145,11 @@ async fn a_successful_evaluation_sends_the_request_as_written_and_returns_metada
     assert_eq!(reply.meta.request_id.as_deref(), Some("req_ok"));
     assert_eq!(reply.meta.attempts, 1);
     assert!(clock.sleeps().is_empty());
+    let raw: Value = serde_json::from_str(reply.raw_body.as_deref().unwrap()).unwrap();
+    assert_eq!(
+        raw["answers"]["is_urgent"]["noul"], 0.92,
+        "the body is kept as received"
+    );
 
     let received = &server.received_requests().await.unwrap()[0];
     let sent: Value = serde_json::from_slice(&received.body).unwrap();

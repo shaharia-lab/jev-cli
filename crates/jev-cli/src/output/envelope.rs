@@ -1,9 +1,5 @@
 //! The result of an evaluation, as every output format presents it.
 
-// Until `jev eval` exists (issue #9) only the test hooks build an envelope, so a build without
-// them sees this module as unused.
-#![cfg_attr(not(feature = "internal-test-hooks"), allow(dead_code))]
-
 use std::fmt::Write as _;
 use std::time::Duration;
 
@@ -52,6 +48,7 @@ impl ResultEnvelope {
         requested_model: &str,
         request_id: Option<String>,
         latency: Duration,
+        usd_per_mtok: Option<f64>,
     ) -> Self {
         let passed_through = raw
             .and_then(|raw| raw.get("answers"))
@@ -77,7 +74,11 @@ impl ResultEnvelope {
             requested_model: requested_model.to_owned(),
             answers,
             usage: response.usage,
-            cost_usd: pricing::estimate_cost_usd(&response.model, response.usage),
+            // A configured price is the user's own rate and applies to whatever model answered.
+            cost_usd: usd_per_mtok
+                .and_then(pricing::Price::from_usd_per_mtok)
+                .map(|price| price.estimate_usd(response.usage))
+                .or_else(|| pricing::estimate_cost_usd(&response.model, response.usage)),
             request_id,
             latency_ms: u64::try_from(latency.as_millis()).unwrap_or(u64::MAX),
         }
@@ -251,6 +252,7 @@ mod tests {
             "jev-latest",
             Some("req_1".into()),
             Duration::from_millis(905),
+            None,
         )
     }
 
@@ -297,8 +299,14 @@ mod tests {
         raw["model"] = json!("jev-9.0.0");
         let response = serde_json::from_value(raw.clone()).unwrap();
 
-        let envelope =
-            ResultEnvelope::new(&response, Some(&raw), "jev-latest", None, Duration::ZERO);
+        let envelope = ResultEnvelope::new(
+            &response,
+            Some(&raw),
+            "jev-latest",
+            None,
+            Duration::ZERO,
+            None,
+        );
 
         assert_eq!(
             serde_json::to_value(&envelope).unwrap()["cost_usd"],
@@ -311,7 +319,8 @@ mod tests {
     fn without_a_raw_body_the_typed_answers_are_used() {
         let response = serde_json::from_value(raw_response()).unwrap();
 
-        let envelope = ResultEnvelope::new(&response, None, "jev-latest", None, Duration::ZERO);
+        let envelope =
+            ResultEnvelope::new(&response, None, "jev-latest", None, Duration::ZERO, None);
 
         assert_eq!(
             envelope.answers["is_urgent"],

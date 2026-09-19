@@ -30,6 +30,11 @@ impl Interaction {
         }
     }
 
+    /// Whether stdin is a terminal, which decides if a pipe is there to be read.
+    pub(crate) const fn stdin_is_terminal(self) -> bool {
+        self.stdin_is_terminal
+    }
+
     /// Succeeds only when a prompt can be shown and answered.
     ///
     /// `what` is the thing that would be asked for ("the API key") and `instead` tells the reader
