@@ -139,7 +139,7 @@ fn send(
     context: &mut Context<'_>,
 ) -> Result<batch::Outcome, CliError> {
     let notifier = context.notifier;
-    let mut meter = Meter::new(notifier, arguments.progress);
+    let mut meter = Meter::new(notifier);
     let outcome = {
         let mut observe = |event: Event| meter.observe(event);
         let interrupt = || {
@@ -387,7 +387,7 @@ fn write_summary(path: &str, summary: &Summary) -> Result<(), CliError> {
 }
 
 /// Progress on stderr: a bar redrawn in place on a terminal, a line every few seconds elsewhere
-/// when --progress asks for it, nothing under --quiet.
+/// (FR-BATCH-10), nothing under --quiet.
 struct Meter {
     notifier: Notifier,
     style: MeterStyle,
@@ -404,15 +404,13 @@ enum MeterStyle {
 }
 
 impl Meter {
-    fn new(notifier: Notifier, asked: bool) -> Self {
+    fn new(notifier: Notifier) -> Self {
         let style = if notifier.quiet {
             MeterStyle::Off
         } else if notifier.terminal {
             MeterStyle::Bar
-        } else if asked {
-            MeterStyle::Lines
         } else {
-            MeterStyle::Off
+            MeterStyle::Lines
         };
         Self {
             notifier,
@@ -597,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn a_terminal_gets_a_bar_a_pipe_gets_lines_only_when_asked_and_quiet_gets_nothing() {
+    fn a_terminal_gets_a_bar_a_pipe_gets_lines_and_quiet_gets_nothing() {
         let notifier = |quiet, terminal| Notifier {
             format: Format::Json,
             ui: Ui::plain(),
@@ -605,13 +603,8 @@ mod tests {
             terminal,
         };
 
-        let styles = [
-            (notifier(false, true), false),
-            (notifier(false, false), true),
-            (notifier(false, false), false),
-            (notifier(true, true), true),
-        ]
-        .map(|(notifier, asked)| Meter::new(notifier, asked).style);
+        let styles = [(false, true), (false, false), (true, true), (true, false)]
+            .map(|(quiet, terminal)| Meter::new(notifier(quiet, terminal)).style);
 
         assert_eq!(
             styles,
