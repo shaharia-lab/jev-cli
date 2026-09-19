@@ -15,6 +15,10 @@ use serde_json::{Value, json};
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+#[cfg(unix)]
+#[path = "support/pty.rs"]
+mod pty;
+
 const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-7a1e";
 
 /// `jev`, isolated from the environment of whoever runs the tests, pointed at `server`.
@@ -1141,16 +1145,13 @@ async fn ordered_records_follow_the_input_when_the_first_row_is_the_slowest() {
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn a_terminal_gets_a_progress_bar_that_is_erased_before_the_summary() {
-    use std::io::Read as _;
-
     let server = slow_mock(Duration::from_millis(20)).await;
     let dir = scratch("progress-bar");
     let questions = write(&dir, "questions.yaml", QUESTIONS);
     let input = write(&dir, "rows.jsonl", &rows(20, &[]));
     let out = dir.join("results.jsonl");
-    let (mut pty, pts) = pty_process::blocking::open().unwrap();
-    pty.resize(pty_process::Size::new(40, 120)).unwrap();
-    let mut command = pty_process::blocking::Command::new(assert_cmd::cargo::cargo_bin("jev"))
+    let mut command = process(Some(&server));
+    command
         .args([
             "batch",
             "run",
@@ -1164,41 +1165,17 @@ async fn a_terminal_gets_a_progress_bar_that_is_erased_before_the_summary() {
         .args(["--concurrency", "2", "--out"])
         .arg(&out)
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null());
-    for variable in [
-        "CI",
-        "LANG",
-        "LC_ALL",
-        "LC_CTYPE",
-        "JEV_OUTPUT",
-        "JEV_NO_INPUT",
-    ] {
-        command = command.env_remove(variable);
-    }
-    let mut child = command
+        .stdout(std::process::Stdio::null())
         .env("TERM", "xterm-256color")
         .env("NO_COLOR", "1")
-        .env("JEV_CONFIG_DIR", dir.join("config"))
-        .env("TYPESAFE_API_KEY", SENTINEL_KEY)
-        .env("TYPESAFE_BASE_URL", server.uri())
-        .spawn(pts)
-        .unwrap();
+        .env("JEV_CONFIG_DIR", dir.join("config"));
 
-    let seen = tokio::task::spawn_blocking(move || {
-        let mut seen = Vec::new();
-        let mut buffer = [0_u8; 4096];
-        while let Ok(read) = pty.read(&mut buffer) {
-            if read == 0 {
-                break;
-            }
-            seen.extend(buffer.iter().take(read));
-        }
-        String::from_utf8(seen).unwrap()
-    })
-    .await
-    .unwrap();
+    let (status, seen) =
+        tokio::task::spawn_blocking(move || pty::run(command, pty::Stream::Stderr))
+            .await
+            .unwrap();
 
-    assert!(child.wait().unwrap().success());
+    assert!(status.success(), "{status}: {seen:?}");
     assert!(!seen.contains(SENTINEL_KEY));
     let bar = "\r\u{1b}[2K";
     assert!(seen.contains(&format!("{bar}#")), "{seen:?}");
