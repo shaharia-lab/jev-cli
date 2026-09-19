@@ -7,6 +7,7 @@
 | [commands.md](commands.md) | Every command, flag, default and example — generated from the command tree, so it matches the binary. Regenerate it with `make reference`. |
 | [exit-codes.md](exit-codes.md) | The exit-code contract, the gating flags, and the JSON that `jev` prints on stdout and stderr. |
 | [configuration.md](configuration.md) | Settings and their precedence, the configuration file, profiles, the API key, environment variables and updates. |
+| [threat-model.md](threat-model.md) | The long form of [SECURITY.md](../SECURITY.md): what is protected, which inputs are not trusted, where each protection lives and how it is tested, and the findings of the last review. Update it with any change that moves a trust boundary. |
 
 The [README](../README.md) is the place to start, [SECURITY.md](../SECURITY.md) has the security
 model, and [`skills/jev-cli/SKILL.md`](../skills/jev-cli/SKILL.md) is the same ground written for

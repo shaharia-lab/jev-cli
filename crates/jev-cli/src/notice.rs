@@ -9,7 +9,7 @@ use std::io::Write;
 
 use serde_json::json;
 
-use crate::output::{Format, Ui};
+use crate::output::{Format, Ui, printable};
 
 /// Something the user should know, with a stable code and, when there is one, a next action.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,13 +52,14 @@ impl Notice {
             let kind = if self.info { "info" } else { "warning" };
             serde_json::Value::Object([(kind.to_owned(), body)].into_iter().collect()).to_string()
         } else {
+            let message = printable(&self.message);
             let mut text = if self.info {
-                self.message.clone()
+                message.into_owned()
             } else {
-                format!("{} {}", ui.warning_label("warning:"), self.message)
+                format!("{} {message}", ui.warning_label("warning:"))
             };
             if let Some(hint) = &self.hint {
-                let _ = write!(text, "\n  {} {hint}", ui.dim("hint:"));
+                let _ = write!(text, "\n  {} {}", ui.dim("hint:"), printable(hint));
             }
             text
         };
@@ -107,6 +108,16 @@ mod tests {
         assert_eq!(
             emitted(&notice, Format::Json),
             "{\"warning\":{\"code\":\"config_unknown_key\",\"message\":\"unknown key `modle`\",\"hint\":\"did you mean `model`?\"}}\n"
+        );
+    }
+
+    #[test]
+    fn quoted_text_cannot_drive_the_terminal() {
+        let notice = Notice::warning("x", "file \u{1b}[2J.yaml").hint("see \u{9b}31m");
+
+        assert_eq!(
+            emitted(&notice, Format::Table),
+            "warning: file \\u{1b}[2J.yaml\n  hint: see \\u{9b}31m\n"
         );
     }
 

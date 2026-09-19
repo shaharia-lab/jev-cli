@@ -16,7 +16,7 @@ use serde_json::Value;
 
 pub(crate) use envelope::ResultEnvelope;
 pub(crate) use table::{Cell, Table};
-pub(crate) use ui::Ui;
+pub(crate) use ui::{Ui, printable};
 
 use crate::error::CliError;
 

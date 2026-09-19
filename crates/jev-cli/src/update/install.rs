@@ -430,7 +430,9 @@ pub(crate) fn probe(exe: &Path, expected: Option<&Version>) -> Result<Version, S
         .args(["version", "--output", "json"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::null())
+        // `jev version` needs no key, and a binary that has not passed its self-test gets none.
+        .env_remove("TYPESAFE_API_KEY");
     #[cfg(feature = "internal-test-hooks")]
     match expected {
         Some(version) => command.env("JEV_TEST_VERSION", version.to_string()),

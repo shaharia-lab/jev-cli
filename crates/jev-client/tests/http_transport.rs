@@ -502,6 +502,39 @@ async fn a_success_with_an_unreadable_body_is_an_invalid_response_that_never_quo
 }
 
 #[tokio::test]
+async fn a_success_that_echoes_the_key_is_scrubbed_before_anything_reads_it() {
+    let server = MockServer::start().await;
+    let echo = format!("Bearer {SENTINEL_KEY}");
+    let body = json!({
+        "model": "jev-1.13.0",
+        "answers": {
+            "is_urgent": { "type": "noul", "noul": 0.92, "echo": echo },
+            "later": { "type": "from_the_future", "echo": echo }
+        },
+        "usage": { "input_tokens": 312, "output_tokens": 48 },
+        "echo": echo
+    });
+    respond(&server, ResponseTemplate::new(200).set_body_json(body), 1).await;
+
+    let reply = transport(&server, &FakeClock::new())
+        .evaluate(&request())
+        .await
+        .unwrap();
+
+    let raw = reply.raw_body.unwrap();
+    assert!(!raw.contains(SENTINEL_KEY), "{raw}");
+    assert!(raw.contains("Bearer [REDACTED]"), "{raw}");
+    let unknown = serde_json::to_string(&reply.body.answers["later"]).unwrap();
+    assert!(!unknown.contains(SENTINEL_KEY), "{unknown}");
+    assert_eq!(
+        reply.body.answers["is_urgent"]
+            .as_noul()
+            .map(|answer| answer.noul),
+        Some(0.92)
+    );
+}
+
+#[tokio::test]
 async fn models_are_listed_with_a_get() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

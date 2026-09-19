@@ -24,6 +24,7 @@ relationships. Pick issues whose blockers are closed.
 | Scope, numbered requirements (`FR-`, `NFR-`, `SEC-`, `REL-`, `ENG-`, `TEST-`, `DIST-`), exit codes, decision log | `docs/prd/v1.md` |
 | API shapes, errors, limits, pricing, env vars | `docs/context/02-http-api.md` |
 | Server quirks found in live testing | `docs/context/05-live-test-findings.md` |
+| Trust boundaries, what is verified where, review findings | `docs/threat-model.md` |
 | How good questions are written; model weak spots | `docs/context/03-design-rules.md` |
 | Full upstream docs (gitignored mirror) | run `scripts/fetch-upstream-docs.sh`, then `docs/upstream/` |
 
@@ -217,6 +218,15 @@ CI turns it on with `--all-features`; a second, default-features test run proves
 do not contain them. Tests must isolate the environment (`CI`, `NO_COLOR`, `TERM`, `LANG`, `JEV_*`,
 `TYPESAFE_*`): CI sets `CI=true`, and a developer's shell has a UTF-8 locale. What a person sees is
 tested on a real pseudo-terminal in `tests/terminal.rs` (Unix only).
+
+`tests/secret_leak.rs` is the cross-cutting net under every per-feature sentinel test: it runs
+every command `jev spec` lists, at `-vvv` with and without `--debug-bodies`, with the key from the
+environment and from the credentials file, against a mock API that echoes the key and the request,
+and asserts that the key reaches no stream and no file, that `state` reaches neither stderr nor a
+file nobody named, that only the transport and the release client can open a connection, and that
+nothing goes to a host that is neither the API nor GitHub. A new command needs a scenario there;
+the test names it until it has one. The reasoning behind all of it is `docs/threat-model.md`,
+which is user-facing and stays when the other planning docs go.
 
 Every parser of outside input is fuzzed (`fuzz/`, cargo-fuzz on nightly, a workspace of its own).
 Entry points live in each crate's `src/fuzz.rs` behind `#[cfg(any(test, fuzzing))]`, so they reach

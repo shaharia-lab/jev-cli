@@ -1,6 +1,32 @@
 //! How human output looks: colour and character set.
 
+use std::borrow::Cow;
+
 use anstyle::{AnsiColor, Style};
+
+/// `text` with every control character except newline and tab written out as an escape, such as
+/// `\u{1b}`, so that it cannot drive a terminal.
+///
+/// For text that `jev` did not write itself and prints for a person: a server's error message or
+/// a value from a file. A terminal escape in it could otherwise retitle the window, rewrite what
+/// is already on screen, or hide a line.
+pub(crate) fn printable(text: &str) -> Cow<'_, str> {
+    let is_unsafe = |c: char| c.is_control() && c != '\n' && c != '\t';
+    if !text.contains(is_unsafe) {
+        return Cow::Borrowed(text);
+    }
+    Cow::Owned(
+        text.chars()
+            .map(|c| {
+                if is_unsafe(c) {
+                    c.escape_unicode().to_string()
+                } else {
+                    c.to_string()
+                }
+            })
+            .collect(),
+    )
+}
 
 /// The look of human-readable output for one stream.
 ///
@@ -100,7 +126,16 @@ impl Ui {
 
 #[cfg(test)]
 mod tests {
-    use super::Ui;
+    use super::{Ui, printable};
+
+    #[test]
+    fn printable_text_cannot_drive_a_terminal_but_keeps_its_lines() {
+        assert_eq!(printable("plain\n\ttext"), "plain\n\ttext");
+        assert_eq!(
+            printable("bad \u{1b}]0;title\u{7}\u{1b}[2J\r\u{9b}x"),
+            "bad \\u{1b}]0;title\\u{7}\\u{1b}[2J\\u{d}\\u{9b}x"
+        );
+    }
 
     #[test]
     fn plain_output_has_no_escape_codes_and_no_unicode() {

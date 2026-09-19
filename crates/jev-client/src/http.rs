@@ -227,6 +227,9 @@ impl HttpTransport {
             .with_status(status.as_u16())
             .with_request_id(request_id.clone()),
         })?;
+        // A server that echoes the `Authorization` header back must not get the key into anything
+        // built from the body: an unknown answer kept as raw JSON, `--raw` output, an error or a log.
+        let bytes = self.api_key.scrub_bytes(bytes);
 
         tracing::debug!(
             %method,
@@ -238,9 +241,9 @@ impl HttpTransport {
             "received response"
         );
         if self.log_bodies {
-            // Opting in to bodies is opting in to seeing `state`, never the key: a server that
-            // echoes a header back must not get it into a log.
-            let body = self.api_key.scrub(&String::from_utf8_lossy(&bytes));
+            // Opting in to bodies is opting in to seeing `state`, never the key, which `bytes` no
+            // longer holds.
+            let body = String::from_utf8_lossy(&bytes);
             tracing::debug!(target: BODY_LOG_TARGET, %body, "response body");
         }
 
