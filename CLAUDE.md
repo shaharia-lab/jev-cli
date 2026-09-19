@@ -281,8 +281,8 @@ GitHub Releases + install scripts (self-updating), the existing `shaharia-lab/ho
 (`Formula/jev.rb` plus pinned `jev@<version>.rb`, written via the scoped GitHub App token), and
 crates.io. Package-manager installs never self-update.
 
-`release-please.yml` tags and drafts a release, then dispatches `release.yml` on the tag (a tag
-made with `GITHUB_TOKEN` triggers nothing, a dispatch does). `release.yml` is staged: plan → build
+`release-please.yml` tags and drafts a release as the `jev-release-bot` App (a tag or pull request
+made with `GITHUB_TOKEN` triggers no workflow), and the tag starts `release.yml`. It is staged: plan → build
 (six native runners) → package → publish (draft, `release` environment) → verify → finalize →
 `stable`. Any other ref is a dry run. The archive layout and the full asset list are checked by
 `scripts/release/verify-assets.sh`; change it with the matrix. Signing goes between package and
