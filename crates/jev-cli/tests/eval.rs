@@ -52,8 +52,6 @@ fn jev(server: Option<&MockServer>) -> Command {
         "JEV_CONFIG_DIR",
         Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-config"),
     );
-    // Never the real keychain of whoever runs the tests.
-    command.env("JEV_NO_KEYCHAIN", "1");
     command.env("TYPESAFE_API_KEY", SENTINEL_KEY);
     // An address nothing listens on, so a test that forgets its mock cannot reach the real API.
     command.env(

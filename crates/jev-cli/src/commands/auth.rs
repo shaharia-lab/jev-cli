@@ -11,8 +11,7 @@ use crate::cli::{AuthCommand, LoginArgs, LogoutArgs, StatusArgs};
 use crate::client;
 use crate::config::{Key, Settings};
 use crate::credentials::{
-    API_KEY_VARIABLE, CredentialStore, Credentials, KEY_CONSOLE_URL, KeySource, SecretStore,
-    fingerprint,
+    API_KEY_VARIABLE, CredentialStore, Credentials, KEY_CONSOLE_URL, KeySource, fingerprint,
 };
 use crate::error::CliError;
 use crate::notice::Notice;
@@ -36,31 +35,7 @@ fn login(arguments: &LoginArgs, context: &mut Context<'_>) -> Result<(), CliErro
     }
 
     let credentials = Credentials::new(&context.env, context.store()?.dir());
-    let store: &dyn SecretStore = match (&credentials.keychain, arguments.insecure_storage) {
-        (Some(keychain), false) => keychain.as_ref(),
-        (_, true) => &credentials.file,
-        (None, false) => {
-            // No keychain on this machine. The file holds the key in clear text, so a person is
-            // asked first, and anyone who cannot be asked is told.
-            let path = credentials.file.path().display().to_string();
-            if context.interaction.ensure_can_prompt("", "").is_ok() {
-                if !confirm(&format!(
-                    "No keychain is available. Store the key in clear text in {path}, readable only by you? [y/N] "
-                ))? {
-                    return Err(CliError::usage("nothing was stored").hint(format!(
-                        "set {API_KEY_VARIABLE} instead, or pass --insecure-storage to use the file"
-                    )));
-                }
-            } else {
-                context.notify(
-                    &Notice::warning("insecure_storage", format!("no keychain is available, so the key is stored in clear text in {path}, readable only by you"))
-                        .hint("pass --insecure-storage to choose this on purpose, or use TYPESAFE_API_KEY instead"),
-                );
-            }
-            &credentials.file
-        }
-    };
-    store.set(&profile, &key)?;
+    credentials.file.set(&profile, &key)?;
 
     if context.env.get(API_KEY_VARIABLE).is_some() {
         context.notify(
@@ -70,7 +45,7 @@ fn login(arguments: &LoginArgs, context: &mut Context<'_>) -> Result<(), CliErro
     }
     let outcome = LoggedIn {
         profile,
-        stored_in: store.source().name(),
+        stored_in: credentials.file.path().display().to_string(),
         verified: !arguments.skip_verify,
         fingerprint: fingerprint(&key),
     };
@@ -103,18 +78,6 @@ fn read_key(arguments: &LoginArgs, context: &mut Context<'_>) -> Result<ApiKey, 
             .hint("use --with-token to read it from stdin")
     })?;
     ApiKey::new(typed).map_err(unusable)
-}
-
-fn confirm(question: &str) -> Result<bool, CliError> {
-    eprint!("{question}");
-    let mut answer = String::new();
-    std::io::stdin()
-        .read_line(&mut answer)
-        .map_err(|error| CliError::usage(format!("could not read the answer: {error}")))?;
-    Ok(matches!(
-        answer.trim().to_ascii_lowercase().as_str(),
-        "y" | "yes"
-    ))
 }
 
 /// Checks a key against the API before it is stored.
@@ -169,7 +132,6 @@ fn status(arguments: &StatusArgs, context: &mut Context<'_>) -> Result<(), CliEr
         source: found.as_ref().map(|(_, source)| source.name()),
         fingerprint: found.as_ref().map(|(key, _)| fingerprint(key)),
         base_url,
-        keychain_available: credentials.keychain.is_some(),
         check,
     };
     context.output.emit(&report, context.stdout)?;
@@ -229,13 +191,8 @@ fn logout(arguments: &LogoutArgs, context: &mut Context<'_>) -> Result<(), CliEr
 
     let mut removed = Vec::new();
     for profile in &profiles {
-        for store in credentials.stores() {
-            if store.delete(profile)? {
-                removed.push(Removed {
-                    profile: profile.clone(),
-                    from: store.source().name(),
-                });
-            }
+        if credentials.file.delete(profile)? {
+            removed.push(profile.clone());
         }
     }
     if context.env.get(API_KEY_VARIABLE).is_some() {
@@ -255,17 +212,14 @@ fn logout(arguments: &LogoutArgs, context: &mut Context<'_>) -> Result<(), CliEr
 /// Removes every stored key of a profile. Used when the profile itself is deleted.
 pub(crate) fn forget(profile: &str, context: &Context<'_>) -> Result<(), CliError> {
     let credentials = Credentials::new(&context.env, context.store()?.dir());
-    for store in credentials.stores() {
-        store.delete(profile)?;
-    }
-    Ok(())
+    credentials.file.delete(profile).map(|_| ())
 }
 
 #[derive(Debug, Serialize)]
 struct LoggedIn {
     profile: String,
-    /// `keychain` or `file`.
-    stored_in: &'static str,
+    /// The credentials file the key was written to.
+    stored_in: String,
     /// Whether the key was checked against the API before it was stored.
     verified: bool,
     /// The last four characters of the key. Nothing more of it is ever shown.
@@ -276,8 +230,8 @@ impl Render for LoggedIn {
     fn human(&self, _: Ui) -> String {
         let verified = if self.verified { "verified and " } else { "" };
         format!(
-            "key {} {verified}stored in the {} for profile `{}`\n",
-            self.fingerprint, self.stored_in, self.profile
+            "key {} {verified}stored for profile `{}` in {}\n",
+            self.fingerprint, self.profile, self.stored_in
         )
     }
 }
@@ -287,13 +241,11 @@ struct Status {
     profile: String,
     /// `true` when there is a key and, unless --offline, the API accepted it.
     authenticated: bool,
-    /// `env`, `keychain` or `file`; `null` when there is no key.
+    /// `env` or `file`; `null` when there is no key.
     source: Option<&'static str>,
     /// The last four characters of the key. Nothing more of it is ever shown.
     fingerprint: Option<String>,
     base_url: String,
-    /// Whether this machine has a keychain `jev` can use.
-    keychain_available: bool,
     /// The live check against the API; `null` with --offline, or when there is no key.
     check: Option<LiveCheck>,
 }
@@ -337,14 +289,6 @@ impl Render for Status {
             ),
             ("base URL", self.base_url.clone()),
             ("live check", check),
-            (
-                "keychain",
-                if self.keychain_available {
-                    "available".to_owned()
-                } else {
-                    "not available".to_owned()
-                },
-            ),
         ] {
             table.row(vec![Cell::styled(label, ui.dim(label)), Cell::plain(value)]);
         }
@@ -356,14 +300,8 @@ const KEY_FROM_ENV: &str = KeySource::Env.name();
 
 #[derive(Debug, Serialize)]
 struct LoggedOut {
-    /// Every key that was removed, and where from. Empty when there was nothing stored.
-    removed: Vec<Removed>,
-}
-
-#[derive(Debug, Serialize)]
-struct Removed {
-    profile: String,
-    from: &'static str,
+    /// The profiles whose stored key was removed. Empty when there was nothing stored.
+    removed: Vec<String>,
 }
 
 impl Render for LoggedOut {
@@ -372,12 +310,8 @@ impl Render for LoggedOut {
             return "no stored key to remove\n".to_owned();
         }
         let mut text = String::new();
-        for removed in &self.removed {
-            let _ = writeln!(
-                text,
-                "removed the key for profile `{}` from the {}",
-                removed.profile, removed.from
-            );
+        for profile in &self.removed {
+            let _ = writeln!(text, "removed the stored key of profile `{profile}`");
         }
         text
     }

@@ -109,7 +109,7 @@ fn ensure_exists(file: &ConfigFile, name: &str) -> Result<(), CliError> {
     })
 }
 
-/// A profile name is used in a TOML key, a flag value and (later) a keychain entry, so it is kept
+/// A profile name is used in a TOML key, a flag value and the credentials file, so it is kept
 /// to characters that need no quoting anywhere.
 fn validate_name(name: &str) -> Result<(), CliError> {
     let valid = (1..=64).contains(&name.len())

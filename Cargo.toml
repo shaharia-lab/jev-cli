@@ -23,7 +23,6 @@ clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
 fastrand = "2.5"
 httpdate = "1.0.3"
 indexmap = { version = "2.14", features = ["serde"] }
-keyring = "4.2"
 # TLS is rustls with the `ring` provider and the platform certificate verifier, wired up explicitly
 # in `jev-client`. No OpenSSL, no `native-tls`, and no process-global crypto provider.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "http2", "system-proxy"] }

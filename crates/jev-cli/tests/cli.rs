@@ -31,8 +31,6 @@ fn jev() -> Command {
         "JEV_CONFIG_DIR",
         std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-config"),
     );
-    // Never the real keychain of whoever runs the tests.
-    command.env("JEV_NO_KEYCHAIN", "1");
     command
 }
 

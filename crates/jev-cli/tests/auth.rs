@@ -1,4 +1,4 @@
-//! `jev auth login|status|logout`, always with the keychain switched off and a scratch directory.
+//! `jev auth login|status|logout`, always in a scratch configuration directory.
 
 // Clippy's `allow-unwrap-in-tests` and `allow-panic-in-tests` cover `#[test]` functions only, not
 // the helper functions an integration test shares, where failing fast is equally the point.
@@ -56,8 +56,6 @@ impl Sandbox {
             command.env_remove(variable);
         }
         command.env("JEV_CONFIG_DIR", &self.0);
-        // Never the real keychain of whoever runs the tests.
-        command.env("JEV_NO_KEYCHAIN", "1");
         command.env(
             "TYPESAFE_BASE_URL",
             server.map_or_else(|| "http://127.0.0.1:9".to_owned(), MockServer::uri),
@@ -148,14 +146,7 @@ async fn login_status_and_logout_work_per_profile_without_a_terminal() {
     // Login: the key arrives on stdin, is verified, and lands in the credentials file.
     let mut login = sandbox.jev(Some(&server));
     login
-        .args([
-            "auth",
-            "login",
-            "--with-token",
-            "--insecure-storage",
-            "--profile",
-            "work",
-        ])
+        .args(["auth", "login", "--with-token", "--profile", "work"])
         .write_stdin(format!("{SENTINEL_KEY}\n"));
     let login = run(login).await;
     assert_eq!(
@@ -166,7 +157,12 @@ async fn login_status_and_logout_work_per_profile_without_a_terminal() {
     );
     assert_eq!(
         json_of(&login.stdout),
-        json!({ "profile": "work", "stored_in": "file", "verified": true, "fingerprint": "…wxyz" })
+        json!({
+            "profile": "work",
+            "stored_in": sandbox.credentials().to_str().unwrap(),
+            "verified": true,
+            "fingerprint": "…wxyz"
+        })
     );
     assert_key_is_masked(&login);
     assert!(
@@ -208,10 +204,7 @@ async fn login_status_and_logout_work_per_profile_without_a_terminal() {
     let mut logout = sandbox.jev(Some(&server));
     logout.args(["auth", "logout", "--profile", "work"]);
     let logout = run(logout).await;
-    assert_eq!(
-        json_of(&logout.stdout),
-        json!({ "removed": [{ "profile": "work", "from": "file" }] })
-    );
+    assert_eq!(json_of(&logout.stdout), json!({ "removed": ["work"] }));
     let mut after = sandbox.jev(Some(&server));
     after.args(["models", "list", "--profile", "work"]);
     let after = run(after).await;
@@ -235,7 +228,7 @@ async fn the_environment_variable_always_wins_over_a_stored_key() {
     let sandbox = Sandbox::new("env-wins");
     let mut login = sandbox.jev(Some(&server));
     login
-        .args(["auth", "login", "--with-token", "--insecure-storage"])
+        .args(["auth", "login", "--with-token"])
         .write_stdin(SENTINEL_KEY);
     assert_eq!(run(login).await.code, 0);
 
@@ -288,7 +281,7 @@ async fn a_rejected_key_is_not_stored() {
     let sandbox = Sandbox::new("rejected");
     let mut command = sandbox.jev(Some(&server));
     command
-        .args(["auth", "login", "--with-token", "--insecure-storage"])
+        .args(["auth", "login", "--with-token"])
         .write_stdin("a-wrong-key-that-the-api-rejects");
 
     let run = run(command).await;
@@ -322,7 +315,6 @@ async fn skip_verify_stores_without_a_network_and_an_unreachable_api_stores_noth
             "auth",
             "login",
             "--with-token",
-            "--insecure-storage",
             "--max-retries",
             "0",
             "--timeout",
@@ -331,13 +323,7 @@ async fn skip_verify_stores_without_a_network_and_an_unreachable_api_stores_noth
         .write_stdin(SENTINEL_KEY);
     let mut skipped = sandbox.jev(None);
     skipped
-        .args([
-            "auth",
-            "login",
-            "--with-token",
-            "--insecure-storage",
-            "--skip-verify",
-        ])
+        .args(["auth", "login", "--with-token", "--skip-verify"])
         .write_stdin(SENTINEL_KEY);
 
     let unreachable = run(unreachable).await;
@@ -357,25 +343,34 @@ async fn skip_verify_stores_without_a_network_and_an_unreachable_api_stores_noth
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn without_a_keychain_and_without_a_person_the_file_is_used_and_said_so() {
+async fn login_needs_no_storage_choice_and_there_is_no_flag_for_one() {
     let server = api().await;
-    let sandbox = Sandbox::new("fallback");
+    let sandbox = Sandbox::new("plain-login");
     let mut command = sandbox.jev(Some(&server));
     command
         .args(["auth", "login", "--with-token"])
         .write_stdin(SENTINEL_KEY);
+    let mut old_flag = sandbox.jev(Some(&server));
+    old_flag
+        .args(["auth", "login", "--with-token", "--insecure-storage"])
+        .write_stdin(SENTINEL_KEY);
 
-    let run = run(command).await;
+    let (run, old_flag) = (run(command).await, run(old_flag).await);
 
-    assert_eq!(run.code, 0, "{}", run.stderr);
-    assert_eq!(json_of(&run.stdout)["stored_in"], "file");
-    let warning = &json_of(&run.stderr)["warning"];
-    assert_eq!(warning["code"], "insecure_storage");
-    assert!(
-        warning["message"].as_str().unwrap().contains("clear text"),
-        "{warning}"
+    assert_eq!(
+        (run.code, run.stderr.as_str()),
+        (0, ""),
+        "one store, so nothing to warn about"
+    );
+    assert_eq!(
+        json_of(&run.stdout)["stored_in"],
+        sandbox.credentials().to_str().unwrap()
     );
     assert_key_is_masked(&run);
+    assert_eq!(
+        old_flag.code, 2,
+        "the keychain is gone, and so is the flag that bypassed it"
+    );
 }
 
 #[cfg(unix)]
@@ -386,13 +381,7 @@ async fn a_credentials_file_others_can_read_is_refused_with_the_exact_chmod() {
     let sandbox = Sandbox::new("too-open");
     let mut login = sandbox.jev(None);
     login
-        .args([
-            "auth",
-            "login",
-            "--with-token",
-            "--insecure-storage",
-            "--skip-verify",
-        ])
+        .args(["auth", "login", "--with-token", "--skip-verify"])
         .write_stdin(SENTINEL_KEY);
     assert_eq!(run(login).await.code, 0);
     assert_eq!(
@@ -426,7 +415,7 @@ async fn status_never_shows_more_than_the_last_four_characters_in_any_format() {
     let sandbox = Sandbox::new("masking");
     let mut login = sandbox.jev(Some(&server));
     login
-        .args(["auth", "login", "--with-token", "--insecure-storage"])
+        .args(["auth", "login", "--with-token"])
         .write_stdin(SENTINEL_KEY);
     assert_eq!(run(login).await.code, 0);
 
@@ -472,7 +461,6 @@ async fn deleting_a_profile_forgets_its_key_and_logout_all_clears_everything() {
                 "auth",
                 "login",
                 "--with-token",
-                "--insecure-storage",
                 "--skip-verify",
                 "--profile",
                 profile,
@@ -493,10 +481,7 @@ async fn deleting_a_profile_forgets_its_key_and_logout_all_clears_everything() {
     let mut logout = sandbox.jev(None);
     logout.args(["auth", "logout", "--all"]);
     let logout = run(logout).await;
-    assert_eq!(
-        json_of(&logout.stdout),
-        json!({ "removed": [{ "profile": "two", "from": "file" }] })
-    );
+    assert_eq!(json_of(&logout.stdout), json!({ "removed": ["two"] }));
     assert!(
         !fs::read_to_string(sandbox.credentials())
             .unwrap()
