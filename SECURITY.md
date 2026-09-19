@@ -114,8 +114,8 @@ gh attestation verify "$archive" --repo shaharia-lab/jev-cli
   downloaded every published asset and checked it with the standard minisign CLI against the
   committed primary key, checked every checksum, and verified the build provenance attestations.
   If any check fails, nothing is published and no later stage (crates.io, Homebrew) runs.
-- `jev` compiles in both public keys, primary and next, and its updater accepts a release signed
-  by either of them. Nothing else can change which keys it trusts.
+- The updater, which is still being built, compiles in both public keys, primary and next, and
+  accepts a release signed by either of them. Nothing else can change which keys it trusts.
 
 ### Key rotation
 
