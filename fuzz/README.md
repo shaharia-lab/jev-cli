@@ -32,8 +32,8 @@ cargo +nightly fuzz list        # the targets
 
 `run.sh` starts from the committed seeds in `seeds/<target>/` plus whatever corpus earlier runs
 left in `corpus/<target>/` (not committed), and uses the dictionary in `dict/jev.dict`. The
-[Fuzz workflow](../.github/workflows/fuzz.yml) runs every target for ten minutes each week, on
-demand, and on a pull request that changes this directory.
+[Fuzz workflow](../.github/workflows/fuzz.yml) runs every target for ten minutes each week and on
+demand, and for one minute on a pull request that changes this directory.
 
 ## When a target crashes
 
