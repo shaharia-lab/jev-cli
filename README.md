@@ -81,6 +81,14 @@ price, so a capped server refuses it) and set a per-call limit:
 `"--profile", "<name>"` to use a profile's key and settings. Logs go to stderr; stdout carries only
 protocol messages.
 
+A seventh tool, `batch_run`, runs `jev batch run` over a JSONL or CSV file and writes the records
+to a new file. It is offered only when the server is started with one or more `--allow-dir <dir>`,
+and it reads and writes nothing outside them: every path is resolved, `..` and symbolic links
+included, before it is used. Cap it with `--max-batch-rows` and `--max-batch-cost-usd`; a run over
+either is refused before anything is sent. It reports progress to clients that ask for it and
+returns the run's summary:
+`"args": ["mcp", "serve", "--model", "jev-1.13.0", "--allow-dir", "/path/to/data", "--max-batch-rows", "1000", "--max-batch-cost-usd", "0.05"]`.
+
 ## Agent skill
 
 [`skills/jev-cli`](skills/jev-cli/SKILL.md) is an [agent skill](https://agentskills.io) that

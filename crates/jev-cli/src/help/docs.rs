@@ -794,18 +794,26 @@ such as Claude Code, Claude Desktop, Cursor or VS Code. From a shell script or C
 `jev eval`, `jev noul`, `jev choice` or `jev score` directly instead.",
         input: "The Model Context Protocol on stdin, one JSON-RPC message per line, until the \
 client closes stdin. Tools: evaluate (a state and many questions), noul, choice, score (one \
-question each), validate (offline, needs no key) and list_models. The API key, base URL and model \
-come from the usual places (--profile, the environment, the profile), read once at start-up; the \
-key is never part of a tool's input, result or error. Every call is validated offline before \
-anything is sent.",
+question each), validate (offline, needs no key) and list_models. With one or more --allow-dir, \
+also batch_run: `jev batch run` over a JSONL or CSV file, writing its records to a new file; every \
+path must resolve inside an --allow-dir (`..` and symbolic links included), and a run over \
+--max-batch-rows or --max-batch-cost-usd is refused before anything is sent. Without --allow-dir \
+no tool touches a file. The API key, base URL and model come from the usual places (--profile, \
+the environment, the profile), read once at start-up; the key is never part of a tool's input, \
+result or error. Every call is validated offline before anything is sent.",
         output: "Protocol messages only on stdout; logs, notices and warnings go to stderr. A tool \
 result is the same JSON envelope as `jev eval -o json`, plus `session` (calls made and estimated \
-spend so far). A failure is a tool error carrying the JSON error object `jev` prints on stderr, \
-and an invalid request is a tool error listing every finding. API failures never end the server; \
-if stdout cannot be written, it exits 1.",
+spend so far); batch_run's result is the run's summary, as `jev batch run` reports it, with `out` \
+and `session`, and it sends progress notifications when the call has a progressToken. A failure is \
+a tool error carrying the JSON error object `jev` prints on stderr, and an invalid request is a \
+tool error listing every finding. API failures never end the server; if stdout cannot be written, \
+it exits 1.",
         exit_codes: &[
             code_as(Exit::Success, "the client closed stdin"),
-            code_as(Exit::Usage, "usage, or a broken configuration"),
+            code_as(
+                Exit::Usage,
+                "usage, a broken configuration, or an --allow-dir that is not a directory",
+            ),
         ],
         examples: &[
             Example {
@@ -817,8 +825,8 @@ if stdout cannot be written, it exits 1.",
                 command: "jev mcp serve --model jev-1.13.0 --max-cost-usd-per-call 0.001",
             },
             Example {
-                description: "Use a profile's key and settings; logs go to stderr, never stdout",
-                command: "jev mcp serve --profile work -v",
+                description: "Also offer batch_run over files in one directory, at most 1000 rows and $0.05 a run",
+                command: "jev mcp serve --model jev-1.13.0 --allow-dir ./data \\\n  --max-batch-rows 1000 --max-batch-cost-usd 0.05",
             },
             Example {
                 description: "Check it from a shell: list the tools' names",

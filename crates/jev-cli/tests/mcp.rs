@@ -18,6 +18,13 @@ const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-7d02";
 
 /// `jev mcp serve`, isolated from the environment of whoever runs the tests, pointed at `server`.
 fn serve(server: Option<&MockServer>, extra: &[&str]) -> Command {
+    let mut command = jev(server);
+    command.args(["mcp", "serve"]).args(extra);
+    command
+}
+
+/// `jev`, isolated from the environment of whoever runs the tests, pointed at `server`.
+fn jev(server: Option<&MockServer>) -> Command {
     let mut command = Command::cargo_bin("jev").unwrap();
     for variable in [
         "CI",
@@ -46,7 +53,6 @@ fn serve(server: Option<&MockServer>, extra: &[&str]) -> Command {
         "TYPESAFE_BASE_URL",
         server.map_or_else(|| "http://127.0.0.1:9".to_owned(), MockServer::uri),
     );
-    command.args(["mcp", "serve"]).args(extra);
     command
 }
 
@@ -57,10 +63,11 @@ struct Run {
 }
 
 impl Run {
-    /// Every line on stdout, each of which must be a JSON-RPC 2.0 message.
+    /// Every response on stdout. Each line must be a JSON-RPC 2.0 message.
     fn messages(&self) -> Vec<Value> {
         self.stdout
             .lines()
+            .filter(|line| !line.contains(r#""method":"notifications/"#))
             .map(|line| {
                 let message: Value = serde_json::from_str(line)
                     .unwrap_or_else(|error| panic!("not JSON ({error}): {line:?}"));
@@ -69,6 +76,20 @@ impl Run {
                     message.get("result").is_some() != message.get("error").is_some(),
                     "a response has a result or an error: {line}"
                 );
+                message
+            })
+            .collect()
+    }
+
+    /// Every notification on stdout.
+    fn notifications(&self) -> Vec<Value> {
+        self.stdout
+            .lines()
+            .filter(|line| line.contains(r#""method":"notifications/"#))
+            .map(|line| {
+                let message: Value = serde_json::from_str(line).unwrap();
+                assert_eq!(message["jsonrpc"], "2.0", "{line}");
+                assert!(message.get("id").is_none(), "{line}");
                 message
             })
             .collect()
@@ -701,4 +722,474 @@ async fn a_negative_limit_is_a_usage_error() {
         "{}",
         run.stderr
     );
+}
+
+/// A fresh directory for a `batch_run` test: `allowed/` holds `rows.jsonl` (three tickets) and
+/// `questions.json`; `outside/` holds `secret.jsonl`.
+fn sandbox(name: &str) -> std::path::PathBuf {
+    let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("mcp-batch-{name}"));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("allowed")).unwrap();
+    std::fs::create_dir_all(base.join("outside")).unwrap();
+    std::fs::write(
+        base.join("allowed/rows.jsonl"),
+        "{\"id\": \"t-1\", \"body\": \"Refund please\"}\n{\"id\": \"t-2\", \"body\": \"App crashes\"}\n{\"id\": \"t-3\", \"body\": \"Hello\"}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        base.join("allowed/questions.json"),
+        json!({ "questions": { "is_urgent": { "type": "noul", "instructions": "Does this convey urgency?" } } })
+            .to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        base.join("outside/secret.jsonl"),
+        "{\"body\": \"secret\"}\n",
+    )
+    .unwrap();
+    base
+}
+
+fn allow(base: &Path) -> String {
+    format!("--allow-dir={}", base.join("allowed").display())
+}
+
+/// Every file in a directory, by name.
+fn files(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// The records of a file, without `latency_ms`, which differs from run to run.
+fn records(path: &Path) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let mut record: Value = serde_json::from_str(line).unwrap();
+            record.as_object_mut().unwrap().remove("latency_ms");
+            record
+        })
+        .collect()
+}
+
+fn tool_names(run: &Run, id: u64) -> Vec<String> {
+    run.response(id)["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_allow_dir_batch_run_is_neither_listed_nor_callable() {
+    let base = sandbox("unlisted");
+    let arguments = json!({ "questions_file": "questions.json", "input": base.join("allowed/rows.jsonl"), "out": base.join("allowed/out.jsonl") });
+
+    let run = run(
+        serve(None, &[]),
+        &[
+            initialize(),
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }),
+            call(2, "batch_run", &arguments),
+        ],
+    )
+    .await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(!tool_names(&run, 1).contains(&"batch_run".to_owned()));
+    assert_eq!(
+        run.response(2)["error"]["message"],
+        "Unknown tool: `batch_run`"
+    );
+    assert_eq!(
+        files(&base.join("allowed")),
+        ["questions.json", "rows.jsonl"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn with_allow_dir_batch_run_is_listed_and_says_where_it_may_read_and_write() {
+    let base = sandbox("listed");
+
+    let run = run(
+        serve(None, &[&allow(&base)]),
+        &[
+            initialize(),
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }),
+        ],
+    )
+    .await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(tool_names(&run, 1).last().unwrap(), "batch_run");
+    let tool = run.response(1)["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "batch_run")
+        .unwrap()
+        .clone();
+    let root = std::fs::canonicalize(base.join("allowed")).unwrap();
+    assert!(
+        tool["description"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("`{}`", root.display())),
+        "{}",
+        tool["description"]
+    );
+    assert_eq!(tool["annotations"]["readOnlyHint"], false);
+    assert_eq!(tool["annotations"]["destructiveHint"], false);
+    let schema = &tool["inputSchema"];
+    assert_eq!(schema["required"], json!(["input", "out"]));
+    assert_eq!(schema["additionalProperties"], false);
+    assert!(!schema.to_string().contains("$ref"), "{schema}");
+    assert_eq!(
+        schema["properties"]["questions"]["additionalProperties"]["oneOf"]
+            .as_array()
+            .map(Vec::len),
+        Some(3),
+        "the questions are typed as a request's are: {}",
+        schema["properties"]["questions"]
+    );
+    assert!(
+        schema["properties"]["input_format"]
+            .to_string()
+            .contains(r#""const":"csv""#),
+        "{}",
+        schema["properties"]["input_format"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_writes_the_records_jev_batch_run_writes_reports_progress_and_returns_the_summary() {
+    let base = sandbox("run");
+    let server = api(json!({ "is_urgent": { "type": "noul", "noul": 0.9 } })).await;
+
+    let cli = jev(Some(&server))
+        .args(["batch", "run", "-f"])
+        .arg(base.join("allowed/questions.json"))
+        .arg("--input")
+        .arg(base.join("allowed/rows.jsonl"))
+        .arg("--out")
+        .arg(base.join("allowed/cli.jsonl"))
+        .args([
+            "--state-field",
+            "body",
+            "--id-field",
+            "id",
+            "--ordered",
+            "--model",
+            "jev-1.13.0",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        cli.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cli.stderr)
+    );
+
+    let run = run(
+        serve(Some(&server), &[&allow(&base), "--model", "jev-1.13.0", "--max-batch-rows", "3", "--max-batch-cost-usd", "0.01"]),
+        &[
+            initialize(),
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+                "name": "batch_run",
+                "arguments": { "questions_file": "questions.json", "input": "rows.jsonl", "out": "mcp.jsonl",
+                               "state_field": "body", "id_field": "id", "ordered": true },
+                "_meta": { "progressToken": "batch-1" }
+            }}),
+        ],
+    )
+    .await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(run.stderr, "");
+    assert_no_key(&run);
+    let (result, failed) = run.tool(1);
+    assert!(!failed, "{result}");
+    assert_eq!(
+        (
+            &result["rows_total"],
+            &result["ok"],
+            &result["failed"],
+            &result["skipped"]
+        ),
+        (&json!(3), &json!(3), &json!(0), &json!(0))
+    );
+    assert_eq!(result["models"], json!(["jev-1.13.0"]));
+    assert_eq!(result["stopped_by"], Value::Null);
+    let out = std::fs::canonicalize(base.join("allowed/mcp.jsonl")).unwrap();
+    assert_eq!(result["out"], out.display().to_string());
+    assert_eq!(result["session"]["calls"], 3);
+    assert!(result["cost_usd"].as_f64().unwrap() > 0.0, "{result}");
+
+    assert!(
+        !std::fs::read_to_string(&out)
+            .unwrap()
+            .contains(SENTINEL_KEY)
+    );
+    let written = records(&out);
+    assert_eq!(written.len(), 3);
+    assert_eq!(written, records(&base.join("allowed/cli.jsonl")));
+    assert_eq!(written[0]["id"], "t-1");
+    assert_eq!(written[0]["status"], "ok");
+
+    let bodies = sent(&server).await;
+    assert_eq!(
+        bodies.len(),
+        6,
+        "three rows from the command, three from the tool"
+    );
+    assert_eq!(bodies[3..], bodies[..3]);
+
+    let progress = run.notifications();
+    assert!(!progress.is_empty(), "{}", run.stdout);
+    let last = &progress.last().unwrap()["params"];
+    assert_eq!(progress[0]["method"], "notifications/progress");
+    assert_eq!(last["progressToken"], "batch-1");
+    assert_eq!((&last["progress"], &last["total"]), (&json!(3), &json!(3)));
+    assert_eq!(last["message"], "3/3 rows: 3 ok, 0 failed");
+    let lines: Vec<&str> = run.stdout.lines().collect();
+    assert!(
+        lines.last().unwrap().contains(r#""id":1"#),
+        "progress comes before the result: {}",
+        run.stdout
+    );
+}
+
+/// Escapes through symbolic links planted inside the allowed directory. Creating a link needs
+/// privileges on Windows, so they are tried on Unix only.
+#[cfg(unix)]
+fn symlinked_escapes(base: &Path) -> Vec<Value> {
+    use std::os::unix::fs::symlink;
+
+    let outside = base.join("outside");
+    symlink(
+        outside.join("secret.jsonl"),
+        base.join("allowed/link.jsonl"),
+    )
+    .unwrap();
+    symlink(&outside, base.join("allowed/linked-dir")).unwrap();
+    vec![
+        json!({ "input": "link.jsonl", "out": "f.jsonl" }),
+        json!({ "input": "linked-dir/secret.jsonl", "out": "g.jsonl" }),
+        json!({ "input": "rows.jsonl", "out": "linked-dir/h.jsonl" }),
+    ]
+}
+
+#[cfg(not(unix))]
+fn symlinked_escapes(_: &Path) -> Vec<Value> {
+    Vec::new()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_path_outside_the_allowed_directories_is_refused_before_anything_is_written_or_sent() {
+    let base = sandbox("escape");
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let outside = base.join("outside");
+    let mut attempts = vec![
+        json!({ "input": "../outside/secret.jsonl", "out": "a.jsonl" }),
+        json!({ "input": outside.join("secret.jsonl"), "out": "b.jsonl" }),
+        json!({ "input": "rows.jsonl", "out": "../outside/c.jsonl" }),
+        json!({ "input": "rows.jsonl", "out": outside.join("d.jsonl") }),
+        json!({ "questions_file": "../outside/secret.jsonl", "input": "rows.jsonl", "out": "e.jsonl" }),
+    ];
+    attempts.extend(symlinked_escapes(&base));
+    let mut messages = vec![initialize()];
+    for (id, attempt) in attempts.iter().enumerate() {
+        let mut arguments = attempt.clone();
+        if arguments.get("questions_file").is_none() {
+            arguments["questions_file"] = json!("questions.json");
+        }
+        messages.push(call(id as u64 + 1, "batch_run", &arguments));
+    }
+    let before = files(&base.join("allowed"));
+
+    let run = run(serve(Some(&server), &[&allow(&base)]), &messages).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    for (id, attempt) in attempts.iter().enumerate() {
+        let (error, failed) = run.tool(id as u64 + 1);
+        assert!(failed, "{attempt}: {error}");
+        assert_eq!(
+            error["error"]["code"], "path_not_allowed",
+            "{attempt}: {error}"
+        );
+        assert_eq!(error["error"]["exit_code"], 2);
+        assert!(
+            !error.to_string().contains("secret\""),
+            "nothing of a file outside is shown: {error}"
+        );
+    }
+    assert_eq!(
+        files(&outside),
+        ["secret.jsonl"],
+        "nothing was written outside"
+    );
+    assert_eq!(
+        files(&base.join("allowed")),
+        before,
+        "nothing was written inside"
+    );
+    assert!(sent(&server).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_over_a_cap_is_refused_with_zero_requests_and_no_output_file() {
+    let base = sandbox("caps");
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let questions =
+        json!({ "is_urgent": { "type": "noul", "instructions": "Does this convey urgency?" } });
+    let arguments = |out: &str, model: &str| json!({ "questions": questions, "model": model, "input": "rows.jsonl", "out": out, "state_field": "body" });
+
+    let rows = run(
+        serve(Some(&server), &[&allow(&base), "--max-batch-rows", "2"]),
+        &[
+            initialize(),
+            call(1, "batch_run", &arguments("rows.out.jsonl", "jev-1.13.0")),
+            call(2, "batch_run", &{
+                let mut limited = arguments("limited.out.jsonl", "jev-1.13.0");
+                limited["limit"] = json!(2);
+                limited["out"] = json!("../outside/limited.out.jsonl");
+                limited
+            }),
+        ],
+    )
+    .await;
+    let cost = run(
+        serve(
+            Some(&server),
+            &[&allow(&base), "--max-batch-cost-usd", "0.0000001"],
+        ),
+        &[
+            initialize(),
+            call(1, "batch_run", &arguments("cost.out.jsonl", "jev-1.13.0")),
+            call(2, "batch_run", &arguments("alias.out.jsonl", "jev-latest")),
+        ],
+    )
+    .await;
+
+    let (error, failed) = rows.tool(1);
+    assert!(failed);
+    assert_eq!(error["error"]["code"], "row_limit");
+    assert_eq!(error["error"]["exit_code"], 2);
+    assert_eq!(
+        error["error"]["details"],
+        json!({ "rows": 3, "max_batch_rows": 2 })
+    );
+    assert_eq!(
+        rows.tool(2).0["error"]["code"],
+        "path_not_allowed",
+        "paths are checked before the input is read"
+    );
+
+    let (error, failed) = cost.tool(1);
+    assert!(failed);
+    assert_eq!(error["error"]["code"], "cost_limit");
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("above the limit of $0.000000 per run; nothing was sent"),
+        "{error}"
+    );
+    assert_eq!(error["error"]["details"]["rows"], 3);
+    assert_eq!(error["error"]["details"]["max_batch_cost_usd"], 0.000_000_1);
+    let (error, failed) = cost.tool(2);
+    assert!(failed);
+    assert_eq!(error["error"]["code"], "cost_limit");
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("has no known price"),
+        "{error}"
+    );
+
+    assert_eq!(
+        files(&base.join("allowed")),
+        ["questions.json", "rows.jsonl"]
+    );
+    assert!(sent(&server).await.is_empty());
+    assert_no_key(&rows);
+    assert_no_key(&cost);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bad_batch_arguments_are_tool_errors() {
+    let base = sandbox("arguments");
+    let questions = json!({ "q": { "type": "noul", "instructions": "Is it urgent?" } });
+
+    let run = run(
+        serve(None, &[&allow(&base)]),
+        &[
+            initialize(),
+            call(1, "batch_run", &json!({ "input": "rows.jsonl", "out": "a.jsonl" })),
+            call(2, "batch_run", &json!({ "questions": questions, "questions_file": "questions.json", "input": "rows.jsonl", "out": "a.jsonl" })),
+            call(3, "batch_run", &json!({ "questions": questions, "input": "rows.jsonl", "out": "a.jsonl", "resume": true })),
+            call(4, "batch_run", &json!({ "questions": questions, "input": "rows.jsonl", "out": "rows.jsonl" })),
+            call(5, "batch_run", &json!({ "questions": questions, "input": "rows.jsonl", "out": "a.jsonl", "state_field": "subject" })),
+            call(6, "batch_run", &json!({ "questions": questions, "input": "missing.jsonl", "out": "a.jsonl" })),
+        ],
+    )
+    .await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let message = |id| {
+        let (error, failed) = run.tool(id);
+        assert!(failed, "{error}");
+        assert_eq!(error["error"]["code"], "usage", "{error}");
+        error["error"]["message"].as_str().unwrap().to_owned()
+    };
+    assert!(message(1).contains("give either `questions` or `questions_file`"));
+    assert!(message(2).contains("give either `questions` or `questions_file`"));
+    assert!(
+        message(3).contains("unknown field `resume`"),
+        "{}",
+        message(3)
+    );
+    assert!(message(4).contains("already exists"));
+    assert!(
+        message(5).contains("cannot be used; nothing was sent"),
+        "{}",
+        message(5)
+    );
+    assert!(message(6).contains("does not exist"));
+    assert_eq!(
+        files(&base.join("allowed")),
+        ["questions.json", "rows.jsonl"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_batch_limits_need_allow_dir_and_an_allowed_directory_must_exist() {
+    let missing = run(serve(None, &["--allow-dir", "/no/such/jev/dir"]), &[]).await;
+    let orphan = run(serve(None, &["--max-batch-rows", "10"]), &[]).await;
+
+    assert_eq!((missing.code, missing.stdout.as_str()), (2, ""));
+    assert!(
+        missing.stderr.contains("is not an existing directory"),
+        "{}",
+        missing.stderr
+    );
+    assert_eq!((orphan.code, orphan.stdout.as_str()), (2, ""));
+    assert!(orphan.stderr.contains("--allow-dir"), "{}", orphan.stderr);
 }

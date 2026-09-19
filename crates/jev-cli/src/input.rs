@@ -63,7 +63,20 @@ pub(crate) fn read_document(
         })?;
         (text, source.to_owned())
     };
+    parse_document(&text, source, &shown, format)
+}
 
+/// Parses the text of a request file read from `source`, which is called `shown` in an error.
+///
+/// # Errors
+///
+/// A usage error when the text is not well-formed, as [`read_document`] describes.
+pub(crate) fn parse_document(
+    text: &str,
+    source: &str,
+    shown: &str,
+    format: Option<InputFormat>,
+) -> Result<Document, CliError> {
     let format = format.unwrap_or_else(|| {
         match Path::new(source)
             .extension()
@@ -87,9 +100,9 @@ pub(crate) fn read_document(
     };
     match format {
         InputFormat::Json => {
-            Document::from_json_str(&text).map_err(|error| malformed("JSON", error.to_string()))
+            Document::from_json_str(text).map_err(|error| malformed("JSON", error.to_string()))
         }
-        InputFormat::Yaml => serde_saphyr::from_str::<Document>(&text)
+        InputFormat::Yaml => serde_saphyr::from_str::<Document>(text)
             .map_err(|error| malformed("YAML", first_line(&error.to_string()))),
     }
 }

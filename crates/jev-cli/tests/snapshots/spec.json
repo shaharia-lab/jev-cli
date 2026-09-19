@@ -2644,8 +2644,8 @@
       "about": "Serve jev's tools to an MCP client (Claude Code, Claude Desktop, Cursor, VS Code) over stdio",
       "implemented": true,
       "when_to_use": "Use `jev mcp serve` when an AI agent should call Jev as a tool, through an MCP client such as Claude Code, Claude Desktop, Cursor or VS Code. From a shell script or CI, call `jev eval`, `jev noul`, `jev choice` or `jev score` directly instead.",
-      "input": "The Model Context Protocol on stdin, one JSON-RPC message per line, until the client closes stdin. Tools: evaluate (a state and many questions), noul, choice, score (one question each), validate (offline, needs no key) and list_models. The API key, base URL and model come from the usual places (--profile, the environment, the profile), read once at start-up; the key is never part of a tool's input, result or error. Every call is validated offline before anything is sent.",
-      "output": "Protocol messages only on stdout; logs, notices and warnings go to stderr. A tool result is the same JSON envelope as `jev eval -o json`, plus `session` (calls made and estimated spend so far). A failure is a tool error carrying the JSON error object `jev` prints on stderr, and an invalid request is a tool error listing every finding. API failures never end the server; if stdout cannot be written, it exits 1.",
+      "input": "The Model Context Protocol on stdin, one JSON-RPC message per line, until the client closes stdin. Tools: evaluate (a state and many questions), noul, choice, score (one question each), validate (offline, needs no key) and list_models. With one or more --allow-dir, also batch_run: `jev batch run` over a JSONL or CSV file, writing its records to a new file; every path must resolve inside an --allow-dir (`..` and symbolic links included), and a run over --max-batch-rows or --max-batch-cost-usd is refused before anything is sent. Without --allow-dir no tool touches a file. The API key, base URL and model come from the usual places (--profile, the environment, the profile), read once at start-up; the key is never part of a tool's input, result or error. Every call is validated offline before anything is sent.",
+      "output": "Protocol messages only on stdout; logs, notices and warnings go to stderr. A tool result is the same JSON envelope as `jev eval -o json`, plus `session` (calls made and estimated spend so far); batch_run's result is the run's summary, as `jev batch run` reports it, with `out` and `session`, and it sends progress notifications when the call has a progressToken. A failure is a tool error carrying the JSON error object `jev` prints on stderr, and an invalid request is a tool error listing every finding. API failures never end the server; if stdout cannot be written, it exits 1.",
       "arguments": [],
       "flags": [
         {
@@ -2661,6 +2661,48 @@
           "setting": null,
           "heading": "Guardrails",
           "help": "Refuse, before sending, any call whose estimated cost in US dollars is above this"
+        },
+        {
+          "name": "--allow-dir",
+          "short": null,
+          "value_name": "DIR",
+          "type": "string",
+          "required": false,
+          "multiple": true,
+          "default": null,
+          "values": null,
+          "env": null,
+          "setting": null,
+          "heading": "Batch",
+          "help": "Offer the `batch_run` tool, reading and writing files only inside this directory; repeat for more"
+        },
+        {
+          "name": "--max-batch-rows",
+          "short": null,
+          "value_name": "N",
+          "type": "integer",
+          "required": false,
+          "multiple": false,
+          "default": null,
+          "values": null,
+          "env": null,
+          "setting": null,
+          "heading": "Batch",
+          "help": "Refuse, before sending, any `batch_run` over more rows than this"
+        },
+        {
+          "name": "--max-batch-cost-usd",
+          "short": null,
+          "value_name": "USD",
+          "type": "number",
+          "required": false,
+          "multiple": false,
+          "default": null,
+          "values": null,
+          "env": null,
+          "setting": null,
+          "heading": "Batch",
+          "help": "Refuse, before sending, any `batch_run` whose estimated cost in US dollars is above this"
         }
       ],
       "exit_codes": [
@@ -2672,7 +2714,7 @@
         {
           "code": 2,
           "name": "usage",
-          "meaning": "usage, or a broken configuration"
+          "meaning": "usage, a broken configuration, or an --allow-dir that is not a directory"
         }
       ],
       "examples": [
@@ -2685,8 +2727,8 @@
           "command": "jev mcp serve --model jev-1.13.0 --max-cost-usd-per-call 0.001"
         },
         {
-          "description": "Use a profile's key and settings; logs go to stderr, never stdout",
-          "command": "jev mcp serve --profile work -v"
+          "description": "Also offer batch_run over files in one directory, at most 1000 rows and $0.05 a run",
+          "command": "jev mcp serve --model jev-1.13.0 --allow-dir ./data \\\n  --max-batch-rows 1000 --max-batch-cost-usd 0.05"
         },
         {
           "description": "Check it from a shell: list the tools' names",
