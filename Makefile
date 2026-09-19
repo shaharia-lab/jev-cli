@@ -41,6 +41,7 @@ audit:
 policy:
 	scripts/ci/check-action-pins.sh
 	scripts/ci/check-client-deps.sh
+	scripts/ci/check-pr-title.sh --self-test
 	SKIP=no-commit-to-branch,cargo-fmt,cargo-clippy pre-commit run --all-files
 
 # Regenerates the published JSON Schemas in schemas/ from this build. A test fails when they are

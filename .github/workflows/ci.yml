@@ -135,6 +135,8 @@ jobs:
         run: scripts/ci/check-action-pins.sh
       - name: jev-client stays free of CLI, terminal and config crates
         run: scripts/ci/check-client-deps.sh
+      - name: The pull request title rule accepts and rejects what it should
+        run: scripts/ci/check-pr-title.sh --self-test
       # Keeps .pre-commit-config.yaml valid and applies the hygiene hooks to every file, including
       # for contributors who did not install the hooks. The branch guard is meaningless in CI and
       # the cargo hooks already run in the jobs above.
