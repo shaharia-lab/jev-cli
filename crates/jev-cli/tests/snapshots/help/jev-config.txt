@@ -4,9 +4,9 @@ Usage: jev config [OPTIONS] <COMMAND>
 
 Commands:
   get    Print the effective value of one setting, and where it comes from
-  set    Store a setting in the selected profile
+  set    Store a setting in the selected profile (the `update.*` settings apply to every profile)
   unset  Remove a setting from the selected profile, restoring its default
-  list   Print every effective setting and where its value comes from (flag, env, profile or
+  list   Print every effective setting and where its value comes from (flag, env, profile, config or
          default)
   path   Print the path of the configuration file
 

@@ -430,10 +430,12 @@ yourself. Use `jev auth status` to check what is left.",
 from: a flag, the environment, the profile or the default. Use `jev config list` for every \
 setting at once, and `jev config set` to change one.",
         input: "KEY, one of `base_url`, `model`, `output`, `timeout`, `max_retries`, \
-`concurrency` and `warn_unpinned`. --profile reads another profile, and flags on the same command \
-line count, as they would on a real run.",
-        output: "`key`, `value`, `source` (`flag`, `env`, `profile` or `default`), `origin` (the \
-flag, variable or profile) and `description`. `--field value` prints just the value.",
+`concurrency` and `warn_unpinned`, which each profile has, and `update.auto`, `update.channel` \
+and `update.pin_version`, which every profile shares. --profile reads another profile, and flags on \
+the same command line count, as they would on a real run.",
+        output: "`key`, `value`, `source` (`flag`, `env`, `profile`, `config` for an `update.*` \
+setting in the file, or `default`), `origin` (the flag, variable, profile or key) and \
+`description`. `--field value` prints just the value.",
         exit_codes: &[
             code(Exit::Success),
             code_as(
@@ -455,12 +457,15 @@ flag, variable or profile) and `description`. `--field value` prints just the va
     Doc {
         path: "config set",
         when: "Use `jev config set` to store a default in the selected profile, so that you do not \
-repeat a flag. For one run, pass the flag or set the environment variable instead; \
-`jev config unset` restores the default. The API key is not a setting: use `jev auth login`.",
+repeat a flag, or to change how jev updates itself (`update.*`, for every profile). For one run, \
+pass the flag or set the environment variable instead; `jev config unset` restores the default. The \
+API key is not a setting: use `jev auth login`.",
         input: "KEY and VALUE. The value is checked before anything is written: `timeout` takes \
-`30s` or `500ms`, `output` takes table, json, yaml or jsonl, and so on. --profile chooses the \
-profile to change.",
-        output: "`profile`, `key`, `value` and `changed`.",
+`30s` or `500ms`, `output` takes table, json, yaml or jsonl, `update.auto` true or false, \
+`update.channel` stable or prerelease, `update.pin_version` a version such as 0.3.1 (which turns \
+automatic updates off), and so on. --profile chooses the profile to change; the `update.*` settings \
+go to the `[update]` table, which every profile shares.",
+        output: "`profile` (`null` for an `update.*` setting), `key`, `value` and `changed`.",
         exit_codes: &[
             code_as(Exit::Success, "the setting is stored"),
             code_as(
@@ -478,6 +483,10 @@ written",
                 description: "A longer timeout for the ci profile",
                 command: "jev config set timeout 45s --profile ci -o json",
             },
+            Example {
+                description: "Stop jev updating itself (JEV_AUTO_UPDATE=false does it for one environment)",
+                command: "jev config set update.auto false",
+            },
         ],
     },
     Doc {
@@ -485,9 +494,10 @@ written",
         when: "Use `jev config unset` to remove a setting from the selected profile, so that the \
 environment or the built-in default applies again. Use `jev config set` to change it instead, and \
 `jev config get` to see the value that now applies.",
-        input: "KEY, as for `jev config get`. --profile chooses the profile to change.",
-        output: "`profile`, `key`, `value` (null) and `changed`, false when the profile did not \
-set it.",
+        input: "KEY, as for `jev config get`. --profile chooses the profile to change; an \
+`update.*` setting is removed for every profile.",
+        output: "`profile` (`null` for an `update.*` setting), `key`, `value` (null) and \
+`changed`, false when it was not set.",
         exit_codes: &[
             code(Exit::Success),
             code_as(
@@ -514,7 +524,8 @@ and `jev profile list` for the profiles themselves.",
         input: "Nothing. --profile lists another profile, and flags on the same command line \
 count.",
         output: "`profile` (the selected profile, and how it was selected), `settings` (one row \
-per setting with `key`, `value`, `source`, `origin` and `description`) and `config_file`.",
+per setting with `key`, `value`, `source`, `origin` and `description`, as `jev config get` \
+describes them) and `config_file`.",
         exit_codes: &[
             code(Exit::Success),
             code_as(Exit::Usage, "the configuration cannot be read"),
@@ -840,11 +851,16 @@ it exits 1.",
 to learn whether one exists (exit 20) without changing anything, `jev update --rollback` to go \
 back to the binary the last update replaced, and `jev update --version <x.y.z>` to install one \
 particular release, which is the only way to move to an older one. When Homebrew or cargo \
-installed jev, it prints their command instead and changes nothing. Use `jev version` to see the \
-running version, how it was installed and whether it updates itself.",
-        input: "Nothing but the flags; no API key and no configuration. It contacts only GitHub \
-Releases of shaharia-lab/jev-cli; --rollback, and an update of a package-manager install, contact \
-nothing. \
+installed jev, it prints their command instead and changes nothing. An install made by the install \
+script also updates itself: at most once a day, after a command has finished, a detached process \
+stages a newer release, and the next command swaps it in and says so in one line on stderr; the \
+command's own output and exit code never change. It is off for Homebrew and cargo installs, with \
+CI=true, JEV_AUTO_UPDATE=false, `update.auto = false` or `update.pin_version`, and when jev cannot \
+write to its directory. Use `jev version` to see the running version, how it was installed and \
+whether it updates itself, and why not.",
+        input: "Nothing but the flags; no API key. `update.channel` (stable or prerelease) chooses \
+the releases it follows. It contacts only GitHub Releases of shaharia-lab/jev-cli; --rollback, and \
+an update of a package-manager install, contact nothing. \
 Every download is checked against the release keys compiled into jev (a minisign signature of \
 the archive and of SHA256SUMS, each naming its file and version, and the archive's SHA-256) \
 before anything is written. The new binary is swapped in atomically next to the old one, which is \
@@ -936,7 +952,10 @@ examples).",
         input: "Nothing.",
         output: "`version`, `commit`, `build_date`, `target`, `client_version`, \
 `install_method` (`self_managed` for the install script, `homebrew`, `cargo` or `unknown`), \
-`update_channel` and `auto_update` (`enabled`, and the `reason` when it is off). \
+`update_channel` (`stable` or `prerelease`, from `update.channel`) and `auto_update`: `enabled`, \
+and the `reason` when it is off, naming the first guard that applies (a package manager, a \
+configuration that cannot be read, JEV_AUTO_UPDATE or `update.auto`, `update.pin_version`, CI=true, \
+an install not made by the install script, or a directory jev cannot write to). \
 `--field version` prints just the version.",
         exit_codes: &[code(Exit::Success)],
         examples: &[
@@ -947,6 +966,10 @@ examples).",
             Example {
                 description: "Just the version, for a script",
                 command: "jev version --field version",
+            },
+            Example {
+                description: "Does this jev update itself, and if not, why not?",
+                command: "jev version -o json | jq .auto_update",
             },
         ],
     },

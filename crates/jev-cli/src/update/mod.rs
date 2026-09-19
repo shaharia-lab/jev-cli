@@ -10,9 +10,11 @@
 //! The steps are separate so that the automatic background update can reuse them: [`newest`]
 //! only asks, [`stage`] downloads and verifies into the staging directory, and [`Installation`]
 //! swaps a staged binary in (keeping the previous one for rollback) and runs its self-test.
-//! `jev update` does all of them at once.
+//! `jev update` does all of them at once; the automatic update ([`auto`]) stages in a background
+//! process after one command and swaps at the start of the next.
 
 mod archive;
+pub(crate) mod auto;
 mod github;
 mod install;
 mod method;
@@ -21,6 +23,7 @@ mod verify;
 use semver::Version;
 use serde::Serialize;
 
+use crate::config::{Key, Settings, Source};
 use crate::env::Env;
 use crate::error::CliError;
 use crate::exit::Exit;
@@ -37,8 +40,40 @@ pub(crate) const REPOSITORY: &str = "shaharia-lab/jev-cli";
 /// this. Raise it in a release to stop anyone being moved to releases known to be unsafe.
 pub(crate) const MINIMUM_VERSION: Version = Version::new(0, 1, 0);
 
-/// The only update channel so far: published, non-draft, non-pre-release versions.
-pub(crate) const CHANNEL: &str = "stable";
+/// Which releases updates follow: `update.channel`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Channel {
+    /// Published releases that are not pre-releases. The default.
+    Stable,
+    /// Published releases, pre-releases included.
+    Prerelease,
+}
+
+impl Channel {
+    /// The channel the settings choose; stable when they cannot be read.
+    pub(crate) fn from_settings(settings: Result<&Settings, CliError>) -> Self {
+        match settings
+            .ok()
+            .and_then(|settings| settings.text(Key::UpdateChannel))
+        {
+            Some("prerelease") => Self::Prerelease,
+            _ => Self::Stable,
+        }
+    }
+
+    /// The name, as `update.channel` and `jev version` spell it.
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Prerelease => "prerelease",
+        }
+    }
+}
+
+/// The page of the release of `version`, with its changelog.
+pub(crate) fn release_page(version: &Version) -> String {
+    format!("https://github.com/{REPOSITORY}/releases/tag/v{version}")
+}
 
 /// The largest archive that is downloaded. A release binary is at most 15 MB (NFR-SIZE-1).
 const MAX_ARCHIVE_BYTES: u64 = 100 * 1024 * 1024;
@@ -226,26 +261,68 @@ pub(crate) struct AutoUpdate {
 }
 
 impl AutoUpdate {
-    /// The status for an install made by `method`, in `env`.
-    pub(crate) fn status(method: InstallMethod, env: &Env) -> Self {
-        let off = |reason: String| Self {
-            enabled: false,
-            reason: Some(reason),
-        };
-        if let Some(manager) = method.package_manager() {
-            return off(format!(
-                "installed with {manager}, which updates it: {}",
-                method.upgrade_command(None).unwrap_or_default()
+    /// The status of `installation`, installed by `method`, with these settings and environment.
+    pub(crate) fn status(
+        installation: &Installation,
+        method: InstallMethod,
+        env: &Env,
+        settings: Result<&Settings, CliError>,
+    ) -> Self {
+        let reason = guard(method, env, settings).or_else(|| installation.writable().err());
+        Self {
+            enabled: reason.is_none(),
+            reason,
+        }
+    }
+}
+
+/// The first guard that turns automatic updates off, if any, in the order `jev version` reports
+/// them. Whether the binary can be replaced is left out, because finding out costs a write; see
+/// [`Installation::writable`].
+pub(crate) fn guard(
+    method: InstallMethod,
+    env: &Env,
+    settings: Result<&Settings, CliError>,
+) -> Option<String> {
+    if let Some(manager) = method.package_manager() {
+        return Some(format!(
+            "installed with {manager}, which updates it: {}",
+            method.upgrade_command(None).unwrap_or_default()
+        ));
+    }
+    let settings = match settings {
+        Ok(settings) => settings,
+        // Whether the person turned updates off is unknown, so they stay off.
+        Err(error) => {
+            return Some(format!(
+                "the configuration cannot be read: {}",
+                error.message
             ));
         }
-        if env
-            .get("CI")
-            .is_some_and(|value| value.eq_ignore_ascii_case("true"))
-        {
-            return off("CI=true".to_owned());
-        }
-        off("automatic updates are not in this version of jev yet; run `jev update`".to_owned())
+    };
+    if !settings.switch(Key::UpdateAuto) {
+        return Some(match &settings.get(Key::UpdateAuto).source {
+            Source::Env(variable) => format!("turned off by {variable}"),
+            _ => "turned off by `update.auto = false` in config.toml".to_owned(),
+        });
     }
+    if let Some(version) = settings.text(Key::UpdatePinVersion) {
+        return Some(format!("update.pin_version is set to {version}"));
+    }
+    if env
+        .get("CI")
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+    {
+        return Some("CI=true".to_owned());
+    }
+    if method != InstallMethod::SelfManaged {
+        return Some(
+            "not installed by the install script, so jev does not replace this binary by itself; \
+run `jev update` to update it"
+                .to_owned(),
+        );
+    }
+    None
 }
 
 #[cfg(test)]

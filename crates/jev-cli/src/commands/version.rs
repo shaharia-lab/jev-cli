@@ -3,9 +3,10 @@
 use serde::Serialize;
 
 use super::Context;
+use crate::config::Settings;
 use crate::error::CliError;
 use crate::output::{Cell, Render, Table, Ui};
-use crate::update::{self, AutoUpdate, InstallMethod, Installation};
+use crate::update::{self, AutoUpdate, Channel, InstallMethod, Installation};
 
 /// What `jev version` reports.
 #[derive(Debug, Serialize)]
@@ -22,19 +23,31 @@ pub(crate) struct VersionInfo {
     client_version: &'static str,
     /// Who installed this binary: `self_managed`, `homebrew`, `cargo` or `unknown`.
     install_method: InstallMethod,
-    /// The releases `jev update` follows.
+    /// The releases updates follow: `stable` or `prerelease`.
     update_channel: &'static str,
     /// Whether this binary updates itself, and why not when it does not.
     auto_update: AutoUpdate,
 }
 
 impl VersionInfo {
-    pub(crate) fn current(env: &crate::env::Env) -> Self {
-        // Where the binary is cannot fail in practice; if it did, nothing is known about it.
-        let install_method = Installation::current()
-            .map_or(InstallMethod::Unknown, |installation| {
-                InstallMethod::detect(&installation)
-            });
+    /// This `jev`, with `settings` as the configuration resolved them; a configuration that cannot
+    /// be read turns automatic updates off.
+    pub(crate) fn current(env: &crate::env::Env, settings: Result<&Settings, CliError>) -> Self {
+        // Where the binary is cannot fail in practice; if it did, nothing is known about it, and
+        // nothing is replaced.
+        let installation = Installation::current().ok();
+        let install_method = installation
+            .as_ref()
+            .map_or(InstallMethod::Unknown, InstallMethod::detect);
+        let auto_update = match &installation {
+            Some(installation) => {
+                AutoUpdate::status(installation, install_method, env, settings.clone())
+            }
+            None => AutoUpdate {
+                enabled: false,
+                reason: Some("the running binary cannot be found".to_owned()),
+            },
+        };
         Self {
             version: update::current_version(env).to_string(),
             commit: env!("JEV_BUILD_COMMIT"),
@@ -42,8 +55,8 @@ impl VersionInfo {
             target: env!("JEV_BUILD_TARGET"),
             client_version: jev_client::VERSION,
             install_method,
-            update_channel: update::CHANNEL,
-            auto_update: AutoUpdate::status(install_method, env),
+            update_channel: Channel::from_settings(settings).name(),
+            auto_update,
         }
     }
 }
@@ -72,20 +85,37 @@ impl Render for VersionInfo {
 }
 
 pub(crate) fn run(context: &mut Context<'_>) -> Result<(), CliError> {
-    context
-        .output
-        .emit(&VersionInfo::current(&context.env), context.stdout)
+    context.output.emit(
+        &VersionInfo::current(&context.env, context.settings()),
+        context.stdout,
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use indexmap::IndexMap;
+
     use super::VersionInfo;
+    use crate::config::{Flags, Key, Settings, Value};
     use crate::env::Env;
+    use crate::error::CliError;
     use crate::output::{Render, Ui};
+
+    fn current(env: &Env) -> VersionInfo {
+        let settings = Settings::resolve(
+            &Flags::default(),
+            env,
+            None,
+            &IndexMap::new(),
+            &IndexMap::new(),
+        )
+        .unwrap();
+        VersionInfo::current(env, Ok(&settings))
+    }
 
     #[test]
     fn reports_the_version_commit_date_and_target() {
-        let info = VersionInfo::current(&Env::default());
+        let info = current(&Env::default());
         let json = serde_json::to_value(&info).unwrap();
 
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
@@ -107,7 +137,7 @@ mod tests {
 
     #[test]
     fn the_human_form_leads_with_name_and_version() {
-        let text = VersionInfo::current(&Env::default()).human(Ui::plain());
+        let text = current(&Env::default()).human(Ui::plain());
 
         assert!(
             text.starts_with(concat!("jev ", env!("CARGO_PKG_VERSION"), "\n")),
@@ -122,8 +152,7 @@ mod tests {
 
     #[test]
     fn reports_how_it_was_installed_and_whether_it_updates_itself() {
-        let json =
-            serde_json::to_value(VersionInfo::current(&Env::from([("CI", "true")]))).unwrap();
+        let json = serde_json::to_value(current(&Env::from([("CI", "true")]))).unwrap();
 
         // The test binary lives in the build directory, which no installer owns.
         assert_eq!(json["install_method"], "unknown");
@@ -132,5 +161,49 @@ mod tests {
             json["auto_update"],
             serde_json::json!({ "enabled": false, "reason": "CI=true" })
         );
+    }
+
+    #[test]
+    fn each_guard_is_named_as_the_reason_automatic_updates_are_off() {
+        let reason = |env: &Env, shared: &[(Key, &str)]| {
+            let shared: IndexMap<Key, Value> = shared
+                .iter()
+                .map(|(key, text)| (*key, key.parse(text).unwrap()))
+                .collect();
+            let settings =
+                Settings::resolve(&Flags::default(), env, None, &IndexMap::new(), &shared).unwrap();
+            let json = serde_json::to_value(VersionInfo::current(env, Ok(&settings))).unwrap();
+            assert_eq!(json["auto_update"]["enabled"], false);
+            json["auto_update"]["reason"].as_str().unwrap().to_owned()
+        };
+        let ci = Env::from([("CI", "true")]);
+
+        assert_eq!(
+            reason(
+                &Env::from([("JEV_AUTO_UPDATE", "off"), ("CI", "true")]),
+                &[]
+            ),
+            "turned off by JEV_AUTO_UPDATE"
+        );
+        assert_eq!(
+            reason(&ci, &[(Key::UpdateAuto, "false")]),
+            "turned off by `update.auto = false` in config.toml"
+        );
+        assert_eq!(
+            reason(&ci, &[(Key::UpdatePinVersion, "0.3.1")]),
+            "update.pin_version is set to 0.3.1"
+        );
+        assert!(
+            reason(&Env::default(), &[]).starts_with("not installed by the install script"),
+            "the test binary is in the build directory"
+        );
+
+        let broken = VersionInfo::current(&Env::default(), Err(CliError::usage("bad TOML")));
+        let json = serde_json::to_value(broken).unwrap();
+        assert_eq!(
+            json["auto_update"]["reason"],
+            "the configuration cannot be read: bad TOML"
+        );
+        assert_eq!(json["update_channel"], "stable");
     }
 }

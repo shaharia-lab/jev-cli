@@ -17,14 +17,26 @@ pub(crate) struct Notice {
     pub(crate) code: &'static str,
     pub(crate) message: String,
     pub(crate) hint: Option<String>,
+    info: bool,
 }
 
 impl Notice {
+    /// Something that may be wrong, or will be.
     pub(crate) fn warning(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
             hint: None,
+            info: false,
+        }
+    }
+
+    /// Something that happened and is fine, such as an automatic update: shown without the
+    /// `warning:` label, and as `{"info": ...}` for a program.
+    pub(crate) fn info(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            info: true,
+            ..Self::warning(code, message)
         }
     }
 
@@ -36,10 +48,15 @@ impl Notice {
     /// Writes the warning as text for a person, or as one JSON line for a program.
     pub(crate) fn emit(&self, format: Format, ui: Ui, stderr: &mut dyn Write) {
         let text = if format.is_machine_readable() {
-            json!({ "warning": { "code": self.code, "message": self.message, "hint": self.hint } })
-                .to_string()
+            let body = json!({ "code": self.code, "message": self.message, "hint": self.hint });
+            let kind = if self.info { "info" } else { "warning" };
+            serde_json::Value::Object([(kind.to_owned(), body)].into_iter().collect()).to_string()
         } else {
-            let mut text = format!("{} {}", ui.warning_label("warning:"), self.message);
+            let mut text = if self.info {
+                self.message.clone()
+            } else {
+                format!("{} {}", ui.warning_label("warning:"), self.message)
+            };
             if let Some(hint) = &self.hint {
                 let _ = write!(text, "\n  {} {hint}", ui.dim("hint:"));
             }
@@ -90,6 +107,20 @@ mod tests {
         assert_eq!(
             emitted(&notice, Format::Json),
             "{\"warning\":{\"code\":\"config_unknown_key\",\"message\":\"unknown key `modle`\",\"hint\":\"did you mean `model`?\"}}\n"
+        );
+    }
+
+    #[test]
+    fn information_has_no_warning_label_and_its_own_json_key() {
+        let notice = Notice::info("updated", "jev updated 0.1.0 -> 0.2.0");
+
+        assert_eq!(
+            emitted(&notice, Format::Table),
+            "jev updated 0.1.0 -> 0.2.0\n"
+        );
+        assert_eq!(
+            emitted(&notice, Format::Jsonl),
+            "{\"info\":{\"code\":\"updated\",\"message\":\"jev updated 0.1.0 -> 0.2.0\",\"hint\":null}}\n"
         );
     }
 }

@@ -45,10 +45,33 @@ impl Sandbox {
     }
 
     fn touch(&self, relative: &str) {
+        self.write(relative, "");
+    }
+
+    fn write(&self, relative: &str, contents: &str) {
         let path = self.0.join(relative);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, "").unwrap();
+        fs::write(path, contents).unwrap();
     }
+
+    /// A copy of `jev` as the install script installs it, with its receipt: the only kind of
+    /// install that updates itself.
+    fn install_with_script(&self) -> PathBuf {
+        self.touch("local/bin/.jev-update/receipt.json");
+        self.install("local/bin/jev")
+    }
+
+    /// The configuration directory of this sandbox's `jev`.
+    fn config(&self) -> PathBuf {
+        self.0.join("config")
+    }
+}
+
+/// The copy of `jev` at `exe` with the sandbox's own configuration directory.
+fn jev_in(sandbox: &Sandbox, exe: &Path) -> Command {
+    let mut command = jev(exe);
+    command.env("JEV_CONFIG_DIR", sandbox.config());
+    command
 }
 
 impl Drop for Sandbox {
@@ -70,6 +93,7 @@ fn jev(exe: &Path) -> Command {
         "JEV_OUTPUT",
         "JEV_PROFILE",
         "JEV_NO_INPUT",
+        "JEV_AUTO_UPDATE",
         "JEV_TEST_VERSION",
         "JEV_TEST_UPDATE_URL",
         "JEV_TEST_UPDATE_KEY",
@@ -94,7 +118,22 @@ struct Run {
 }
 
 fn run(command: &mut Command) -> Run {
-    let output = command.timeout(Duration::from_secs(120)).output().unwrap();
+    command.timeout(Duration::from_secs(120));
+    // A copy of `jev` made by one test can be briefly held open for writing by a process another
+    // test is starting at that moment, which inherits the descriptor until it execs; Linux then
+    // refuses to run the copy ("Text file busy"). That clears within milliseconds.
+    let mut attempts = 0;
+    let output = loop {
+        match command.output() {
+            Err(error)
+                if error.kind() == std::io::ErrorKind::ExecutableFileBusy && attempts < 50 =>
+            {
+                attempts += 1;
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            outcome => break outcome.unwrap(),
+        }
+    };
     Run {
         code: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8(output.stdout).unwrap(),
@@ -183,6 +222,92 @@ fn jev_version_reports_the_install_method_and_why_auto_update_is_off() {
 }
 
 #[test]
+fn jev_version_names_the_guard_that_turns_automatic_updates_off() {
+    let sandbox = Sandbox::new("guards");
+    let exe = sandbox.install_with_script();
+    let unknown = sandbox.install("elsewhere/jev");
+    let auto_update = |command: &mut Command| {
+        let report = json(&run(command.args(["version", "-o", "json"])).stdout);
+        (
+            report["auto_update"]["enabled"].as_bool().unwrap(),
+            report["auto_update"]["reason"].as_str().map(str::to_owned),
+        )
+    };
+
+    assert_eq!(auto_update(&mut jev_in(&sandbox, &exe)), (true, None));
+    assert_eq!(
+        auto_update(jev_in(&sandbox, &exe).env("JEV_AUTO_UPDATE", "0")),
+        (false, Some("turned off by JEV_AUTO_UPDATE".to_owned()))
+    );
+    assert_eq!(
+        auto_update(jev_in(&sandbox, &exe).env("CI", "true")),
+        (false, Some("CI=true".to_owned()))
+    );
+    let (enabled, reason) = auto_update(&mut jev_in(&sandbox, &unknown));
+    assert!(!enabled);
+    assert!(
+        reason
+            .unwrap()
+            .starts_with("not installed by the install script"),
+        "no receipt"
+    );
+
+    for (config, expected) in [
+        (
+            "[update]\nauto = false\n",
+            "turned off by `update.auto = false` in config.toml",
+        ),
+        (
+            "[update]\npin_version = \"0.3.1\"\n",
+            "update.pin_version is set to 0.3.1",
+        ),
+    ] {
+        sandbox.write("config/config.toml", config);
+        assert_eq!(
+            auto_update(&mut jev_in(&sandbox, &exe)),
+            (false, Some(expected.to_owned())),
+            "{config}"
+        );
+    }
+    sandbox.write("config/config.toml", "[update]\nchannel = \"prerelease\"\n");
+    let report = json(&run(jev_in(&sandbox, &exe).args(["version", "-o", "json"])).stdout);
+    assert_eq!(report["update_channel"], "prerelease");
+    assert_eq!(report["auto_update"]["enabled"], true);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_binary_in_a_directory_jev_cannot_write_is_not_updated_automatically() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let sandbox = Sandbox::new("read-only");
+    let exe = sandbox.install_with_script();
+    let dir = exe.parent().unwrap().to_owned();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+    let report = run(jev_in(&sandbox, &exe).args(["version", "-o", "json"]));
+    let listed = run(jev_in(&sandbox, &exe).args(["config", "path", "-o", "json"]));
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+
+    // Root can write anywhere; the guard only means something for everyone else.
+    let report = json(&report.stdout);
+    if report["auto_update"]["enabled"] == false {
+        assert!(
+            report["auto_update"]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("never asks for elevated rights"),
+            "{report}"
+        );
+        assert_eq!(
+            (listed.code, listed.stderr.as_str()),
+            (0, ""),
+            "no notice either"
+        );
+        assert!(!sandbox.config().join("auto-update.json").exists());
+    }
+}
+
+#[test]
 fn rollback_without_a_previous_version_is_a_usage_error() {
     let sandbox = Sandbox::new("no-previous");
     let exe = sandbox.install("bin/jev");
@@ -224,7 +349,9 @@ mod with_releases {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    use super::{EXE, Run, Sandbox, jev, json, run};
+    use std::time::{Duration, Instant};
+
+    use super::{EXE, Run, Sandbox, jev, jev_in, json, run};
 
     const REPOSITORY: &str = "shaharia-lab/jev-cli";
 
@@ -665,6 +792,265 @@ mod with_releases {
                 .join(".jev-update")
                 .join(format!("ready{EXE}"))
                 .exists()
+        );
+    }
+
+    /// A command that needs no network, from the copy of `jev` at `exe` in `sandbox`, as version
+    /// `current`, its automatic updates pointed at `server` and trusting `key`.
+    fn command(
+        sandbox: &Sandbox,
+        exe: &Path,
+        current: &str,
+        server: &MockServer,
+        key: &str,
+    ) -> assert_cmd::Command {
+        let mut command = jev_in(sandbox, exe);
+        command
+            .args(["config", "path", "-o", "json"])
+            .env("JEV_TEST_VERSION", current)
+            .env("JEV_TEST_UPDATE_URL", server.uri())
+            .env("JEV_TEST_UPDATE_KEY", key)
+            .env("TYPESAFE_API_KEY", SENTINEL_KEY);
+        command
+    }
+
+    /// A key that must never appear in the updater's output or files. It is not a real credential.
+    const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-6d02";
+
+    /// Runs [`command`], changed by `configure`.
+    async fn automatic(
+        sandbox: &Sandbox,
+        exe: &Path,
+        current: &str,
+        server: &MockServer,
+        key: &str,
+        configure: impl FnOnce(&mut assert_cmd::Command),
+    ) -> Run {
+        let mut command = command(sandbox, exe, current, server, key);
+        configure(&mut command);
+        tokio::task::spawn_blocking(move || run(&mut command))
+            .await
+            .unwrap()
+    }
+
+    /// How many times `jev` asked `server` for the latest release.
+    async fn checks(server: &MockServer) -> usize {
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .filter(|request| request.url.path().ends_with("/releases/latest"))
+            .count()
+    }
+
+    /// Waits for the background check to leave `what` behind in the sandbox.
+    async fn eventually(what: &str, done: impl Fn() -> bool) {
+        let started = Instant::now();
+        while !done() {
+            assert!(
+                started.elapsed() < Duration::from_secs(90),
+                "the background check never {what}"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    fn state(sandbox: &Sandbox) -> Option<serde_json::Value> {
+        let text = fs::read_to_string(sandbox.config().join("auto-update.json")).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    /// Whether the last check has recorded what it found.
+    fn recorded(sandbox: &Sandbox) -> bool {
+        state(sandbox).is_some_and(|state| {
+            state
+                .get("last_outcome")
+                .is_some_and(serde_json::Value::is_string)
+        })
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_newer_release_is_staged_after_one_command_and_swapped_in_before_the_next() {
+        let sandbox = Sandbox::new("automatic");
+        let exe = sandbox.install_with_script();
+        let before = fs::read(&exe).unwrap();
+        let server = MockServer::start().await;
+        let signer = Signer::new();
+        let key = signer.public();
+        publish(&server, "0.2.0", &jev_bytes(), &signer, true).await;
+
+        let opted_out = automatic(&sandbox, &exe, "0.1.0", &server, &key, |command| {
+            command.env("JEV_AUTO_UPDATE", "false");
+        })
+        .await;
+        let first = automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+
+        // The command's own result is the same with or without automatic updates.
+        assert_eq!((opted_out.code, opted_out.stderr.as_str()), (0, ""));
+        assert_eq!((first.code, &first.stdout), (0, &opted_out.stdout));
+        let notice = &json(&first.stderr)["info"];
+        assert_eq!(notice["code"], "auto_update_enabled");
+        assert!(
+            notice["hint"]
+                .as_str()
+                .unwrap()
+                .contains("JEV_AUTO_UPDATE=false"),
+            "{notice}"
+        );
+        let staged = exe.parent().unwrap().join(".jev-update");
+        eventually("staged the release", || recorded(&sandbox)).await;
+        assert_eq!(state(&sandbox).unwrap()["last_outcome"], "staged jev 0.2.0");
+        assert!(staged.join(format!("ready{EXE}")).is_file());
+        assert_eq!(fs::read(&exe).unwrap(), before, "not swapped yet");
+
+        let second = automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+
+        assert_eq!((second.code, &second.stdout), (0, &opted_out.stdout));
+        let lines: Vec<&str> = second.stderr.lines().collect();
+        assert_eq!(lines.len(), 1, "exactly one line: {lines:?}");
+        let notice = &json(lines[0])["info"];
+        assert_eq!(notice["code"], "updated");
+        let message = notice["message"].as_str().unwrap();
+        assert!(message.starts_with("jev updated 0.1.0 "), "{message}");
+        assert!(
+            message.ends_with(&format!(
+                "0.2.0 {} changelog: https://github.com/{REPOSITORY}/releases/tag/v0.2.0",
+                if cfg!(windows) { "\u{2014}" } else { "-" }
+            )),
+            "{message}"
+        );
+        assert!(staged.join(format!("previous{EXE}")).is_file());
+        assert!(!staged.join(format!("ready{EXE}")).exists());
+
+        // The swap started no second check: that waits for the next day.
+        let third = automatic(&sandbox, &exe, "0.2.0", &server, &key, |_| {}).await;
+        assert_eq!((third.code, third.stderr.as_str()), (0, ""));
+        assert_eq!(checks(&server).await, 1);
+
+        let recorded = fs::read_to_string(sandbox.config().join("auto-update.json")).unwrap();
+        for text in [&first.stderr, &second.stderr, &recorded] {
+            assert!(!text.contains(SENTINEL_KEY), "{text}");
+        }
+        for request in server.received_requests().await.unwrap() {
+            assert!(
+                !request.headers.contains_key("authorization"),
+                "GitHub is never sent a key"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn concurrent_commands_start_one_check_a_day() {
+        let sandbox = Sandbox::new("once-a-day");
+        let exe = sandbox.install_with_script();
+        let server = MockServer::start().await;
+        let key = Signer::new().public();
+
+        let started: Vec<_> = (0..6)
+            .map(|_| {
+                let mut command = command(&sandbox, &exe, "0.1.0", &server, &key);
+                tokio::task::spawn_blocking(move || run(&mut command))
+            })
+            .collect();
+        let mut runs = Vec::new();
+        for run in started {
+            runs.push(run.await.unwrap());
+        }
+
+        assert!(runs.iter().all(|run| run.code == 0));
+        let notices = runs.iter().filter(|run| !run.stderr.is_empty()).count();
+        assert_eq!(notices, 1, "the first-run notice is shown once");
+        eventually("recorded its outcome", || recorded(&sandbox)).await;
+        assert_eq!(
+            state(&sandbox).unwrap()["last_outcome"],
+            "no release is published yet"
+        );
+        automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+        assert_eq!(checks(&server).await, 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_guard_means_no_check_and_no_request() {
+        let sandbox = Sandbox::new("no-request");
+        let exe = sandbox.install_with_script();
+        let server = MockServer::start().await;
+        let key = Signer::new().public();
+
+        for (variable, value) in [("JEV_AUTO_UPDATE", "off"), ("CI", "true")] {
+            let run = automatic(&sandbox, &exe, "0.1.0", &server, &key, |command| {
+                command.env(variable, value);
+            })
+            .await;
+            assert_eq!((run.code, run.stderr.as_str()), (0, ""), "{variable}");
+        }
+        sandbox.write("config/config.toml", "[update]\npin_version = \"0.1.0\"\n");
+        let pinned = automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+        assert_eq!((pinned.code, pinned.stderr.as_str()), (0, ""));
+
+        // A check is claimed in the state file before it is started, so without the file none was.
+        assert!(state(&sandbox).is_none());
+        assert_eq!(server.received_requests().await.unwrap().len(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_slow_check_never_holds_up_the_command() {
+        let sandbox = Sandbox::new("slow");
+        let exe = sandbox.install_with_script();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/repos/{REPOSITORY}/releases/latest")))
+            .respond_with(ResponseTemplate::new(404).set_delay(Duration::from_secs(15)))
+            .mount(&server)
+            .await;
+        let key = Signer::new().public();
+
+        let started = Instant::now();
+        let run = automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+        let took = started.elapsed();
+
+        assert_eq!(run.code, 0);
+        assert!(took < Duration::from_secs(8), "took {took:?}");
+        let started = Instant::now();
+        while checks(&server).await == 0 {
+            assert!(
+                started.elapsed() < Duration::from_secs(90),
+                "no check started"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_staged_update_that_fails_its_self_test_is_rolled_back_silently() {
+        let sandbox = Sandbox::new("automatic-self-test");
+        let exe = sandbox.install_with_script();
+        let before = fs::read(&exe).unwrap();
+        let server = MockServer::start().await;
+        let signer = Signer::new();
+        let key = signer.public();
+        publish(&server, "0.2.0", b"not a program", &signer, true).await;
+
+        automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+        eventually("staged the release", || recorded(&sandbox)).await;
+        let next = automatic(&sandbox, &exe, "0.1.0", &server, &key, |command| {
+            command.arg("-v");
+        })
+        .await;
+
+        assert_eq!(next.code, 0);
+        assert!(!next.stderr.contains("\"updated\""), "{}", next.stderr);
+        assert!(
+            next.stderr.contains("update_self_test_failed"),
+            "logged at -v: {}",
+            next.stderr
+        );
+        assert_eq!(fs::read(&exe).unwrap(), before);
+        let quiet = automatic(&sandbox, &exe, "0.1.0", &server, &key, |_| {}).await;
+        assert_eq!(
+            (quiet.code, quiet.stderr.as_str()),
+            (0, ""),
+            "not tried again"
         );
     }
 }

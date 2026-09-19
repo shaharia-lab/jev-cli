@@ -130,7 +130,9 @@ schema. `--field answers.team.choice` prints one raw value instead of the whole 
 
 On failure, stderr carries one JSON object when it is not a terminal:
 `{"error": {"code", "exit_code", "message", "hint", "request_id", ...}}` (`jev schema error`).
-`hint` names the next action: read it before retrying.
+`hint` names the next action: read it before retrying. Other stderr lines are notices,
+`{"warning": {...}}` or `{"info": {...}}` (such as `jev` having updated itself); they never change
+stdout or the exit code.
 
 ## Which command
 
@@ -265,6 +267,9 @@ Reading the answers:
   code, so the policy can change without asking again.
 - Pin a versioned model (`--model jev-1.13.0`, see `jev models list`) for anything repeatable:
   aliases such as `jev-latest` move to new versions without notice.
+- A `jev` installed by the install script updates itself, at most once a day and never during a
+  command. `jev version -o json` says whether it does (`auto_update`). Where the `jev` version must
+  not change, set `JEV_AUTO_UPDATE=false`; with `CI=true` it is already off.
 
 ## Safety and cost
 

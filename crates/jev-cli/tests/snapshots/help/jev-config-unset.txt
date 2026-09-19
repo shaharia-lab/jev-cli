@@ -6,17 +6,19 @@ built-in default applies again. Use `jev config set` to change it instead, and `
 see the value that now applies.
 
 Input:
-KEY, as for `jev config get`. --profile chooses the profile to change.
+KEY, as for `jev config get`. --profile chooses the profile to change; an `update.*` setting is
+removed for every profile.
 
 Output:
-`profile`, `key`, `value` (null) and `changed`, false when the profile did not set it.
+`profile` (`null` for an `update.*` setting), `key`, `value` (null) and `changed`, false when it was
+not set.
 
 Usage: jev config unset [OPTIONS] <KEY>
 
 Arguments:
   <KEY>
-          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or
-          `warn_unpinned`
+          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency`,
+          `warn_unpinned`, `update.auto`, `update.channel` or `update.pin_version`
 
 Options:
   -h, --help

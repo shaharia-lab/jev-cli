@@ -5,16 +5,22 @@ Use `jev update` to move to the latest release now, `jev update --check` in a sc
 whether one exists (exit 20) without changing anything, `jev update --rollback` to go back to the
 binary the last update replaced, and `jev update --version <x.y.z>` to install one particular
 release, which is the only way to move to an older one. When Homebrew or cargo installed jev, it
-prints their command instead and changes nothing. Use `jev version` to see the running version, how
-it was installed and whether it updates itself.
+prints their command instead and changes nothing. An install made by the install script also updates
+itself: at most once a day, after a command has finished, a detached process stages a newer release,
+and the next command swaps it in and says so in one line on stderr; the command's own output and
+exit code never change. It is off for Homebrew and cargo installs, with CI=true,
+JEV_AUTO_UPDATE=false, `update.auto = false` or `update.pin_version`, and when jev cannot write to
+its directory. Use `jev version` to see the running version, how it was installed and whether it
+updates itself, and why not.
 
 Input:
-Nothing but the flags; no API key and no configuration. It contacts only GitHub Releases of
-shaharia-lab/jev-cli; --rollback, and an update of a package-manager install, contact nothing. Every
-download is checked against the release keys compiled into jev (a minisign signature of the archive
-and of SHA256SUMS, each naming its file and version, and the archive's SHA-256) before anything is
-written. The new binary is swapped in atomically next to the old one, which is kept for --rollback,
-and must pass a self-test (`jev version`) or the old one is put back.
+Nothing but the flags; no API key. `update.channel` (stable or prerelease) chooses the releases it
+follows. It contacts only GitHub Releases of shaharia-lab/jev-cli; --rollback, and an update of a
+package-manager install, contact nothing. Every download is checked against the release keys
+compiled into jev (a minisign signature of the archive and of SHA256SUMS, each naming its file and
+version, and the archive's SHA-256) before anything is written. The new binary is swapped in
+atomically next to the old one, which is kept for --rollback, and must pass a self-test (`jev
+version`) or the old one is put back.
 
 Output:
 One object: `status` (`up_to_date`, `update_available`, `updated`, `rolled_back` or `managed`),

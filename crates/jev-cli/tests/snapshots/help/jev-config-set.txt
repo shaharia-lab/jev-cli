@@ -1,23 +1,27 @@
-Store a setting in the selected profile
+Store a setting in the selected profile (the `update.*` settings apply to every profile)
 
 When to use:
-Use `jev config set` to store a default in the selected profile, so that you do not repeat a flag.
-For one run, pass the flag or set the environment variable instead; `jev config unset` restores the
-default. The API key is not a setting: use `jev auth login`.
+Use `jev config set` to store a default in the selected profile, so that you do not repeat a flag,
+or to change how jev updates itself (`update.*`, for every profile). For one run, pass the flag or
+set the environment variable instead; `jev config unset` restores the default. The API key is not a
+setting: use `jev auth login`.
 
 Input:
 KEY and VALUE. The value is checked before anything is written: `timeout` takes `30s` or `500ms`,
-`output` takes table, json, yaml or jsonl, and so on. --profile chooses the profile to change.
+`output` takes table, json, yaml or jsonl, `update.auto` true or false, `update.channel` stable or
+prerelease, `update.pin_version` a version such as 0.3.1 (which turns automatic updates off), and so
+on. --profile chooses the profile to change; the `update.*` settings go to the `[update]` table,
+which every profile shares.
 
 Output:
-`profile`, `key`, `value` and `changed`.
+`profile` (`null` for an `update.*` setting), `key`, `value` and `changed`.
 
 Usage: jev config set [OPTIONS] <KEY> <VALUE>
 
 Arguments:
   <KEY>
-          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or
-          `warn_unpinned`
+          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency`,
+          `warn_unpinned`, `update.auto`, `update.channel` or `update.pin_version`
 
   <VALUE>
           The new value, e.g. `jev-1.13.0`, `45s`, `json` or `false`
@@ -88,3 +92,6 @@ Examples:
 
   # A longer timeout for the ci profile
   jev config set timeout 45s --profile ci -o json
+
+  # Stop jev updating itself (JEV_AUTO_UPDATE=false does it for one environment)
+  jev config set update.auto false

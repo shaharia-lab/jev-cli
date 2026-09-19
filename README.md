@@ -8,8 +8,7 @@ Rust and built for people, shell scripts and AI agents alike.
 > sponsored by TypeSafe AI. "TypeSafe" and "Jev" belong to their owner.
 
 > [!WARNING]
-> **Early development.** Every command works, automatic background updates are still to come,
-> and releases are pre-releases for now. Before 1.0, flags, JSON output and exit
+> **Early development.** Every command works, and releases are pre-releases for now. Before 1.0, flags, JSON output and exit
 > codes may change in a minor release; [CHANGELOG.md](CHANGELOG.md) calls it out when they do.
 > Progress is tracked in the [v1 epic](https://github.com/shaharia-lab/jev-cli/issues/2).
 
@@ -172,6 +171,26 @@ after upgrading:
 Man pages (`man jev`, `man jev-noul`, ...) are generated from the same definitions as `--help`.
 From a checkout, `make dist-assets` writes them and the four completion scripts to
 `target/dist-assets/`; `MANPATH="$PWD/target/dist-assets/man:$MANPATH" man jev` reads them.
+
+## Updates
+
+`jev update` moves to the latest release now; `jev update --check` only asks (exit 20 when a newer
+one exists), and `jev update --rollback` undoes the last update. Every download is checked against
+signing keys compiled into `jev` before anything is replaced.
+
+A `jev` installed with the install script also updates itself. At most once a day, after a command
+has finished, a detached process looks for a newer release on GitHub and stages it; the next command
+swaps it in and says so in one line on stderr. A command's output and exit code never change, and it
+never waits for the check. `jev version` shows whether this happens and, if not, why. It is off
+for Homebrew and cargo installs (update those with `brew upgrade` or `cargo install`), when
+`CI=true`, when `jev` cannot write to its own directory, and when you turn it off:
+
+```bash
+jev config set update.auto false            # for good
+export JEV_AUTO_UPDATE=false                 # for one environment
+jev config set update.pin_version 0.3.1      # stay on one version
+jev config set update.channel prerelease     # follow pre-releases too
+```
 
 ## Contributing
 

@@ -505,7 +505,14 @@ mod tests {
     }
 
     fn settings() -> Settings {
-        Settings::resolve(&Flags::default(), &Env::default(), None, &IndexMap::new()).unwrap()
+        Settings::resolve(
+            &Flags::default(),
+            &Env::default(),
+            None,
+            &IndexMap::new(),
+            &IndexMap::new(),
+        )
+        .unwrap()
     }
 
     fn rows(text: String) -> Rows {

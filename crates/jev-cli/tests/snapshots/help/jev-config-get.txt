@@ -7,19 +7,21 @@ config set` to change one.
 
 Input:
 KEY, one of `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` and
-`warn_unpinned`. --profile reads another profile, and flags on the same command line count, as they
-would on a real run.
+`warn_unpinned`, which each profile has, and `update.auto`, `update.channel` and
+`update.pin_version`, which every profile shares. --profile reads another profile, and flags on the
+same command line count, as they would on a real run.
 
 Output:
-`key`, `value`, `source` (`flag`, `env`, `profile` or `default`), `origin` (the flag, variable or
-profile) and `description`. `--field value` prints just the value.
+`key`, `value`, `source` (`flag`, `env`, `profile`, `config` for an `update.*` setting in the file,
+or `default`), `origin` (the flag, variable, profile or key) and `description`. `--field value`
+prints just the value.
 
 Usage: jev config get [OPTIONS] <KEY>
 
 Arguments:
   <KEY>
-          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or
-          `warn_unpinned`
+          Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency`,
+          `warn_unpinned`, `update.auto`, `update.channel` or `update.pin_version`
 
 Options:
   -h, --help
