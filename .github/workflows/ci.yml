@@ -61,7 +61,15 @@ jobs:
       # The configuration that ships: default features, so without the internal test hooks.
       - run: cargo clippy -p jev-cli --all-targets --locked -- -D warnings
       - run: cargo build --workspace --locked
+      # The completion scripts are syntax-checked by every shell that has a checker (bash, zsh and
+      # fish with -n, PowerShell with its parser). pwsh is on every runner; Linux gets the others
+      # and requires all four, so that a missing shell fails instead of being skipped.
+      - name: Install zsh and fish
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
       - run: cargo test --workspace --all-features --locked
+        env:
+          JEV_TEST_SHELLS: ${{ runner.os == 'Linux' && 'bash,zsh,fish,powershell' || '' }}
       # The configuration that ships: default features, so without the internal test hooks.
       - run: cargo test -p jev-cli --locked
 

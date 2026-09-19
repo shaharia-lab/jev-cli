@@ -11,6 +11,7 @@ use clap::builder::FalseyValueParser;
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand};
 
 use crate::batch::RowFormat;
+use crate::commands::completion::Shell;
 use crate::gate::AbstainBand;
 use crate::input::{InputFormat, StateFormat};
 use crate::output::Format;
@@ -522,7 +523,7 @@ pub(crate) enum Command {
     /// Update jev, check for an update, or roll one back
     Update(Pending),
     /// Print a shell completion script
-    Completion(Pending),
+    Completion(CompletionArgs),
     /// Print the version, commit, build date and target
     Version,
     /// Internal hooks for jev's own test suite. Not part of any release build.
@@ -650,6 +651,14 @@ fn parse_usd(text: &str) -> Result<f64, String> {
         .ok()
         .filter(|value| value.is_finite() && *value >= 0.0)
         .ok_or_else(|| format!("`{text}` is not an amount of US dollars, such as 0.01"))
+}
+
+/// Arguments of `jev completion`.
+#[derive(Debug, Args)]
+pub(crate) struct CompletionArgs {
+    /// The shell to print the script for
+    #[arg(value_enum, ignore_case = true, value_name = "SHELL")]
+    pub(crate) shell: Shell,
 }
 
 #[derive(Debug, Subcommand)]

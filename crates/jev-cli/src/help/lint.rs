@@ -17,6 +17,10 @@ const MACHINE_READABLE: [&str; 6] = [
     "| jq",
 ];
 
+/// Commands whose stdout is a file of its own kind rather than a result, so that --output and
+/// --field do not apply and no example can be machine-readable in the sense above.
+const RAW_OUTPUT: [&str; 1] = ["completion"];
+
 /// The longest line of an example. `--help` indents it by 2 and wraps at 100 columns, and a
 /// command line broken by wrapping cannot be pasted: continue a long one with `\` instead.
 const EXAMPLE_WIDTH: usize = 96;
@@ -135,11 +139,13 @@ wrap in --help; shorten it",
     if !(2..=4).contains(&count) {
         problem(format!("has {count} examples; give 2 to 4"));
     }
-    if !doc.examples.iter().any(|example| {
-        MACHINE_READABLE
-            .iter()
-            .any(|marker| example.command.contains(marker))
-    }) {
+    if !RAW_OUTPUT.contains(&path)
+        && !doc.examples.iter().any(|example| {
+            MACHINE_READABLE
+                .iter()
+                .any(|marker| example.command.contains(marker))
+        })
+    {
         problem(format!(
             "no example is machine-readable: show one using any of {}",
             MACHINE_READABLE

@@ -31,6 +31,8 @@ internal-test-hooks = []
 [dependencies]
 anstyle.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
 csv.workspace = true
 indexmap.workspace = true
 jev-client.workspace = true

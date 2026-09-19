@@ -2,6 +2,7 @@
 
 mod auth;
 mod batch;
+pub(crate) mod completion;
 mod config;
 #[cfg(feature = "internal-test-hooks")]
 pub(crate) mod debug;
@@ -152,7 +153,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Schema(command) => schema::run(command, context),
         Command::Mcp(McpCommand::Serve(arguments)) => mcp::serve(arguments, context),
         Command::Update(_) => pending("update", 25),
-        Command::Completion(_) => pending("completion", 17),
+        Command::Completion(arguments) => completion::run(arguments, context),
     }
     .map(|()| Exit::Success)
 }

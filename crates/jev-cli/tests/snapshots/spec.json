@@ -2751,16 +2751,52 @@
     },
     {
       "path": "completion",
-      "usage": "jev completion [OPTIONS]",
+      "usage": "jev completion [OPTIONS] <SHELL>",
       "about": "Print a shell completion script",
-      "implemented": false,
-      "when_to_use": null,
-      "input": null,
-      "output": null,
-      "arguments": [],
+      "implemented": true,
+      "when_to_use": "Use `jev completion` once, when installing jev, to make the shell complete its commands, flags and flag values on Tab. The script is generated from the same definitions as the help, so re-run it after upgrading jev. It is for people at a shell: a program or an AI agent that needs the command tree should read `jev spec` instead.",
+      "input": "SHELL: bash, zsh, fish or powershell. Nothing else is read: no API key, no configuration, no network.",
+      "output": "The completion script, printed as is on stdout whatever --output says. Load it from the shell's start-up file or save it where the shell looks for completions (see the examples).",
+      "arguments": [
+        {
+          "name": "SHELL",
+          "type": "enum",
+          "required": true,
+          "multiple": false,
+          "help": "The shell to print the script for"
+        }
+      ],
       "flags": [],
-      "exit_codes": [],
-      "examples": []
+      "exit_codes": [
+        {
+          "code": 0,
+          "name": "success",
+          "meaning": "success, and any gate condition holds"
+        },
+        {
+          "code": 2,
+          "name": "usage",
+          "meaning": "no shell, or one jev has no script for"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Bash: add this line to ~/.bashrc",
+          "command": "source <(jev completion bash)"
+        },
+        {
+          "description": "Zsh: add this line to ~/.zshrc, after compinit",
+          "command": "source <(jev completion zsh)"
+        },
+        {
+          "description": "Fish: save it where fish loads completions from",
+          "command": "jev completion fish > ~/.config/fish/completions/jev.fish"
+        },
+        {
+          "description": "PowerShell: add this line to $PROFILE",
+          "command": "jev completion powershell | Out-String | Invoke-Expression"
+        }
+      ]
     },
     {
       "path": "version",

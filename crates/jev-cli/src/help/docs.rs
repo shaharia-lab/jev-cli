@@ -835,6 +835,40 @@ it exits 1.",
         ],
     },
     Doc {
+        path: "completion",
+        when: "Use `jev completion` once, when installing jev, to make the shell complete its \
+commands, flags and flag values on Tab. The script is generated from the same definitions as the \
+help, so re-run it after upgrading jev. It is for people at a shell: a program or an AI agent that \
+needs the command tree should read `jev spec` instead.",
+        input: "SHELL: bash, zsh, fish or powershell. Nothing else is read: no API key, no \
+configuration, no network.",
+        output: "The completion script, printed as is on stdout whatever --output says. Load it \
+from the shell's start-up file or save it where the shell looks for completions (see the \
+examples).",
+        exit_codes: &[
+            code(Exit::Success),
+            code_as(Exit::Usage, "no shell, or one jev has no script for"),
+        ],
+        examples: &[
+            Example {
+                description: "Bash: add this line to ~/.bashrc",
+                command: "source <(jev completion bash)",
+            },
+            Example {
+                description: "Zsh: add this line to ~/.zshrc, after compinit",
+                command: "source <(jev completion zsh)",
+            },
+            Example {
+                description: "Fish: save it where fish loads completions from",
+                command: "jev completion fish > ~/.config/fish/completions/jev.fish",
+            },
+            Example {
+                description: "PowerShell: add this line to $PROFILE",
+                command: "jev completion powershell | Out-String | Invoke-Expression",
+            },
+        ],
+    },
+    Doc {
         path: "version",
         when: "Use `jev version` to report the jev you run, e.g. in a bug report. Use \
 `jev --version` for the bare version, and `jev models list` for the model versions the API offers.",
