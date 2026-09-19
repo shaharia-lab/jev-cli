@@ -387,52 +387,10 @@ pub(crate) struct LogoutArgs {
     pub(crate) all: bool,
 }
 
-const BATCH_RUN_ABOUT: &str = "\
-Evaluate every row of a JSONL or CSV file against one question set, one API call per row, and write \
-one result record per row.
-
-Use it for more than a handful of states. For one state use `jev eval` (many questions) or \
-`jev noul`/`choice`/`score` (one question); to check the question set without sending anything use \
-`jev validate`.
-
-Inputs: -f is a request file (JSON or YAML) whose `questions`, and `model` if present, are used for \
-every row; any `state` in it is replaced by the row's. The rows come from --input: JSONL (one JSON \
-value per line) or CSV with a header row, or JSONL piped on stdin. Each row's state is the whole row, \
-one field of it (--state-field), or an object of some fields (--state-fields). Its id is --id-field, \
-else its 1-based line number.
-
-Before anything is sent the question set is validated, and every row of a file is read and checked: \
-a malformed row, a missing field or a repeated id stops the run with exit 2. Piped rows can only be \
-read once, so they are checked as they arrive, and such a problem stops dispatching there.
-
-Output: JSON Lines, one record per row, in completion order, on stdout or appended to --out:
-  {\"id\": ..., \"status\": \"ok\", \"model\", \"answers\", \"usage\", \"cost_usd\", \"request_id\", \"latency_ms\"}
-  {\"id\": ..., \"status\": \"error\", \"error\": {\"code\", \"exit_code\", \"error_type\", \"message\", \"hint\", \"request_id\", ...}}
-A row that fails is recorded and the run continues, unless --fail-fast or --max-errors stops it. \
-A summary (rows, tokens, estimated cost, time, retries, models) goes to stderr, as one JSON line when \
-the output is for a program, and to --summary-json.";
-
-const BATCH_RUN_EXAMPLES: &str = "\
-Examples:
-  # Label tickets: the `body` field is the state, results keyed by ticket_id
-  jev batch run -f triage.yaml --input tickets.jsonl --state-field body --id-field ticket_id \\
-    --out results.jsonl
-
-  # A CSV export, sending only two columns, with a machine-readable summary
-  jev batch run -f triage.yaml --input export.csv --state-fields subject,body \\
-    --out results.jsonl --summary-json summary.json
-
-  # Rows from a pipeline, stopping at the first failure
-  jq -c '.items[]' dump.json | jev batch run -f triage.yaml --fail-fast > results.jsonl
-
-Exit codes: 0 every row ok · 7 some rows failed (see their records) · 2 usage, a bad question set or
-a bad input row (nothing was sent for a file) · 3 auth · 1 internal.";
-
 /// Arguments of `jev batch run`.
 // On/off command-line switches are booleans by nature; there is no state machine hiding here.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Args)]
-#[command(after_help = BATCH_RUN_EXAMPLES)]
 pub(crate) struct BatchRunArgs {
     /// Question set: a request file (JSON or YAML) with `questions` and optionally `model`
     #[arg(short = 'f', long, value_name = "FILE")]
@@ -569,7 +527,6 @@ impl Command {
 #[derive(Debug, Subcommand)]
 pub(crate) enum BatchCommand {
     /// Evaluate every row of an input file, writing one result record per row
-    #[command(long_about = BATCH_RUN_ABOUT)]
     Run(BatchRunArgs),
 }
 
