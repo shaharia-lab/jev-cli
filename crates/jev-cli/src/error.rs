@@ -74,7 +74,15 @@ impl CliError {
         ))
     }
 
+    /// The updater could not do what it was asked. `code` names the reason.
+    pub(crate) fn update(code: &'static str, exit: Exit, message: impl Into<String>) -> Self {
+        Self::new(code, exit, message)
+    }
+
     /// A command that exists in the command tree but has no behaviour yet.
+    // Every command has its behaviour now. Kept, with `cli::Pending`, for the next command that
+    // joins the tree before its behaviour does.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn not_implemented(command: &str, issue: u32) -> Self {
         Self::new(
             "not_implemented",

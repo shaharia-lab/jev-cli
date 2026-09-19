@@ -13,6 +13,7 @@ mod profile;
 mod schema;
 mod shortcut;
 mod spec;
+mod update;
 mod validate;
 mod version;
 
@@ -141,6 +142,8 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Score(arguments) => return shortcut::score(arguments, context),
         // A batch with failed rows exits 7.
         Command::Batch(BatchCommand::Run(arguments)) => return batch::run(arguments, context),
+        // `--check` exits 20 when an update is available.
+        Command::Update(arguments) => return update::run(arguments, context),
         Command::Version => version::run(context),
         Command::Spec => spec::run(context),
         Command::Auth(command) => auth::run(command, context),
@@ -152,13 +155,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Debug(command) => debug::run(command, context),
         Command::Schema(command) => schema::run(command, context),
         Command::Mcp(McpCommand::Serve(arguments)) => mcp::serve(arguments, context),
-        Command::Update(_) => pending("update", 25),
         Command::Completion(arguments) => completion::run(arguments, context),
     }
     .map(|()| Exit::Success)
-}
-
-/// A command that is in the tree but has no behaviour yet, and the issue that will give it some.
-fn pending(name: &str, issue: u32) -> Result<(), CliError> {
-    Err(CliError::not_implemented(name, issue))
 }

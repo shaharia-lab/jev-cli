@@ -521,7 +521,7 @@ pub(crate) enum Command {
     #[command(subcommand)]
     Mcp(McpCommand),
     /// Update jev, check for an update, or roll one back
-    Update(Pending),
+    Update(UpdateArgs),
     /// Print a shell completion script
     Completion(CompletionArgs),
     /// Print the version, commit, build date and target
@@ -540,6 +540,27 @@ impl Command {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Args)]
+#[command(group = clap::ArgGroup::new("action").multiple(false))]
+pub(crate) struct UpdateArgs {
+    /// Only report whether a newer version exists: exit 0 when current, 20 when one is available
+    #[arg(long, group = "action")]
+    pub(crate) check: bool,
+
+    /// Put back the binary the last update replaced
+    #[arg(long, group = "action")]
+    pub(crate) rollback: bool,
+
+    /// Install this release instead of the latest; the only way to move to an older version
+    #[arg(long, value_name = "X.Y.Z", group = "action", value_parser = parse_version)]
+    pub(crate) version: Option<semver::Version>,
+}
+
+fn parse_version(text: &str) -> Result<semver::Version, String> {
+    semver::Version::parse(text.trim().trim_start_matches('v'))
+        .map_err(|_| "expected a version such as 0.3.1".to_owned())
 }
 
 #[derive(Debug, Subcommand)]
@@ -764,13 +785,20 @@ mod tests {
     }
 
     #[test]
-    fn a_pending_command_accepts_whatever_follows_it() {
-        let cli = Cli::try_parse_from(["jev", "update", "--format", "json", "-x"]).unwrap();
-
-        let Command::Update(pending) = cli.command else {
+    fn update_does_one_thing_at_a_time() {
+        let cli = Cli::try_parse_from(["jev", "update", "--version", "v0.3.1"]).unwrap();
+        let Command::Update(arguments) = cli.command else {
             panic!("expected update")
         };
-        assert_eq!(pending.rest.len(), 3);
+        assert_eq!(arguments.version, Some(semver::Version::new(0, 3, 1)));
+
+        for conflicting in [["--check", "--rollback"], ["--check", "--version=0.3.1"]] {
+            assert!(
+                Cli::try_parse_from(["jev", "update", conflicting[0], conflicting[1]]).is_err(),
+                "{conflicting:?}"
+            );
+        }
+        assert!(Cli::try_parse_from(["jev", "update", "--version", "latest"]).is_err());
     }
 
     #[test]

@@ -31,18 +31,26 @@ clap_complete = "4.6.11"
 clap_mangen = "0.3.3"
 csv = "1.4"
 fastrand = "2.5"
+flate2 = "1.1.9"
 httpdate = "1.0.3"
 indexmap = { version = "2.14", features = ["serde"] }
+# Release signatures: a small, dependency-free verifier by minisign's author. Verification only; the
+# release workflow signs with the minisign CLI.
+minisign-verify = "0.2.5"
 # TLS is rustls with the `ring` provider and the platform certificate verifier, wired up explicitly
 # in `jev-client`. No OpenSSL, no `native-tls`, and no process-global crypto provider.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "http2", "system-proxy"] }
+# SHA-256 of downloaded updates. Already in the tree as the rustls crypto provider.
+ring = "0.17.14"
 rpassword = "7.5"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-platform-verifier = "0.7"
 schemars = { version = "1.2", features = ["indexmap2", "preserve_order"] }
+semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 serde-saphyr = "1.3"
+tar = { version = "0.4.46", default-features = false }
 thiserror = "2.0.20"
 tokio = { version = "1.53", default-features = false }
 toml_edit = "0.25.15"
@@ -51,10 +59,14 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 unicode-width = "0.2.2"
 url = "2.5.8"
 zeroize = { version = "1.9", features = ["derive"] }
+# Windows release archives. Reading deflate is all the updater needs.
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
 
 # Test-only.
 assert_cmd = "2.2.2"
 jsonschema = { version = "0.56", default-features = false }
+# Signs fake releases for the updater's tests.
+minisign = "0.9.1"
 predicates = "3.1.4"
 pty-process = "0.5.3"
 tracing-log = "0.2"

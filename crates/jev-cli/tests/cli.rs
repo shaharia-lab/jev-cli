@@ -243,30 +243,6 @@ fn a_usage_error_is_a_json_object_on_stderr_when_the_output_is_for_a_program() {
 }
 
 #[test]
-fn commands_without_behaviour_say_so_whatever_flags_follow() {
-    let cases = [(vec!["update", "--check"], "update", 25)];
-
-    for (arguments, name, issue) in cases {
-        let run = run(jev().args(&arguments));
-
-        assert_eq!((run.code, run.stdout.as_str()), (2, ""), "{arguments:?}");
-        let error = &json(&run.stderr)["error"];
-        assert_eq!(error["code"], "not_implemented");
-        assert_eq!(
-            error["message"],
-            format!("`jev {name}` is not implemented yet")
-        );
-        assert!(
-            error["hint"]
-                .as_str()
-                .unwrap()
-                .ends_with(&format!("/issues/{issue}")),
-            "{error}"
-        );
-    }
-}
-
-#[test]
 fn verbose_logging_never_touches_stdout() {
     let run = run(jev().args(["version", "-vv"]));
 

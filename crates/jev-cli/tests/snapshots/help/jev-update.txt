@@ -1,8 +1,43 @@
 Update jev, check for an update, or roll one back
 
+When to use:
+Use `jev update` to move to the latest release now, `jev update --check` in a script to learn
+whether one exists (exit 20) without changing anything, `jev update --rollback` to go back to the
+binary the last update replaced, and `jev update --version <x.y.z>` to install one particular
+release, which is the only way to move to an older one. When Homebrew or cargo installed jev, it
+prints their command instead and changes nothing. Use `jev version` to see the running version, how
+it was installed and whether it updates itself.
+
+Input:
+Nothing but the flags; no API key and no configuration. It contacts only GitHub Releases of
+shaharia-lab/jev-cli; --rollback, and an update of a package-manager install, contact nothing. Every
+download is checked against the release keys compiled into jev (a minisign signature of the archive
+and of SHA256SUMS, each naming its file and version, and the archive's SHA-256) before anything is
+written. The new binary is swapped in atomically next to the old one, which is kept for --rollback,
+and must pass a self-test (`jev version`) or the old one is put back.
+
+Output:
+One object: `status` (`up_to_date`, `update_available`, `updated`, `rolled_back` or `managed`),
+`current_version` (the version that was running), `version` (the release concerned: the latest, the
+one installed or the one restored; `null` when nothing is published yet), `install_method`
+(`self_managed`, `homebrew`, `cargo` or `unknown`), `path` (the binary), `release_url` (its
+changelog) and `command` (what to run next, such as the package manager's command). A download that
+fails verification, or a new binary that fails its self-test and is rolled back, is exit 1 with the
+code `update_verification_failed` or `update_self_test_failed`; the installed binary is unchanged in
+both cases.
+
 Usage: jev update [OPTIONS]
 
 Options:
+      --check
+          Only report whether a newer version exists: exit 0 when current, 20 when one is available
+
+      --rollback
+          Put back the binary the last update replaced
+
+      --version <X.Y.Z>
+          Install this release instead of the latest; the only way to move to an older version
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -57,3 +92,23 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    done, or nothing to do; --check: this is the latest version
+  2    bad flag, no such release, nothing to roll back, or jev's directory is read-only
+  5    GitHub is limiting requests; try later
+  6    GitHub could not be reached, or a download was cut short
+  20   --check: a newer version is available
+
+Examples:
+  # Update to the latest release
+  jev update
+
+  # In a script: is there a newer version? (exit 20 when there is)
+  jev update --check -o json
+
+  # Undo the last update
+  jev update --rollback
+
+  # Install one particular release, older or newer
+  jev update --version 0.1.0

@@ -8,8 +8,9 @@ Input:
 Nothing.
 
 Output:
-`version`, `commit`, `build_date`, `target` and `client_version`. `--field version` prints just the
-version.
+`version`, `commit`, `build_date`, `target`, `client_version`, `install_method` (`self_managed` for
+the install script, `homebrew`, `cargo` or `unknown`), `update_channel` and `auto_update`
+(`enabled`, and the `reason` when it is off). `--field version` prints just the version.
 
 Usage: jev version [OPTIONS]
 
