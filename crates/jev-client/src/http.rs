@@ -173,7 +173,8 @@ impl HttpTransport {
     ) -> Result<(T, Option<String>), Error> {
         tracing::debug!(%method, %url, attempt, "sending request");
         if let (true, Some(body)) = (self.log_bodies, body) {
-            tracing::debug!(target: BODY_LOG_TARGET, body = %String::from_utf8_lossy(body), "request body");
+            let body = self.api_key.scrub(&String::from_utf8_lossy(body));
+            tracing::debug!(target: BODY_LOG_TARGET, %body, "request body");
         }
 
         let mut builder = self
@@ -218,7 +219,10 @@ impl HttpTransport {
             "received response"
         );
         if self.log_bodies {
-            tracing::debug!(target: BODY_LOG_TARGET, body = %String::from_utf8_lossy(&bytes), "response body");
+            // Opting in to bodies is opting in to seeing `state`, never the key: a server that
+            // echoes a header back must not get it into a log.
+            let body = self.api_key.scrub(&String::from_utf8_lossy(&bytes));
+            tracing::debug!(target: BODY_LOG_TARGET, %body, "response body");
         }
 
         if !status.is_success() {
@@ -230,11 +234,11 @@ impl HttpTransport {
         }
         match serde_json::from_slice::<T>(&bytes) {
             Ok(parsed) => Ok((parsed, request_id)),
-            // `serde_json` errors name a line and column, never the content, so nothing leaks.
-            Err(error) => Err(Error::new(ErrorKind::InvalidResponse, error.to_string())
-                .with_source(error)
-                .with_status(status.as_u16())
-                .with_request_id(request_id)),
+            Err(error) => Err(
+                Error::new(ErrorKind::InvalidResponse, describe_json_error(&error))
+                    .with_status(status.as_u16())
+                    .with_request_id(request_id),
+            ),
         }
     }
 
@@ -251,7 +255,7 @@ impl HttpTransport {
             ErrorKind::Timeout => format!("no response within {:?}", self.retry.timeout),
             _ => self.api_key.scrub(&root_cause(&error)),
         };
-        // The URL is dropped from the source: it adds nothing the message lacks.
+        // The URL is dropped from the source as a precaution; the trace output already has it.
         Error::new(kind, message).with_source(error.without_url())
     }
 }
@@ -447,6 +451,27 @@ async fn read_capped(mut response: reqwest::Response) -> Result<Vec<u8>, ReadErr
         body.extend_from_slice(&chunk);
     }
     Ok(body)
+}
+
+/// Describes why a body failed to parse, by category and position only.
+///
+/// `serde_json`'s own message is not used, and the error is not kept as a source, because a type
+/// mismatch quotes the offending value (`invalid type: string "..."`) and a response can carry
+/// text that came from the request. Body logging is the way to see the content.
+fn describe_json_error(error: &serde_json::Error) -> String {
+    use serde_json::error::Category;
+
+    let problem = match error.classify() {
+        Category::Syntax => "the body is not valid JSON",
+        Category::Eof => "the body ends unexpectedly",
+        Category::Data => "the body is JSON but not in the documented shape",
+        Category::Io => "the body could not be read",
+    };
+    format!(
+        "{problem} (line {}, column {})",
+        error.line(),
+        error.column()
+    )
 }
 
 /// The innermost cause of an error, which is where `reqwest` keeps the useful part

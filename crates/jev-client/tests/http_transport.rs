@@ -421,22 +421,45 @@ async fn a_redirect_is_not_followed_so_the_key_never_reaches_another_host() {
 }
 
 #[tokio::test]
-async fn a_success_with_an_unreadable_body_is_an_invalid_response_with_its_request_id() {
-    let server = MockServer::start().await;
-    let garbled = ResponseTemplate::new(200)
-        .insert_header("x-typesafe-request-id", "req_garbled")
-        .set_body_string(format!("<html>{SENTINEL_STATE}"));
-    respond(&server, garbled, 1).await;
+async fn a_success_with_an_unreadable_body_is_an_invalid_response_that_never_quotes_the_body() {
+    let bodies = [
+        (format!("<html>{SENTINEL_STATE}"), "not valid JSON"),
+        (
+            format!(r#"{{"model":"m","answers":"{SENTINEL_STATE}"}}"#),
+            "not in the documented shape",
+        ),
+        (
+            format!(r#"{{"model":"{SENTINEL_STATE}""#),
+            "ends unexpectedly",
+        ),
+    ];
+    for (body, problem) in bodies {
+        let server = MockServer::start().await;
+        let garbled = ResponseTemplate::new(200)
+            .insert_header("x-typesafe-request-id", "req_garbled")
+            .set_body_string(body);
+        respond(&server, garbled, 1).await;
 
-    let error = transport(&server, &FakeClock::new())
-        .evaluate(&request())
-        .await
-        .unwrap_err();
+        let error = transport(&server, &FakeClock::new())
+            .evaluate(&request())
+            .await
+            .unwrap_err();
 
-    assert_eq!(error.kind(), ErrorKind::InvalidResponse);
-    assert_eq!(error.request_id(), Some("req_garbled"));
-    assert_eq!(error.attempts(), 1, "a garbled success is not retried");
-    assert!(!format!("{error} {error:?}").contains(SENTINEL_STATE));
+        assert_eq!(error.kind(), ErrorKind::InvalidResponse);
+        assert!(error.message().contains(problem), "{error}");
+        assert_eq!(error.request_id(), Some("req_garbled"));
+        assert_eq!(error.attempts(), 1, "a garbled success is not retried");
+        let mut rendered = format!("{error} {error:?}");
+        let mut cause = std::error::Error::source(&error);
+        while let Some(current) = cause {
+            rendered.push_str(&current.to_string());
+            cause = current.source();
+        }
+        assert!(
+            !rendered.contains(SENTINEL_STATE),
+            "the body leaked into the error: {rendered}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -591,7 +614,14 @@ fn body_logging_is_opt_in_and_still_never_shows_the_key() {
         logs.contains("jev_client::http::body"),
         "under their own target:\n{logs}"
     );
-    // The mock server echoes the key in its error *body*, which body logging shows verbatim. The
-    // request side must still be clean: no Authorization header is ever traced.
-    assert!(!logs.contains(&format!("authorization: Bearer {SENTINEL_KEY}")));
+    // Opting in to bodies is never opting in to the key, even though this mock server echoes the
+    // key back inside its error body.
+    assert!(
+        logs.contains("bad credentials: Bearer [REDACTED]"),
+        "the echo was scrubbed:\n{logs}"
+    );
+    assert!(
+        !logs.contains(SENTINEL_KEY),
+        "the API key leaked into body logs:\n{logs}"
+    );
 }
