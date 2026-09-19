@@ -80,8 +80,10 @@ versions or `CHANGELOG.md` by hand.
    Conventional Commit titles since the last release, and its changelog entry. A `feat` bumps the
    minor version, a `fix` the patch; before 1.0 a breaking change (`!`) bumps the minor version.
    The `PR title` check rejects a pull request whose title does not follow the format.
-2. Merging the release pull request tags `vX.Y.Z` and creates a **draft** GitHub Release, then
-   starts `.github/workflows/release.yml` on the tag.
+2. Merging the release pull request tags `vX.Y.Z` and creates a **draft** GitHub Release. The
+   tag starts `.github/workflows/release.yml`. release-please works through the
+   `jev-release-bot` GitHub App (`RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`), so its pull
+   request gets CI and its tag triggers the release.
 3. That workflow builds all six targets (x86_64 and aarch64 of static-musl Linux, macOS and
    Windows) on native runners, checks each binary's size, version and (on Linux) static linking,
    packs `jev-<version>-<triple>.tar.gz` (`.zip` on Windows) with the licences, man pages and
@@ -89,14 +91,15 @@ versions or `CHANGELOG.md` by hand.
    `release` environment; the assets are uploaded to the draft, downloaded again and verified,
    and only then is the release published.
 
-A failed run is resumed with **Re-run failed jobs**. Publishing can run any number of times: a
+A failed run is resumed with **Re-run failed jobs**, or with
+`gh workflow run release.yml --ref vX.Y.Z` once it is too old to re-run. Publishing can run any number of times: a
 draft gets exactly the new assets, and a published release is never changed.
 
 A **pre-release** (`0.2.0-rc.1`) exercises the same pipeline and is published as a GitHub
 pre-release that never becomes "latest". Stages that must not see pre-releases (crates.io, the
 Homebrew formula) depend on the `stable` job, which is skipped for them. Either merge a commit
-with a `Release-As: 0.2.0-rc.1` footer and let release-please do the rest, or tag a commit whose
-`Cargo.toml` already says that version and run `gh workflow run release.yml --ref v0.2.0-rc.1`.
+with a `Release-As: 0.2.0-rc.1` footer and let release-please do the rest, or push the tag
+`v0.2.0-rc.1` on a commit whose `Cargo.toml` already says that version.
 A tag that disagrees with `Cargo.toml` fails the run before anything is built.
 
 Dispatching `release.yml` on a branch, or a pull request that touches the release plumbing, is a

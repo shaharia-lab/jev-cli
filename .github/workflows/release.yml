@@ -5,12 +5,12 @@
 #
 # How a run starts, and what it does:
 #
-# - release-please (.github/workflows/release-please.yml) merges the release pull request, creates
-#   the tag and a draft release, and dispatches this workflow on the tag. A tag or release created
-#   with the default GITHUB_TOKEN triggers no workflow, but a dispatch does, and it runs on the tag
-#   ref, which the `release` environment requires.
-# - `gh workflow run release.yml --ref v0.2.0-rc.1` publishes a tag by hand, for a pre-release or
-#   to resume a release whose run can no longer be re-run.
+# - Pushing a tag `v*` publishes it. Normally release-please pushes it, after the release pull
+#   request is merged, together with a draft release (.github/workflows/release-please.yml). It
+#   acts through the jev-release-bot GitHub App, because a tag pushed with the default GITHUB_TOKEN
+#   would trigger no workflow. A person can push one for a pre-release.
+# - `gh workflow run release.yml --ref <tag>` runs a tag again, to resume a release whose run can
+#   no longer be re-run.
 # - Any other ref (a branch dispatch, or a pull request that changes the release plumbing) is a
 #   dry run: every target is built, checked and packed, and nothing is published.
 #
@@ -26,6 +26,8 @@
 name: Release
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
   pull_request:
     branches: [main]
