@@ -45,10 +45,10 @@ const OFFLINE_BUDGET: Duration = Duration::from_millis(50);
 /// The regression guards, about two and a half times the medians CI's Linux runner measured when
 /// they were set (in brackets). One that trips means start-up has roughly doubled: find out why
 /// before raising it, and never above the budget.
-const HELP_GUARD: Duration = Duration::from_millis(5); // (1.8 ms)
-const SPEC_GUARD: Duration = Duration::from_millis(7); // (2.8 ms)
-const VALIDATE_GUARD: Duration = Duration::from_millis(5); // (1.8 ms)
-const OVERHEAD_GUARD: Duration = Duration::from_millis(18); // (7.4 ms)
+const HELP_GUARD: Duration = Duration::from_millis(4); // (1.4 ms)
+const SPEC_GUARD: Duration = Duration::from_millis(5); // (2.2 ms)
+const VALIDATE_GUARD: Duration = Duration::from_millis(4); // (1.5 ms)
+const OVERHEAD_GUARD: Duration = Duration::from_millis(14); // (5.7 ms)
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
