@@ -12,6 +12,9 @@ use crate::output::Format;
 #[derive(Debug, Parser)]
 #[command(
     name = "jev",
+    // Without this, help and errors name the program after argv[0], which is `jev.exe` on Windows.
+    // Help, and the command spec generated from it, should read the same everywhere.
+    bin_name = "jev",
     version,
     about = "Ask TypeSafe AI's Jev model typed questions from a terminal, a script or an AI agent (unofficial)",
     long_about = "jev sends a `state` (text or structured data) and typed questions to TypeSafe AI's Jev \

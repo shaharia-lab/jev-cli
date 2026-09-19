@@ -171,6 +171,23 @@ fn asked_for_help_and_version_go_to_stdout_and_succeed() {
 }
 
 #[test]
+fn help_names_the_program_jev_whatever_the_file_is_called() {
+    // On Windows the file is `jev.exe`, and clap would otherwise name the program after it.
+    let renamed = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("renamed-jev.exe");
+    std::fs::copy(assert_cmd::cargo::cargo_bin("jev"), &renamed).unwrap();
+
+    let output = std::process::Command::new(&renamed)
+        .args(["batch", "run", "--help"])
+        .output()
+        .unwrap();
+
+    let help = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success());
+    assert!(help.contains("Usage: jev batch run"), "{help}");
+    assert!(!help.contains("renamed-jev"), "{help}");
+}
+
+#[test]
 fn an_unknown_command_or_flag_suggests_the_nearest_one() {
     let command = run(jev().args(["evl", "-o", "table"]));
     let flag = run(jev().args(["version", "--outptu", "json", "-o", "table"]));
