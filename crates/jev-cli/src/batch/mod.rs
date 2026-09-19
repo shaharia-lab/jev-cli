@@ -11,7 +11,9 @@
 
 mod engine;
 mod input;
+mod plan;
 mod record;
+mod resume;
 mod summary;
 
 use std::collections::HashSet;
@@ -19,10 +21,12 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use serde_json::{Map, Value, json};
 
-pub(crate) use engine::{Job, run};
+pub(crate) use engine::{Event, Job, Outcome, Progress, run};
 pub(crate) use input::{Row, RowFormat, RowProblem, RowSource, Rows};
+pub(crate) use plan::Plan;
 pub(crate) use record::Record;
-pub(crate) use summary::Summary;
+pub(crate) use resume::{discard_partial, read as read_resumed};
+pub(crate) use summary::{StopReason, Summary};
 
 use crate::error::CliError;
 
@@ -169,26 +173,52 @@ impl Ids {
     ///
     /// A problem when the id has been seen before. `"7"` and `7` are the same id.
     pub(crate) fn insert(&mut self, id: &Value, line: u64) -> Result<(), RowProblem> {
-        let text = match id {
-            Value::String(text) => text.clone(),
-            other => other.to_string(),
-        };
-        let fingerprint = [0_u8, 1].map(|seed| {
-            let mut hasher = DefaultHasher::new();
-            seed.hash(&mut hasher);
-            text.hash(&mut hasher);
-            hasher.finish()
-        });
-        let [high, low] = fingerprint;
-        if self.0.insert((u128::from(high) << 64) | u128::from(low)) {
+        if self.0.insert(fingerprint(id)) {
             Ok(())
         } else {
             Err(RowProblem::at(
                 line,
-                format!("the id `{text}` is used by an earlier row; ids must be unique"),
+                format!(
+                    "the id `{}` is used by an earlier row; ids must be unique",
+                    id_text(id)
+                ),
             ))
         }
     }
+
+    /// Records an id, whether or not it has been seen before.
+    pub(crate) fn add(&mut self, id: &Value) {
+        self.0.insert(fingerprint(id));
+    }
+
+    /// Whether an id has been recorded. `"7"` and `7` are the same id.
+    pub(crate) fn contains(&self, id: &Value) -> bool {
+        self.0.contains(&fingerprint(id))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+/// An id as text: a string as it is, a number as written.
+fn id_text(id: &Value) -> String {
+    match id {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }
+}
+
+fn fingerprint(id: &Value) -> u128 {
+    let text = id_text(id);
+    let [high, low] = [0_u8, 1].map(|seed| {
+        let mut hasher = DefaultHasher::new();
+        seed.hash(&mut hasher);
+        text.hash(&mut hasher);
+        hasher.finish()
+    });
+    (u128::from(high) << 64) | u128::from(low)
 }
 
 /// Reads every row of a rereadable input once, before anything is sent, and checks that each can
@@ -199,7 +229,10 @@ impl Ids {
 /// # Errors
 ///
 /// A usage error listing the problems found. Nothing has been sent.
-pub(crate) fn preflight(rows: Rows, mapping: &Mapping) -> Result<u64, CliError> {
+pub(crate) fn preflight(
+    rows: impl IntoIterator<Item = Result<Row, RowProblem>>,
+    mapping: &Mapping,
+) -> Result<u64, CliError> {
     let mut ids = mapping.id_field.is_some().then(Ids::default);
     let mut count = 0_u64;
     let mut problems = Vec::new();
@@ -220,13 +253,12 @@ pub(crate) fn preflight(rows: Rows, mapping: &Mapping) -> Result<u64, CliError> 
     if problems.is_empty() {
         Ok(count)
     } else {
-        Err(invalid_input(&problems))
+        Err(invalid_input(&problems, problems.len() as u64))
     }
 }
 
 /// The error for rows that cannot be used.
-pub(crate) fn invalid_input(problems: &[RowProblem]) -> CliError {
-    let count = problems.len();
+pub(crate) fn invalid_input(problems: &[RowProblem], count: u64) -> CliError {
     let mut error = CliError::usage(format!(
         "the input has {count} row{} that cannot be used; nothing was sent",
         if count == 1 { "" } else { "s" }
@@ -235,10 +267,9 @@ pub(crate) fn invalid_input(problems: &[RowProblem]) -> CliError {
     for problem in problems.iter().take(MAX_LISTED_PROBLEMS) {
         error.lines.push(format!("- {}", problem.describe()));
     }
-    if count > MAX_LISTED_PROBLEMS {
-        error
-            .lines
-            .push(format!("- and {} more", count - MAX_LISTED_PROBLEMS));
+    let listed = problems.len().min(MAX_LISTED_PROBLEMS) as u64;
+    if count > listed {
+        error.lines.push(format!("- and {} more", count - listed));
     }
     let listed: Vec<Value> = problems
         .iter()

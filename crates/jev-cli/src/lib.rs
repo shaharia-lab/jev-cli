@@ -19,6 +19,7 @@ mod gate;
 mod help;
 mod input;
 mod interaction;
+mod interrupt;
 mod logging;
 mod notice;
 mod output;
@@ -153,6 +154,8 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
         format,
         ui: stderr_ui,
         quiet: global.quiet,
+        // A dumb terminal cannot erase a line, so nothing is redrawn on it.
+        terminal: terminal.stderr && !terminal.dumb,
     };
     if let Ok((file, _)) = &loaded {
         for warning in &file.warnings {

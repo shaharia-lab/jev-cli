@@ -13,7 +13,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use jev_client::{
     Answer, ApiKey, BaseUrl, Clock, ErrorKind, HttpTransport, HttpTransportBuilder, Noul, Request,
-    RetryPolicy, Transport,
+    RetryPolicy, Throttle, Transport,
 };
 use serde_json::{Value, json};
 use wiremock::matchers::{header, method, path};
@@ -193,6 +193,40 @@ async fn a_429_with_retry_after_waits_as_asked_and_then_succeeds() {
     assert!(
         reply.meta.latency >= Duration::from_secs(1),
         "latency includes the wait"
+    );
+}
+
+#[tokio::test]
+async fn a_429_on_one_call_through_a_throttle_holds_back_the_calls_that_follow() {
+    let server = MockServer::start().await;
+    respond(
+        &server,
+        api_error(429, "rate_limit_error", "Slow down.").insert_header("retry-after", "3"),
+        1,
+    )
+    .await;
+    respond(&server, success(), 2).await;
+    let clock = FakeClock::new();
+    let throttle = Arc::new(Throttle::new());
+    let first = transport(&server, &clock).with_throttle(Arc::clone(&throttle));
+    let second = first.clone();
+
+    first.evaluate(&request()).await.unwrap();
+    let paced = throttle.spacing();
+    second.evaluate(&request()).await.unwrap();
+
+    assert_eq!(
+        clock.sleeps(),
+        [Duration::from_secs(3), Duration::from_millis(100)],
+        "the retry waited as asked, and the next call was spaced out after it"
+    );
+    assert_eq!(
+        (paced, throttle.spacing()),
+        (
+            Duration::from_micros(87_500),
+            Duration::from_nanos(76_562_500)
+        ),
+        "the refusal opened a 100 ms gap, and each success since narrowed it by an eighth"
     );
 }
 

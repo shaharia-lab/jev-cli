@@ -145,7 +145,13 @@ worker, so memory is O(concurrency), never O(rows); only ids are remembered, as 
 A file is read twice: once to check every row (mapping, repeated ids) before anything is sent, then
 to send. Piped rows can be read only once, so they are checked as they arrive. Like `jev mcp serve`,
 `jev batch run` writes to stdout as it goes: one record per row, flushed at once, in completion
-order. A row that fails is a record, not an error; the run exits 7 when any did.
+order (`--ordered` holds records back behind a slower earlier row, within a bounded window). A row
+that fails is a record, not an error; the run exits 7 when any did. The engine takes no signals and
+prints nothing: it gets an `interrupt` future (the command's is `interrupt::first_of_two`, SIGINT or
+SIGTERM, 130; a second signal exits at once) and reports `Event`s to an observer that draws the
+progress. `--resume` has no state file: the output is the state (`batch/resume.rs`), ids recorded
+`ok` are skipped, and an incomplete last line from a crash is truncated away before appending.
+Pool-wide back-off is `jev_client::Throttle`, attached to the one transport every worker shares.
 
 JSON Schemas come from one place, `schemas.rs`, which generates them from the types that read and
 write the data (`Request`, `ResultEnvelope`, `batch::Record`, `ErrorDocument`); `jev schema` prints them and the MCP

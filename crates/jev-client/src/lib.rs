@@ -61,6 +61,7 @@
 //! - **Retries.** [`RetryPolicy`] defaults to the official SDKs' behaviour: 2 retries with jittered
 //!   exponential backoff for 408, 429, 5xx, timeouts and connection failures, honouring
 //!   `Retry-After`. 400, 401, 403, 404 and 422 are never retried. [`Clock`] keeps tests instant.
+//!   A [`Throttle`] shared by concurrent calls makes a 429 or 529 on one of them slow all of them.
 //! - **Errors.** One [`Error`] with an [`ErrorKind`] mirroring the SDKs' error classes, carrying
 //!   the HTTP status, the API's `error_type`, and the `x-typesafe-request-id`. No error ever
 //!   contains the API key or a request's `state`.
@@ -90,6 +91,7 @@ mod request;
 mod response;
 mod retry;
 mod secret;
+mod throttle;
 mod transport;
 pub mod validate;
 
@@ -105,6 +107,7 @@ pub use request::Request;
 pub use response::{Response, Usage};
 pub use retry::RetryPolicy;
 pub use secret::{ApiKey, InvalidApiKey};
+pub use throttle::Throttle;
 pub use transport::{Reply, ReplyMeta, Transport};
 
 /// Version of this crate, as published.
