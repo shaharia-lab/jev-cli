@@ -843,7 +843,8 @@ particular release, which is the only way to move to an older one. When Homebrew
 installed jev, it prints their command instead and changes nothing. Use `jev version` to see the \
 running version, how it was installed and whether it updates itself.",
         input: "Nothing but the flags; no API key and no configuration. It contacts only GitHub \
-Releases of shaharia-lab/jev-cli, and --rollback and package-manager installs contact nothing. \
+Releases of shaharia-lab/jev-cli; --rollback, and an update of a package-manager install, contact \
+nothing. \
 Every download is checked against the release keys compiled into jev (a minisign signature of \
 the archive and of SHA256SUMS, each naming its file and version, and the archive's SHA-256) \
 before anything is written. The new binary is swapped in atomically next to the old one, which is \
