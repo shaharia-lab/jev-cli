@@ -7,7 +7,7 @@ use crate::cli::ConfigCommand;
 use crate::config::{Key, Setting, Settings, Source, Value};
 use crate::error::CliError;
 use crate::notice::Notice;
-use crate::output::{Cell, Render, Table, Ui};
+use crate::output::{Cell, Render, Table, Ui, printable};
 
 pub(crate) fn run(command: &ConfigCommand, context: &mut Context<'_>) -> Result<(), CliError> {
     match command {
@@ -126,6 +126,10 @@ impl Row {
 
 impl Render for Row {
     /// Just the value, so that `$(jev config get model)` works in a script.
+    ///
+    /// The value is printed as stored, control characters and all. Like `--field` and the machine
+    /// formats, this is one value for a program to read, and a program needs it unchanged; the
+    /// table `jev config list` prints for a person neutralises the same value.
     fn human(&self, _: Ui) -> String {
         format!("{}\n", self.shown_value())
     }
@@ -212,9 +216,10 @@ struct Changed {
 
 impl Render for Changed {
     fn human(&self, _: Ui) -> String {
+        // A `Value` displays as JSON, which escapes control characters; a profile name does not.
         let place = self.profile.as_ref().map_or_else(
             || "for every profile".to_owned(),
-            |profile| format!("in profile `{profile}`"),
+            |profile| format!("in profile `{}`", printable(profile)),
         );
         match (&self.value, self.applied) {
             (Some(value), _) => format!("set `{}` to `{value}` {place}\n", self.key),
@@ -233,6 +238,8 @@ struct Location {
 }
 
 impl Render for Location {
+    /// Just the path, so that `$(jev config path)` works in a script: unchanged, like
+    /// [`Row::human`].
     fn human(&self, _: Ui) -> String {
         format!("{}\n", self.config_file)
     }

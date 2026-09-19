@@ -7,7 +7,7 @@ use super::Context;
 use crate::cli::ProfileCommand;
 use crate::config::{ConfigFile, DEFAULT_PROFILE, Flags, Key, Value};
 use crate::error::CliError;
-use crate::output::{Cell, Render, Table, Ui};
+use crate::output::{Cell, Render, Table, Ui, printable};
 use crate::suggest;
 
 pub(crate) fn run(command: &ProfileCommand, context: &mut Context<'_>) -> Result<(), CliError> {
@@ -220,9 +220,11 @@ struct Outcome {
 
 impl Render for Outcome {
     fn human(&self, _: Ui) -> String {
+        // `create` validates the name, but `use` and `delete` take whatever the config file holds.
+        let profile = printable(&self.profile);
         match self.action {
-            "active" => format!("profile `{}` is now active\n", self.profile),
-            action => format!("{action} profile `{}`\n", self.profile),
+            "active" => format!("profile `{profile}` is now active\n"),
+            action => format!("{action} profile `{profile}`\n"),
         }
     }
 }

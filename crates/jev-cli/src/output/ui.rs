@@ -50,11 +50,17 @@ impl Ui {
         Self::new(false, false)
     }
 
+    /// Styles one value for a person.
+    ///
+    /// `text` is always a value, never a line that has already been styled, so it is passed
+    /// through [`printable`] first: whatever `jev` paints for a person cannot drive the terminal,
+    /// whether colour is on or off. The escape codes added here are `jev`'s own and stay.
     fn paint(self, style: Style, text: &str) -> String {
+        let text = printable(text);
         if self.color {
             format!("{style}{text}{style:#}")
         } else {
-            text.to_owned()
+            text.into_owned()
         }
     }
 
@@ -145,6 +151,19 @@ mod tests {
         assert_eq!(ui.error_label("error:"), "error:");
         assert_eq!(ui.bar(0.5, 10), "#####.....");
         assert_eq!(ui.separator(), " | ");
+    }
+
+    #[test]
+    fn styling_a_value_neutralises_its_control_characters_with_colour_on_or_off() {
+        for ui in [Ui::plain(), Ui::new(true, true)] {
+            for styled in [ui.bold("a\u{1b}[8mb"), ui.dim("a\rb")] {
+                assert!(
+                    !styled.contains("\u{1b}[8m") && !styled.contains('\r'),
+                    "{styled:?}"
+                );
+            }
+        }
+        assert_eq!(Ui::plain().bold("a\u{1b}[8mb"), "a\\u{1b}[8mb");
     }
 
     #[test]
