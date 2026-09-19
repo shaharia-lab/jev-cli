@@ -25,7 +25,7 @@
         {
           "type": "toml",
           "path": "Cargo.lock",
-          "jsonpath": "$.package[?(@.name === 'jev-cli' || @.name === 'jev-client')].version"
+          "jsonpath": "$.package[?(@.name.value === 'jev-cli' || @.name.value === 'jev-client')].version"
         }
       ]
     }
