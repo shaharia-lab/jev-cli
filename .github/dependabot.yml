@@ -24,6 +24,14 @@ updates:
       github-actions:
         patterns: ["*"]
 
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(hooks)"
+
   # Keeps the pinned development toolchain in rust-toolchain.toml current. The minimum supported
   # version (`rust-version` in Cargo.toml) is a deliberate decision and is never bumped automatically.
   - package-ecosystem: rust-toolchain

@@ -123,6 +123,13 @@ jobs:
         run: scripts/ci/check-action-pins.sh
       - name: jev-client stays free of CLI, terminal and config crates
         run: scripts/ci/check-client-deps.sh
+      # Keeps .pre-commit-config.yaml valid and applies the hygiene hooks to every file, including
+      # for contributors who did not install the hooks. The branch guard is meaningless in CI and
+      # the cargo hooks already run in the jobs above.
+      - name: pre-commit hygiene hooks
+        run: pipx run pre-commit==4.6.2 run --all-files --show-diff-on-failure
+        env:
+          SKIP: no-commit-to-branch,cargo-fmt,cargo-clippy
       - name: AGENTS.md is a symlink to CLAUDE.md
         run: |
           test "$(git ls-files -s AGENTS.md | cut -d' ' -f1)" = "120000"

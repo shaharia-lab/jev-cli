@@ -1,11 +1,15 @@
 # Local equivalents of the CI jobs. `make check` runs everything a pull request must pass.
 # On Windows without make, run the cargo commands below directly.
 
-.PHONY: check fmt fmt-check lint test msrv doc deny audit policy
+.PHONY: check hooks fmt fmt-check lint test msrv doc deny audit policy
 
 MSRV := $(shell sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
 
 check: fmt-check lint test msrv doc deny audit policy
+
+# Once per clone: installs the pre-commit and pre-push git hooks.
+hooks:
+	pre-commit install
 
 fmt:
 	cargo fmt --all
@@ -35,3 +39,4 @@ audit:
 policy:
 	scripts/ci/check-action-pins.sh
 	scripts/ci/check-client-deps.sh
+	SKIP=no-commit-to-branch,cargo-fmt,cargo-clippy pre-commit run --all-files

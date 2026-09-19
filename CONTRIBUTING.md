@@ -18,6 +18,17 @@ cargo build --workspace
 cargo run -p jev-cli        # runs the `jev` binary
 ```
 
+Then install the git hooks, once per clone. They need [pre-commit](https://pre-commit.com/#install):
+
+```bash
+pre-commit install          # or: make hooks
+```
+
+This installs two hooks. On **commit**: file hygiene (whitespace, line endings, YAML/TOML syntax,
+large files, private keys), `cargo fmt --check` and `cargo clippy` when Rust or Cargo files change,
+and a guard that stops commits to `main`. On **push**: the test suite and the crate-boundary check.
+If a hook fixes a file for you, stage the fix and commit again.
+
 For the dependency checks, install two extra tools once:
 
 ```bash

@@ -107,6 +107,10 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
   | Supply chain | `cargo deny --locked check` and `cargo audit --deny unsound --deny yanked` |
   | Repo policy | `scripts/ci/check-action-pins.sh`, `scripts/ci/check-client-deps.sh` |
 
+- Git hooks are defined in `.pre-commit-config.yaml`; install them once per clone with
+  `pre-commit install` (commit: hygiene, fmt, clippy, no commits to `main`; push: tests and the crate
+  boundary). Never bypass them with `--no-verify`: fix what they report. A worktree shares the main
+  checkout's hooks, so they run there too.
 - If `cargo` is not on `PATH` in a fresh shell, run `. "$HOME/.cargo/env"` first.
 - The development toolchain is pinned in `rust-toolchain.toml` (Dependabot bumps it). The MSRV is
   `rust-version` in the root `Cargo.toml`; policy is latest stable minus two, changed deliberately.
