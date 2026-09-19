@@ -102,6 +102,13 @@ versions or `CHANGELOG.md` by hand.
    verified (checksums, signatures against `crates/jev-cli/keys/release-primary.pub` with the
    standard minisign CLI, and attestations), and only then is the release published.
 
+The install scripts at the repository root, `install.sh` and `install.ps1`, download from GitHub
+Releases and are served to users straight from `main`, so a change to them ships when it is
+merged. `crates/jev-cli/tests/install_script.rs` runs them on every OS against signed fake
+releases on a local server (it needs `minisign`; CI installs it with
+`scripts/ci/install-minisign.sh`), and `scripts/ci/lint-install-scripts.sh` runs ShellCheck and
+PSScriptAnalyzer on them.
+
 `scripts/release/self-test.sh` (part of `make check` and CI) checks the committed public keys and
 drives signing and verification with a throwaway key, including tampered assets. Key rotation and
 manual verification are described in [`SECURITY.md`](SECURITY.md).
