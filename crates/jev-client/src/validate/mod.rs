@@ -1,7 +1,7 @@
 //! Offline validation of a request, before any money is spent on it.
 //!
 //! The API does not enforce its own limits reliably: a one-level score returns 200 with a
-//! meaningless answer, an eleven-level score fails with a server error, and an unknown field inside
+//! meaningless answer, an eleven-level score is refused with a bare 400, and an unknown field inside
 //! a question is silently ignored. Checking a request here is therefore a matter of correctness,
 //! not convenience. Nothing in this module performs I/O.
 //!

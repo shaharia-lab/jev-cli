@@ -1,0 +1,106 @@
+# Live smoke suite (PRD TEST-3): crates/jev-cli/tests/live.rs against the real TypeSafe API, to
+# notice when the server changes under us. One call of each question type through `jev eval` and
+# each shortcut, `jev models list`, and the server quirks `jev` works around. A run is about two
+# thousand input tokens, well under a hundredth of a cent; the job summary shows the count.
+#
+# The API key is the `TYPESAFE_API_KEY` secret of the `live-smoke` environment, which only the
+# main branch can use. Only the smoke job has that environment, and only its test step sees the
+# secret. This workflow never runs for a pull request, so a fork cannot reach the key.
+#
+# When the suite fails, the report job opens an issue titled "Live smoke suite is failing", or
+# comments on the one already open; a later passing run closes it. To exercise that path, run the
+# workflow by hand with `break_expectation`.
+
+name: Live smoke
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      break_expectation:
+        description: Expect a model that does not exist, to test the tracking issue
+        type: boolean
+        default: false
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  smoke:
+    name: Live smoke suite
+    if: github.repository == 'shaharia-lab/jev-cli'
+    runs-on: ubuntu-latest
+    environment: live-smoke
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: live-smoke
+      # Built before the secret is in any step's environment.
+      - run: cargo test --locked -p jev-cli --test live --no-run
+      # One test at a time, so a shared key is not rate-limited. The log holds answers and token
+      # counts, never the key: the suite asserts that `jev` does not print it.
+      - name: Run the live suite
+        run: cargo test --locked -p jev-cli --test live -- --ignored --nocapture --test-threads=1 2>&1 | tee live-smoke.log
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          # A missing secret fails the run instead of skipping every test.
+          JEV_LIVE_SMOKE_REQUIRED: "1"
+          JEV_LIVE_SMOKE_BREAK_EXPECTATION: ${{ inputs.break_expectation && '1' || '' }}
+      - name: Report the tokens used
+        if: always()
+        run: |
+          tokens=$(grep -o 'live-smoke tokens: [0-9]*' live-smoke.log | awk '{ sum += $3 } END { print sum + 0 }')
+          # jev-1.13.0 bills $0.042 per million input tokens; an estimate, like every cost jev shows.
+          cost=$(awk -v tokens="$tokens" 'BEGIN { printf "%.6f", tokens * 0.042 / 1000000 }')
+          echo "Input tokens used: **$tokens** (estimated cost \$$cost)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Opens, updates or closes the one tracking issue. It has no secret, only permission to write
+  # issues.
+  report:
+    name: Tracking issue
+    needs: smoke
+    if: always() && github.repository == 'shaharia-lab/jev-cli' && (needs.smoke.result == 'failure' || needs.smoke.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.smoke.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Live smoke suite is failing"
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq "map(select(.title == \"$title\")) | first | .number // empty")
+          if [ "$RESULT" = failure ]; then
+            body="The live smoke suite failed: $RUN_URL
+
+          The TypeSafe API may have changed. Read the failing assertion in the run log and compare it with docs/context/05-live-test-findings.md."
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "Failed again: $RUN_URL"
+            else
+              gh issue create --title "$title" --body "$body"
+            fi
+          elif [ -n "$number" ]; then
+            gh issue close "$number" --comment "The live smoke suite passes again: $RUN_URL"
+          fi

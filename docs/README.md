@@ -21,7 +21,7 @@ Written in our own words from the TypeSafe docs plus live API calls. Read in ord
 Facts a CLI has to respect, with where they come from:
 
 - One endpoint does the work: `POST /v1/systemone`; `GET /v1/models` lists aliases. Auth is a bearer token from `TYPESAFE_API_KEY`; `TYPESAFE_BASE_URL` and `TYPESAFE_DEFAULT_MODEL` are the SDKs' other env vars. (02)
-- Limits: 255 options per Choice, 2–10 levels per Score, 64k tokens per request, 32k for state plus the longest question. The server does not enforce all of them cleanly — a 1-level Score returns 200 and an 11-level Score returns a server error — so validate before sending. (02, 04, 05)
+- Limits: 255 options per Choice, 2–10 levels per Score, 64k tokens per request, 32k for state plus the longest question. The server does not enforce all of them cleanly — a 1-level Score returns 200 and an 11-level Score gets only a bare 400 — so validate before sending. (02, 04, 05)
 - Retry 408/429/5xx (including 529) with exponential backoff and honour `retry-after`. Concurrency above roughly eight gets rate-limited. (02, 04)
 - Responses carry the resolved model id (`jev-1.13.0`) and an `x-typesafe-request-id` header; both are worth surfacing. Aliases move without notice. (02)
 - Only input tokens are billed ($0.042 per million), so cost is computable from `usage.input_tokens`. (02)

@@ -41,7 +41,7 @@ Decisions in the PRD's decision log (§16) are settled. Do not re-open them; rai
 3. **Never prompt** when stdin is not a TTY, `--no-input` / `JEV_NO_INPUT` is set, or `CI=true`. Fail with
    an error that names the flag or env var to use.
 4. **Validate before spending.** The server does not enforce limits reliably (a 1-level Score returns 200,
-   an 11-level Score returns a server error), so client-side validation is a correctness feature.
+   an 11-level Score gets only a bare 400), so client-side validation is a correctness feature.
 5. **Exit codes are a stable contract:** 0 ok · 1 internal · 2 usage/validation · 3 auth · 4 API rejected ·
    5 rate-limited/overloaded · 6 network/timeout · 7 batch partial failure · **10 gate condition false** ·
    11 abstain band · 20 update available · 130 interrupted. Exit 10 is never used for errors.
@@ -279,7 +279,9 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
   only. `jev-client` must not depend on CLI, terminal or config crates (CI checks this).
 - Every third-party GitHub Action is pinned to a full commit SHA with the version in a comment.
 - Tests run against a local mock server (`wiremock`); CLI behaviour is asserted with `assert_cmd` and
-  snapshot tests on stdout, stderr **and** exit code. Live API tests are opt-in only.
+  snapshot tests on stdout, stderr **and** exit code. Live API tests are opt-in only: the smoke suite
+  `crates/jev-cli/tests/live.rs` is `#[ignore]`d, runs nightly in `.github/workflows/live-smoke.yml`
+  (which files one tracking issue on failure), and asserts the server quirks above so drift is noticed.
 - Isolate all test state with `JEV_CONFIG_DIR`; never touch the real user config or credentials.
 - Match the surrounding code's naming, idiom and comment density. Document public items in `jev-client`.
 
