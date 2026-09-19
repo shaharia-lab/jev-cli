@@ -965,6 +965,31 @@ async fn a_run_writes_the_records_jev_batch_run_writes_reports_progress_and_retu
     );
 }
 
+/// Escapes through symbolic links planted inside the allowed directory. Creating a link needs
+/// privileges on Windows, so they are tried on Unix only.
+#[cfg(unix)]
+fn symlinked_escapes(base: &Path) -> Vec<Value> {
+    use std::os::unix::fs::symlink;
+
+    let outside = base.join("outside");
+    symlink(
+        outside.join("secret.jsonl"),
+        base.join("allowed/link.jsonl"),
+    )
+    .unwrap();
+    symlink(&outside, base.join("allowed/linked-dir")).unwrap();
+    vec![
+        json!({ "input": "link.jsonl", "out": "f.jsonl" }),
+        json!({ "input": "linked-dir/secret.jsonl", "out": "g.jsonl" }),
+        json!({ "input": "rows.jsonl", "out": "linked-dir/h.jsonl" }),
+    ]
+}
+
+#[cfg(not(unix))]
+fn symlinked_escapes(_: &Path) -> Vec<Value> {
+    Vec::new()
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_path_outside_the_allowed_directories_is_refused_before_anything_is_written_or_sent() {
     let base = sandbox("escape");
@@ -982,19 +1007,7 @@ async fn a_path_outside_the_allowed_directories_is_refused_before_anything_is_wr
         json!({ "input": "rows.jsonl", "out": outside.join("d.jsonl") }),
         json!({ "questions_file": "../outside/secret.jsonl", "input": "rows.jsonl", "out": "e.jsonl" }),
     ];
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::symlink;
-        symlink(
-            outside.join("secret.jsonl"),
-            base.join("allowed/link.jsonl"),
-        )
-        .unwrap();
-        symlink(&outside, base.join("allowed/linked-dir")).unwrap();
-        attempts.push(json!({ "input": "link.jsonl", "out": "f.jsonl" }));
-        attempts.push(json!({ "input": "linked-dir/secret.jsonl", "out": "g.jsonl" }));
-        attempts.push(json!({ "input": "rows.jsonl", "out": "linked-dir/h.jsonl" }));
-    }
+    attempts.extend(symlinked_escapes(&base));
     let mut messages = vec![initialize()];
     for (id, attempt) in attempts.iter().enumerate() {
         let mut arguments = attempt.clone();
