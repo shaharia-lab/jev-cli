@@ -30,6 +30,9 @@ use crate::exit::Exit;
 /// The updater's directory, beside the binary.
 const STATE_DIR: &str = ".jev-update";
 
+/// How long to wait for the updater's lock before saying another `jev` holds it.
+const LOCK_PATIENCE: Duration = Duration::from_secs(2);
+
 /// How long the self-test of a new binary may take.
 const SELF_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -131,17 +134,25 @@ with the install script, or update it the way it was installed",
             .write(true)
             .open(self.state.join("update.lock"))
             .map_err(|error| not_writable(&error))?;
-        match file.try_lock() {
-            Ok(()) => {}
-            Err(fs::TryLockError::WouldBlock) => {
-                return Err(CliError::update(
-                    "update_in_progress",
-                    Exit::Usage,
-                    "another jev is updating this installation",
-                )
-                .hint("wait for it to finish, then run the command again"));
+        let started = Instant::now();
+        loop {
+            match file.try_lock() {
+                Ok(()) => break,
+                // A process being started elsewhere holds a copy of the descriptor for a moment,
+                // and with it a Unix lock, so a busy lock is tried again for a little while.
+                Err(fs::TryLockError::WouldBlock) if started.elapsed() < LOCK_PATIENCE => {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(fs::TryLockError::WouldBlock) => {
+                    return Err(CliError::update(
+                        "update_in_progress",
+                        Exit::Usage,
+                        "another jev is updating this installation",
+                    )
+                    .hint("wait for it to finish, then run the command again"));
+                }
+                Err(fs::TryLockError::Error(error)) => return Err(not_writable(&error)),
             }
-            Err(fs::TryLockError::Error(error)) => return Err(not_writable(&error)),
         }
         self.clear_leftovers();
         Ok(Lock(file))
