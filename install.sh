@@ -257,8 +257,11 @@ sha256() {
 }
 expected=$(awk -v name="$archive" '$2 == name || $2 == "*" name { print $1 }' "$tmp/SHA256SUMS")
 actual=$(sha256 "$tmp/$archive" | awk '{ print $1 }')
-printf '%s\n' "$expected" | grep -Eqx '[0-9a-f]{64}' ||
-  die "SHA256SUMS does not list $archive exactly once. Nothing was installed."
+# Exactly one line: 64 hex digits, with no second checksum after a newline.
+case $expected in
+  *[!0-9a-f]* | "") die "SHA256SUMS does not list $archive exactly once. Nothing was installed." ;;
+  *) [ ${#expected} -eq 64 ] || die "SHA256SUMS does not list $archive exactly once. Nothing was installed." ;;
+esac
 [ "$actual" = "$expected" ] ||
   die "the SHA-256 of $archive does not match SHA256SUMS: the download is corrupt or was altered. Nothing was installed."
 
