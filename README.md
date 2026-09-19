@@ -8,7 +8,9 @@ Rust and built for people, shell scripts and AI agents alike.
 > sponsored by TypeSafe AI. "TypeSafe" and "Jev" belong to their owner.
 
 > [!WARNING]
-> **Early development.** There is no release yet and the commands below are not implemented.
+> **Early development.** Most commands work, a few still answer "not implemented" and name their
+> tracking issue, and releases are pre-releases for now. Before 1.0, flags, JSON output and exit
+> codes may change in a minor release; [CHANGELOG.md](CHANGELOG.md) calls it out when they do.
 > Progress is tracked in the [v1 epic](https://github.com/shaharia-lab/jev-cli/issues/2).
 
 ## What it will do
