@@ -540,6 +540,12 @@ impl Command {
             _ => None,
         }
     }
+
+    /// Whether automatic updates run around this command. Not around `jev update`, which
+    /// updates when and how it is told, nor `jev version`, which is a new binary's self-test.
+    pub(crate) const fn updates_itself(&self) -> bool {
+        !matches!(self, Self::Update(_) | Self::Version)
+    }
 }
 
 #[derive(Debug, Args)]
@@ -556,6 +562,11 @@ pub(crate) struct UpdateArgs {
     /// Install this release instead of the latest; the only way to move to an older version
     #[arg(long, value_name = "X.Y.Z", group = "action", value_parser = parse_version)]
     pub(crate) version: Option<semver::Version>,
+
+    /// The automatic check that `jev` starts by itself after a command: stages a newer release
+    /// silently, printing nothing. Not for people or scripts.
+    #[arg(long, group = "action", hide = true)]
+    pub(crate) background: bool,
 }
 
 fn parse_version(text: &str) -> Result<semver::Version, String> {
@@ -589,22 +600,22 @@ pub(crate) enum AuthCommand {
 pub(crate) enum ConfigCommand {
     /// Print the effective value of one setting, and where it comes from
     Get {
-        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or `warn_unpinned`
+        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency`, `warn_unpinned`, `update.auto`, `update.channel` or `update.pin_version`
         key: String,
     },
-    /// Store a setting in the selected profile
+    /// Store a setting in the selected profile (the `update.*` settings apply to every profile)
     Set {
-        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or `warn_unpinned`
+        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency`, `warn_unpinned`, `update.auto`, `update.channel` or `update.pin_version`
         key: String,
         /// The new value, e.g. `jev-1.13.0`, `45s`, `json` or `false`
         value: String,
     },
     /// Remove a setting from the selected profile, restoring its default
     Unset {
-        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency` or `warn_unpinned`
+        /// Setting name: `base_url`, `model`, `output`, `timeout`, `max_retries`, `concurrency`, `warn_unpinned`, `update.auto`, `update.channel` or `update.pin_version`
         key: String,
     },
-    /// Print every effective setting and where its value comes from (flag, env, profile or default)
+    /// Print every effective setting and where its value comes from (flag, env, profile, config or default)
     List,
     /// Print the path of the configuration file
     Path,

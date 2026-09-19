@@ -23,7 +23,13 @@ use crate::output::{Format, Output, ResultEnvelope, Ui};
 
 /// The settings of a machine with no configuration and no environment.
 pub(crate) fn default_settings() -> Result<Settings, CliError> {
-    Settings::resolve(&Flags::default(), &Env::default(), None, &IndexMap::new())
+    Settings::resolve(
+        &Flags::default(),
+        &Env::default(),
+        None,
+        &IndexMap::new(),
+        &IndexMap::new(),
+    )
 }
 
 /// A request file, read as JSON and as YAML, then prepared as `jev eval` would prepare it: with
@@ -139,6 +145,7 @@ pub fn config(data: &[u8]) {
             &Env::default(),
             file.active_profile.as_deref(),
             &file.profiles,
+            &file.shared,
         );
         file.create_profile("fuzz");
         file.set_active_profile("fuzz");

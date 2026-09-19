@@ -13,7 +13,7 @@ mod profile;
 mod schema;
 mod shortcut;
 mod spec;
-mod update;
+pub(crate) mod update;
 mod validate;
 mod version;
 

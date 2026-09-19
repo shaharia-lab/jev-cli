@@ -151,8 +151,13 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
     let store = config::config_dir(&env).map(ConfigStore::new);
     let loaded = store.clone().and_then(|store| {
         let file = store.load()?;
-        let settings =
-            Settings::resolve(&flags, &env, file.active_profile.as_deref(), &file.profiles)?;
+        let settings = Settings::resolve(
+            &flags,
+            &env,
+            file.active_profile.as_deref(),
+            &file.profiles,
+            &file.shared,
+        )?;
         Ok((file, settings))
     });
 
@@ -210,7 +215,12 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
         stdout: &mut stdout.lock(),
         stdin: &mut stdin,
     };
-    commands::run(&cli.command, &mut context).map_err(fail)
+    // Automatic updates happen around the command, never during it: a staged update is swapped
+    // in before it starts, and the next check is started, detached, after it has finished.
+    commands::update::before(&cli.command, &context);
+    let outcome = commands::run(&cli.command, &mut context);
+    commands::update::after(&cli.command, &context);
+    outcome.map_err(fail)
 }
 
 /// Turns a `clap` error into help on stdout, or a usage error on stderr.

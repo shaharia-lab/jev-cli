@@ -9,8 +9,11 @@ Nothing.
 
 Output:
 `version`, `commit`, `build_date`, `target`, `client_version`, `install_method` (`self_managed` for
-the install script, `homebrew`, `cargo` or `unknown`), `update_channel` and `auto_update`
-(`enabled`, and the `reason` when it is off). `--field version` prints just the version.
+the install script, `homebrew`, `cargo` or `unknown`), `update_channel` (`stable` or `prerelease`,
+from `update.channel`) and `auto_update`: `enabled`, and the `reason` when it is off, naming the
+first guard that applies (a package manager, a configuration that cannot be read, JEV_AUTO_UPDATE or
+`update.auto`, `update.pin_version`, CI=true, an install not made by the install script, or a
+directory jev cannot write to). `--field version` prints just the version.
 
 Usage: jev version [OPTIONS]
 
@@ -79,3 +82,6 @@ Examples:
 
   # Just the version, for a script
   jev version --field version
+
+  # Does this jev update itself, and if not, why not?
+  jev version -o json | jq .auto_update

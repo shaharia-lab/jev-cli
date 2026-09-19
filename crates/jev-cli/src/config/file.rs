@@ -16,7 +16,7 @@ pub(crate) const SCHEMA_VERSION: i64 = 1;
 const HEADER: &str = "# jev configuration. Change it with `jev config set` and `jev profile`, or by hand.\n\
 # API keys are never stored in this file.\n";
 
-/// Top-level keys. `update` and `pricing` are reserved for features that read them themselves.
+/// Top-level keys. `[update]` holds the settings every profile shares (see [`Key::table`]).
 const TOP_LEVEL_KEYS: [&str; 5] = [
     "schema_version",
     "active_profile",
@@ -35,6 +35,8 @@ pub(crate) struct ConfigFile {
     document: DocumentMut,
     pub(crate) active_profile: Option<String>,
     pub(crate) profiles: IndexMap<String, IndexMap<Key, Value>>,
+    /// The settings held once for every profile, such as `[update] auto`.
+    pub(crate) shared: IndexMap<Key, Value>,
     /// `[pricing] usd_per_mtok`: the user's own rate, used instead of the built-in price list.
     pub(crate) pricing_usd_per_mtok: Option<f64>,
     pub(crate) warnings: Vec<Notice>,
@@ -46,6 +48,7 @@ impl Default for ConfigFile {
             document: DocumentMut::new(),
             active_profile: None,
             profiles: IndexMap::new(),
+            shared: IndexMap::new(),
             pricing_usd_per_mtok: None,
             warnings: Vec::new(),
         }
@@ -76,7 +79,7 @@ impl ConfigFile {
             .iter()
             .filter(|(key, _)| !TOP_LEVEL_KEYS.contains(key))
         {
-            warnings.push(unknown_key(shown_path, key, key, TOP_LEVEL_KEYS));
+            warnings.push(unknown_key(shown_path, key, key, &TOP_LEVEL_KEYS));
         }
         match document.get("schema_version").map(Item::as_integer) {
             None | Some(Some(..=SCHEMA_VERSION)) => {}
@@ -111,7 +114,7 @@ impl ConfigFile {
                 let mut values = IndexMap::new();
                 for (key_name, item) in entries.iter() {
                     let key_path = format!("{path}.{key_name}");
-                    match Key::ALL.into_iter().find(|key| key.name() == key_name) {
+                    match profile_keys().find(|key| key.name() == key_name) {
                         Some(key) => {
                             let parsed = from_toml(key, item)
                                 .map_err(|problem| invalid(&key_path, &problem))?;
@@ -121,13 +124,14 @@ impl ConfigFile {
                             shown_path,
                             &key_path,
                             key_name,
-                            Key::ALL.map(Key::name),
+                            &profile_keys().map(Key::name).collect::<Vec<_>>(),
                         )),
                     }
                 }
                 profiles.insert(name.to_owned(), values);
             }
         }
+        let shared = read_shared(&document, shown_path, &invalid, &mut warnings)?;
         let pricing_usd_per_mtok = match document
             .get("pricing")
             .and_then(|pricing| pricing.get("usd_per_mtok"))
@@ -146,6 +150,7 @@ impl ConfigFile {
             document,
             active_profile,
             profiles,
+            shared,
             pricing_usd_per_mtok,
             warnings,
         })
@@ -172,10 +177,15 @@ impl ConfigFile {
         name == DEFAULT_PROFILE || self.profiles.contains_key(name)
     }
 
-    /// Stores a setting in a profile, creating the profile's table when it is the first one.
+    /// Stores a setting in a profile, creating the profile's table when it is the first one. A
+    /// setting every profile shares goes to its own table instead, whatever `profile` says.
     pub(crate) fn set(&mut self, profile: &str, key: Key, new: &Value) {
         self.prepare();
-        let Some(table) = self.profile_table(profile) else {
+        let table = match key.table() {
+            Some(shared) => as_table(self.document.entry(shared).or_insert_with(toml_edit::table)),
+            None => self.profile_table(profile),
+        };
+        let Some(table) = table else {
             return;
         };
         let mut replacement: toml_edit::Value = match new {
@@ -184,18 +194,34 @@ impl ConfigFile {
             text => text.to_string().into(),
         };
         // A comment written beside the old value belongs to the setting, not to the old value.
-        if let Some(old) = table.get(key.name()).and_then(Item::as_value) {
+        if let Some(old) = table.get(key.field()).and_then(Item::as_value) {
             *replacement.decor_mut() = old.decor().clone();
         }
-        table[key.name()] = Item::Value(replacement);
-        self.profiles
-            .entry(profile.to_owned())
-            .or_default()
-            .insert(key, new.clone());
+        table[key.field()] = Item::Value(replacement);
+        if key.table().is_some() {
+            self.shared.insert(key, new.clone());
+        } else {
+            self.profiles
+                .entry(profile.to_owned())
+                .or_default()
+                .insert(key, new.clone());
+        }
     }
 
-    /// Removes a setting from a profile. Returns whether it was there.
+    /// Removes a setting from a profile, or from its own table for a setting every profile
+    /// shares. Returns whether it was there.
     pub(crate) fn unset(&mut self, profile: &str, key: Key) -> bool {
+        if let Some(shared) = key.table() {
+            let removed = self.shared.shift_remove(&key).is_some();
+            if let Some(table) = self
+                .document
+                .get_mut(shared)
+                .and_then(Item::as_table_like_mut)
+            {
+                table.remove(key.field());
+            }
+            return removed;
+        }
         let removed = self
             .profiles
             .get_mut(profile)
@@ -299,17 +325,57 @@ fn as_table(item: &mut Item) -> Option<&mut Table> {
     item.as_table_mut()
 }
 
+/// Reads the settings every profile shares from their top-level tables, such as `[update]`.
+fn read_shared(
+    document: &DocumentMut,
+    shown_path: &str,
+    invalid: &dyn Fn(&str, &str) -> CliError,
+    warnings: &mut Vec<Notice>,
+) -> Result<IndexMap<Key, Value>, CliError> {
+    let mut shared = IndexMap::new();
+    for table in SHARED_TABLES {
+        let Some(item) = document.get(table) else {
+            continue;
+        };
+        let entries = item
+            .as_table_like()
+            .ok_or_else(|| invalid(table, "must be a table of settings"))?;
+        let known: Vec<Key> = Key::ALL
+            .into_iter()
+            .filter(|key| key.table() == Some(table))
+            .collect();
+        for (field, item) in entries.iter() {
+            let key_path = format!("{table}.{field}");
+            match known.iter().find(|key| key.field() == field) {
+                Some(key) => {
+                    let parsed =
+                        from_toml(*key, item).map_err(|problem| invalid(&key_path, &problem))?;
+                    shared.insert(*key, parsed);
+                }
+                None => warnings.push(unknown_key(
+                    shown_path,
+                    &key_path,
+                    field,
+                    &known.iter().map(|key| key.field()).collect::<Vec<_>>(),
+                )),
+            }
+        }
+    }
+    Ok(shared)
+}
+
 /// Reads a setting from the TOML value a person wrote.
 fn from_toml(key: Key, item: &Item) -> Result<Value, String> {
+    let switch = matches!(key, Key::WarnUnpinned | Key::UpdateAuto);
     let text = match (key, item.as_value()) {
         (Key::Timeout, Some(toml_edit::Value::Integer(seconds))) => seconds.value().to_string(),
         (Key::Timeout, Some(toml_edit::Value::Float(seconds))) => seconds.value().to_string(),
         (Key::MaxRetries | Key::Concurrency, Some(toml_edit::Value::Integer(count))) => {
             count.value().to_string()
         }
-        (Key::WarnUnpinned, Some(toml_edit::Value::Boolean(on))) => on.value().to_string(),
+        (_, Some(toml_edit::Value::Boolean(on))) if switch => on.value().to_string(),
         (Key::MaxRetries | Key::Concurrency, _) => return Err("must be a whole number".to_owned()),
-        (Key::WarnUnpinned, _) => return Err("must be true or false".to_owned()),
+        _ if switch => return Err("must be true or false".to_owned()),
         (_, Some(toml_edit::Value::String(text))) => text.value().clone(),
         (Key::Timeout, _) => {
             return Err(format!(
@@ -323,17 +389,20 @@ fn from_toml(key: Key, item: &Item) -> Result<Value, String> {
         .map_err(|error| format!("is not valid: {}", error.message))
 }
 
-fn unknown_key<const N: usize>(
-    shown_path: &str,
-    key_path: &str,
-    key_name: &str,
-    known: [&'static str; N],
-) -> Notice {
+/// The settings a profile holds.
+fn profile_keys() -> impl Iterator<Item = Key> {
+    Key::ALL.into_iter().filter(|key| key.table().is_none())
+}
+
+/// The top-level tables that hold settings every profile shares.
+const SHARED_TABLES: [&str; 1] = ["update"];
+
+fn unknown_key(shown_path: &str, key_path: &str, key_name: &str, known: &[&str]) -> Notice {
     let notice = Notice::warning(
         "config_unknown_key",
         format!("{shown_path}: unknown key `{key_path}` is ignored"),
     );
-    match suggest::closest(key_name, known) {
+    match suggest::closest(key_name, known.iter().copied()) {
         Some(close) => notice.hint(format!("did you mean `{close}`?")),
         None => notice.hint(format!("the keys allowed there are: {}", known.join(", "))),
     }
@@ -549,6 +618,88 @@ timeout = \"500ms\"\n"
             file.to_toml(),
             "# my settings\nschema_version = 1\n\n[profiles.default]\n# pinned on purpose\nmodel = \"jev-1.14.0\"   # do not move\n"
         );
+    }
+
+    #[test]
+    fn the_update_settings_live_in_their_own_table_shared_by_every_profile() {
+        let file = ConfigFile::parse(
+            "[update]\nauto = false\nchannel = \"prerelease\"\npin_version = \"v0.3.1\"\nautomatic = 1\n\
+[profiles.default]\n\"update.auto\" = true\n",
+            PATH,
+        )
+        .unwrap();
+
+        assert_eq!(file.shared[&Key::UpdateAuto], Value::Switch(false));
+        assert_eq!(
+            file.shared[&Key::UpdateChannel],
+            Value::Text("prerelease".into())
+        );
+        assert_eq!(
+            file.shared[&Key::UpdatePinVersion],
+            Value::Text("0.3.1".into())
+        );
+        let warnings: Vec<&str> = file.warnings.iter().map(|w| w.message.as_str()).collect();
+        assert_eq!(
+            warnings,
+            [
+                "config.toml: unknown key `profiles.default.update.auto` is ignored",
+                "config.toml: unknown key `update.automatic` is ignored",
+            ]
+        );
+        assert!(
+            file.profiles["default"].is_empty(),
+            "a profile cannot hold it"
+        );
+
+        for (text, expected) in [
+            (
+                "[update]\nauto = \"no\"\n",
+                "`update.auto` must be true or false",
+            ),
+            (
+                "[update]\nchannel = \"nightly\"\n",
+                "`update.channel` is not valid",
+            ),
+            (
+                "[update]\npin_version = 3\n",
+                "`update.pin_version` must be a string",
+            ),
+            ("update = 3\n", "`update` must be a table of settings"),
+        ] {
+            let error = ConfigFile::parse(text, PATH).unwrap_err();
+            assert!(
+                error.message.contains(expected),
+                "{text:?}: {}",
+                error.message
+            );
+        }
+    }
+
+    #[test]
+    fn setting_an_update_setting_writes_the_update_table_whatever_the_profile() {
+        let original = "# mine\n[profiles.work]\nmodel = \"jev-1.13.0\"\n";
+        let mut file = ConfigFile::parse(original, PATH).unwrap();
+
+        file.set("work", Key::UpdateAuto, &Value::Switch(false));
+        file.set("work", Key::UpdatePinVersion, &Value::Text("0.3.1".into()));
+        assert_eq!(
+            file.to_toml(),
+            "# mine\n[profiles.work]\nmodel = \"jev-1.13.0\"\n\n[update]\nauto = false\npin_version = \"0.3.1\"\n"
+        );
+        assert_eq!(file.profiles["work"].len(), 1);
+
+        assert!(file.unset("work", Key::UpdatePinVersion));
+        assert!(
+            !file.unset("default", Key::UpdatePinVersion),
+            "already gone"
+        );
+        let reread = ConfigFile::parse(&file.to_toml(), PATH).unwrap();
+        assert_eq!(reread.shared, file.shared);
+        assert_eq!(
+            reread.shared.get(&Key::UpdateAuto),
+            Some(&Value::Switch(false))
+        );
+        assert!(!reread.shared.contains_key(&Key::UpdatePinVersion));
     }
 
     #[test]

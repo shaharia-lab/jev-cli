@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`, `jev batch run`,
-`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema`, `jev completion`, `jev update` and `jev version` work; the automatic background update is still to come. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema`, `jev completion`, `jev update` and `jev version` work, and install-script installs update themselves in the background. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -187,7 +187,9 @@ never shown, because it would quote a line that holds a key.
 Settings come from one resolver, `config::Settings::resolve`: **flag > environment > profile >
 default**, each value carrying its `Source`. A command reads `context.settings()?`; it never reads a
 flag or an environment variable for a setting itself. Adding a setting means adding a `Key` (name,
-parser, default, flag, env var) and a row in the precedence table test. The configuration is loaded
+parser, default, flag, env var) and a row in the precedence table test. A key with a `table()`
+(`update.auto`, `update.channel`, `update.pin_version`) is stored once in that top-level table for
+every profile, and its source is `config` rather than `profile`. The configuration is loaded
 lazily as a `Result`, so a broken `config.toml` stops only the commands that need it (`jev version` and
 `jev config path` must keep working). `ConfigStore::update` is the only way to write: lock, re-read,
 change, temp file, rename. Edits go through `toml_edit` and must preserve a person's comments; an
@@ -235,6 +237,16 @@ comes from the path (`Cellar` is Homebrew, `<root>/bin` with `.crates.toml` is c
 script's receipt, `.jev-update/receipt.json`; managed installs get their package manager's command.
 Tests serve signed fake releases from `wiremock` through the test hooks `JEV_TEST_UPDATE_URL`,
 `JEV_TEST_UPDATE_KEY` and `JEV_TEST_VERSION`, which release builds do not contain.
+
+Automatic updates (`update/auto.rs`, hooks in `commands/update.rs`) run *around* a command in
+`lib.rs`, never inside it, and never around `jev update` or `jev version` (the self-test).
+`before` swaps in a staged upgrade and prints one `Notice::info` line; `after` claims the day's check
+in `auto-update.json` in the config dir (a non-blocking lock, so concurrent runs start one check) and
+spawns `jev update --background` (hidden flag) detached with null stdio, not waited for. Guards, in
+the order `jev version` reports them (`update::guard`): package manager, unreadable config,
+`JEV_AUTO_UPDATE`/`update.auto`, `update.pin_version`, `CI=true`, no install receipt, directory not
+writable. Only an install with the receipt updates itself, so dev builds and tests never do unless a
+test creates one. Failures are recorded in the state file and logged at `-v`, never shown otherwise.
 
 Commands depend on traits (`Transport`, `CredentialStore`, `Clock`, `UpdateSource`) so they are testable
 with fakes. Errors use `thiserror` in the library; the binary has one error → exit-code mapping.

@@ -1,20 +1,24 @@
-//! `jev update`.
+//! `jev update`, and the automatic update around every other command.
 
 use semver::Version;
 use serde::Serialize;
 
 use super::Context;
-use crate::cli::UpdateArgs;
+use crate::cli::{Command, UpdateArgs};
 use crate::error::CliError;
 use crate::exit::Exit;
 use crate::notice::Notice;
 use crate::output::{Render, Ui};
+use crate::update::auto::{self, StateFile};
 use crate::update::{
-    self, GitHubReleases, InstallMethod, Installation, MINIMUM_VERSION, Newest, Release,
+    self, Channel, GitHubReleases, InstallMethod, Installation, MINIMUM_VERSION, Newest, Release,
     TrustedKeys, UpdateSource,
 };
 
 pub(crate) fn run(arguments: &UpdateArgs, context: &mut Context<'_>) -> Result<Exit, CliError> {
+    if arguments.background {
+        return background(context);
+    }
     let installation = Installation::current()?;
     let method = InstallMethod::detect(&installation);
     let current = update::current_version(&context.env);
@@ -53,7 +57,7 @@ pub(crate) fn run(arguments: &UpdateArgs, context: &mut Context<'_>) -> Result<E
         );
     }
 
-    let source = GitHubReleases::new(&context.env)?;
+    let source = GitHubReleases::new(&context.env, Channel::from_settings(context.settings()))?;
     let release = match &arguments.version {
         Some(version) => source.release(version)?.ok_or_else(|| {
             CliError::usage(format!("there is no published release of jev {version}")).hint(
@@ -158,6 +162,177 @@ fn install(
     installation.apply(&release.version, &|exe| {
         update::probe(exe, Some(&release.version)).map(|_| ())
     })
+}
+
+/// `jev update --background`: the automatic check, started by `jev` itself after a command, with
+/// no standard streams. It stages a newer release and records what it found; it prints nothing,
+/// and a failure waits for the next check.
+fn background(context: &Context<'_>) -> Result<Exit, CliError> {
+    let installation = Installation::current()?;
+    let state = StateFile::new(context.store()?.dir().to_owned());
+    let method = InstallMethod::detect(&installation);
+    let outcome = match update::guard(method, &context.env, context.settings()) {
+        // Asked again, in case anything changed since the command that started this check.
+        Some(reason) => Ok(format!("not checked: {reason}")),
+        None => GitHubReleases::new(&context.env, Channel::from_settings(context.settings()))
+            .and_then(|source| {
+                auto::check(
+                    &source,
+                    &TrustedKeys::for_run(&context.env),
+                    &installation,
+                    &update::current_version(&context.env),
+                )
+            }),
+    };
+    state.record(outcome.unwrap_or_else(|error| format!("failed: {}", error.message)));
+    Ok(Exit::Success)
+}
+
+/// Automatic updates for one run of a command other than `jev update` and `jev version`.
+struct Automatic {
+    installation: Installation,
+    state: StateFile,
+    current: Version,
+}
+
+impl Automatic {
+    /// Automatic updates for this run, or `None` when a guard turns them off.
+    fn new(command: &Command, context: &Context<'_>) -> Option<Self> {
+        if !command.updates_itself() {
+            return None;
+        }
+        let installation = Installation::current().ok()?;
+        let method = InstallMethod::detect(&installation);
+        if let Some(reason) = update::guard(method, &context.env, context.settings()) {
+            tracing::debug!(reason, "automatic updates are off");
+            return None;
+        }
+        Some(Self {
+            installation,
+            state: StateFile::new(context.store().ok()?.dir().to_owned()),
+            current: update::current_version(&context.env),
+        })
+    }
+
+    /// Says, once, that `jev` updates itself and how to stop it.
+    fn notice_once(&self, context: &Context<'_>) {
+        // Nobody would see it, so it is kept for a run that shows it.
+        if context.notifier.quiet
+            || self.state.read().notice_shown
+            || self.installation.writable().is_err()
+        {
+            return;
+        }
+        let marked = self.state.change(true, |state| {
+            (!state.notice_shown).then(|| state.notice_shown = true)
+        });
+        if marked.is_some() {
+            context.notify(
+                &Notice::info(
+                    "auto_update_enabled",
+                    "jev updates itself: at most once a day, after a command, it looks for a new \
+release in the background, and installs it when the next command starts",
+                )
+                .hint(
+                    "to turn this off, run `jev config set update.auto false` or set \
+JEV_AUTO_UPDATE=false; `jev version` shows whether it is on",
+                ),
+            );
+        }
+    }
+
+    /// Swaps in the update a background check staged, if it is newer than this `jev`.
+    fn apply_staged(&self, context: &Context<'_>) {
+        let Some(staged) = self.installation.staged() else {
+            return;
+        };
+        if !update::is_upgrade(&self.current, &staged) {
+            tracing::info!(%staged, "discarding a staged update that is not newer than this jev");
+            self.installation.discard_staged();
+            return;
+        }
+        let applied = self.installation.apply(&staged, &|exe| {
+            update::probe(exe, Some(&staged)).map(|_| ())
+        });
+        match applied {
+            Ok(()) => {
+                let ui = context.notifier.ui;
+                let (arrow, dash) = if ui.has_unicode() {
+                    ("→", "—")
+                } else {
+                    ("->", "-")
+                };
+                context.notify(&Notice::info(
+                    "updated",
+                    format!(
+                        "jev updated {} {arrow} {staged} {dash} changelog: {}",
+                        self.current,
+                        update::release_page(&staged)
+                    ),
+                ));
+            }
+            Err(error) => {
+                tracing::info!(
+                    code = error.code,
+                    "the staged update was not applied: {}",
+                    error.message
+                );
+                self.installation.discard_staged();
+            }
+        }
+    }
+
+    /// Starts the background check when one is due.
+    fn start_check(&self) {
+        let now = auto::now();
+        let state = self.state.read();
+        if let Some(outcome) = &state.last_outcome {
+            tracing::info!(outcome, "the last automatic update check");
+        }
+        if !state.due(now) {
+            return;
+        }
+        if let Err(reason) = self.installation.writable() {
+            tracing::info!(reason, "no automatic update check");
+            return;
+        }
+        // On Windows a new process inherits every inheritable handle of this one, whatever its own
+        // standard streams are, and the pipes this `jev` was started with are inheritable. A check
+        // started now would hold the caller's pipe open, and the caller would wait for the end of
+        // the output until the check had finished. There the check waits for a run at a terminal.
+        #[cfg(windows)]
+        {
+            use std::io::IsTerminal;
+            if !(std::io::stdout().is_terminal() && std::io::stderr().is_terminal()) {
+                tracing::info!("the automatic update check waits for a run at a terminal");
+                return;
+            }
+        }
+        if !self.state.claim(now) {
+            return;
+        }
+        match auto::spawn_check(self.installation.exe()) {
+            Ok(()) => tracing::info!("looking for a newer release in the background"),
+            Err(error) => tracing::info!(%error, "the automatic update check could not start"),
+        }
+    }
+}
+
+/// Before a command: swaps in an update staged by an earlier background check, and says once
+/// that `jev` updates itself. Nothing here fails the command.
+pub(crate) fn before(command: &Command, context: &Context<'_>) {
+    if let Some(automatic) = Automatic::new(command, context) {
+        automatic.notice_once(context);
+        automatic.apply_staged(context);
+    }
+}
+
+/// After a command: starts the background check, at most once a day. It never writes to stdout,
+/// never changes the exit code, and is not waited for.
+pub(crate) fn after(command: &Command, context: &Context<'_>) {
+    if let Some(automatic) = Automatic::new(command, context) {
+        automatic.start_check();
+    }
 }
 
 fn emit(context: &mut Context<'_>, report: &Report) -> Result<Exit, CliError> {

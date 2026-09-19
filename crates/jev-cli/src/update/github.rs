@@ -15,7 +15,7 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use semver::Version;
 use serde::Deserialize;
 
-use super::{REPOSITORY, Release, UpdateSource};
+use super::{Channel, REPOSITORY, Release, UpdateSource};
 use crate::env::Env;
 use crate::error::CliError;
 use crate::exit::Exit;
@@ -37,6 +37,8 @@ const MAX_API_BYTES: u64 = 4 * 1024 * 1024;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 /// Time allowed for one whole download.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+/// How many of the most recent releases the pre-release channel looks through.
+const RECENT_RELEASES: u32 = 30;
 
 /// Releases of this repository on GitHub.
 pub(crate) struct GitHubReleases {
@@ -44,16 +46,18 @@ pub(crate) struct GitHubReleases {
     runtime: tokio::runtime::Runtime,
     api_root: String,
     download_root: String,
+    channel: Channel,
 }
 
 impl GitHubReleases {
-    /// The real source. A build with the test hooks reads both roots from `JEV_TEST_UPDATE_URL`
-    /// when it is set, so tests can serve releases locally; release builds do not contain it.
+    /// The real source, following `channel`. A build with the test hooks reads both roots from
+    /// `JEV_TEST_UPDATE_URL` when it is set, so tests can serve releases locally; release builds
+    /// do not contain it.
     ///
     /// # Errors
     ///
     /// An internal error when TLS or the async runtime cannot be set up.
-    pub(crate) fn new(env: &Env) -> Result<Self, CliError> {
+    pub(crate) fn new(env: &Env, channel: Channel) -> Result<Self, CliError> {
         let (api_root, download_root) = roots(env);
         let failed = |what: &str, error: &dyn std::fmt::Display| {
             CliError::internal(format!("{what} could not be set up: {error}"))
@@ -99,14 +103,34 @@ impl GitHubReleases {
             runtime,
             api_root,
             download_root,
+            channel,
         })
     }
 
-    /// One release from the API, or `None` for a 404.
+    /// One release from the API, or `None` for a 404 or a release the channel does not follow.
     fn fetch(&self, path: &str) -> Result<Option<Release>, CliError> {
+        let Some(body) = self.get(path)? else {
+            return Ok(None);
+        };
+        let release: GitHubRelease = serde_json::from_slice(&body).map_err(|_| unreadable())?;
+        Ok(release.into_release(&self.api_root, self.channel))
+    }
+
+    /// The newest of the recent releases the channel follows.
+    fn newest_recent(&self) -> Result<Option<Release>, CliError> {
+        let Some(body) = self.get(&format!("releases?per_page={RECENT_RELEASES}"))? else {
+            return Ok(None);
+        };
+        let releases: Vec<GitHubRelease> =
+            serde_json::from_slice(&body).map_err(|_| unreadable())?;
+        Ok(newest_of(releases, &self.api_root, self.channel))
+    }
+
+    /// The body of an API response, or `None` for a 404.
+    fn get(&self, path: &str) -> Result<Option<Vec<u8>>, CliError> {
         let url = format!("{}/repos/{REPOSITORY}/{path}", self.api_root);
         tracing::debug!(%url, "asking GitHub for a release");
-        let body = self.runtime.block_on(async {
+        self.runtime.block_on(async {
             let response = self
                 .client
                 .get(&url)
@@ -122,25 +146,35 @@ impl GitHubReleases {
             read(response, MAX_API_BYTES, "the release list")
                 .await
                 .map(Some)
-        })?;
-        let Some(body) = body else {
-            return Ok(None);
-        };
-        let release: GitHubRelease = serde_json::from_slice(&body).map_err(|_| {
-            CliError::update(
-                "invalid_response",
-                Exit::Internal,
-                "GitHub answered with a release this jev cannot read",
-            )
-            .hint("try again later, or download the release by hand from its GitHub page")
-        })?;
-        Ok(release.into_release(&self.api_root))
+        })
     }
+}
+
+/// GitHub answered with something that is not a release.
+fn unreadable() -> CliError {
+    CliError::update(
+        "invalid_response",
+        Exit::Internal,
+        "GitHub answered with a release this jev cannot read",
+    )
+    .hint("try again later, or download the release by hand from its GitHub page")
+}
+
+/// The newest of `releases` that `channel` follows.
+fn newest_of(releases: Vec<GitHubRelease>, api_root: &str, channel: Channel) -> Option<Release> {
+    releases
+        .into_iter()
+        .filter_map(|release| release.into_release(api_root, channel))
+        .max_by(|one, other| one.version.cmp(&other.version))
 }
 
 impl UpdateSource for GitHubReleases {
     fn latest(&self) -> Result<Option<Release>, CliError> {
-        self.fetch("releases/latest")
+        match self.channel {
+            // GitHub's "latest" is the newest release that is neither a draft nor a pre-release.
+            Channel::Stable => self.fetch("releases/latest"),
+            Channel::Prerelease => self.newest_recent(),
+        }
     }
 
     fn release(&self, version: &Version) -> Result<Option<Release>, CliError> {
@@ -282,14 +316,14 @@ struct GitHubAsset {
 }
 
 impl GitHubRelease {
-    /// The release, unless it is a draft, a pre-release, or tagged with something other than
-    /// `v<version>`.
-    fn into_release(self, api_root: &str) -> Option<Release> {
-        if self.draft || self.prerelease {
+    /// The release, unless it is a draft, tagged with something other than `v<version>`, or a
+    /// pre-release on the stable channel.
+    fn into_release(self, api_root: &str, channel: Channel) -> Option<Release> {
+        if self.draft || (self.prerelease && channel == Channel::Stable) {
             return None;
         }
         let version = Version::parse(self.tag_name.strip_prefix('v')?).ok()?;
-        if !version.pre.is_empty() {
+        if !version.pre.is_empty() && channel == Channel::Stable {
             return None;
         }
         let url = self.html_url.unwrap_or_else(|| {
@@ -312,12 +346,12 @@ impl GitHubRelease {
 mod tests {
     use semver::Version;
 
-    use super::GitHubRelease;
+    use super::{Channel, GitHubRelease};
 
     fn parse(json: &str) -> Option<super::Release> {
         serde_json::from_str::<GitHubRelease>(json)
             .unwrap()
-            .into_release(super::API_ROOT)
+            .into_release(super::API_ROOT, Channel::Stable)
     }
 
     #[test]
@@ -343,5 +377,31 @@ mod tests {
         ] {
             assert_eq!(parse(skipped), None, "{skipped}");
         }
+    }
+
+    #[test]
+    fn the_prerelease_channel_takes_the_newest_release_of_either_kind() {
+        let releases = r#"[
+            {"tag_name":"v0.3.0-rc.1","prerelease":true},
+            {"tag_name":"v0.4.0-rc.1","draft":true},
+            {"tag_name":"v0.2.1"},
+            {"tag_name":"v0.3.0-beta.2","prerelease":true},
+            {"tag_name":"nightly","prerelease":true}
+        ]"#;
+        let newest = |channel| {
+            super::newest_of(
+                serde_json::from_str(releases).unwrap(),
+                super::API_ROOT,
+                channel,
+            )
+            .map(|release| release.version.to_string())
+        };
+
+        assert_eq!(newest(Channel::Prerelease).as_deref(), Some("0.3.0-rc.1"));
+        assert_eq!(newest(Channel::Stable).as_deref(), Some("0.2.1"));
+        assert_eq!(
+            super::newest_of(Vec::new(), super::API_ROOT, Channel::Prerelease),
+            None
+        );
     }
 }

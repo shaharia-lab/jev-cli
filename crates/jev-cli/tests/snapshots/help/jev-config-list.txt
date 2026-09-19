@@ -1,4 +1,4 @@
-Print every effective setting and where its value comes from (flag, env, profile or default)
+Print every effective setting and where its value comes from (flag, env, profile, config or default)
 
 When to use:
 Use `jev config list` to see every effective setting and where each value comes from, e.g. to find
@@ -10,7 +10,8 @@ Nothing. --profile lists another profile, and flags on the same command line cou
 
 Output:
 `profile` (the selected profile, and how it was selected), `settings` (one row per setting with
-`key`, `value`, `source`, `origin` and `description`) and `config_file`.
+`key`, `value`, `source`, `origin` and `description`, as `jev config get` describes them) and
+`config_file`.
 
 Usage: jev config list [OPTIONS]
 

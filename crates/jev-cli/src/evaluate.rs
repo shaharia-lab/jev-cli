@@ -247,7 +247,7 @@ mod tests {
     use crate::env::Env;
 
     fn settings(flags: &Flags, env: &Env) -> Settings {
-        Settings::resolve(flags, env, None, &IndexMap::new()).unwrap()
+        Settings::resolve(flags, env, None, &IndexMap::new(), &IndexMap::new()).unwrap()
     }
 
     fn document(json: &serde_json::Value) -> Document {

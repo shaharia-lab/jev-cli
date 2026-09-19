@@ -31,7 +31,7 @@ pub(crate) fn run(command: &ConfigCommand, context: &mut Context<'_>) -> Result<
                 Ok(())
             })?;
             let changed = Changed {
-                profile,
+                profile: key.table().is_none().then_some(profile),
                 key: key.name(),
                 value: Some(value),
                 applied: true,
@@ -45,7 +45,7 @@ pub(crate) fn run(command: &ConfigCommand, context: &mut Context<'_>) -> Result<
                 .store()?
                 .update(|file| Ok(file.unset(&profile, key)))?;
             let changed = Changed {
-                profile,
+                profile: key.table().is_none().then_some(profile),
                 key: key.name(),
                 value: None,
                 applied: removed,
@@ -75,11 +75,14 @@ pub(crate) fn run(command: &ConfigCommand, context: &mut Context<'_>) -> Result<
 #[derive(Debug, Serialize)]
 struct Row {
     key: &'static str,
-    /// `null` only for `output` when nothing sets it: text on a terminal, JSON on a pipe.
+    /// `null` for `output` when nothing sets it (text on a terminal, JSON on a pipe), and for
+    /// `update.pin_version` when no version is pinned.
     value: Option<Value>,
-    /// `flag`, `env`, `profile` or `default`.
+    /// `flag`, `env`, `profile`, `config` (a table every profile shares, such as `[update]`) or
+    /// `default`.
     source: &'static str,
-    /// The flag, the environment variable or the profile that supplied the value.
+    /// The flag, the environment variable, the profile or the key in the file that supplied the
+    /// value.
     origin: Option<String>,
     /// What the setting does.
     description: &'static str,
@@ -97,9 +100,18 @@ impl Row {
     }
 
     fn shown_value(&self) -> String {
-        self.value
-            .as_ref()
-            .map_or_else(|| "(auto)".to_owned(), ToString::to_string)
+        self.value.as_ref().map_or_else(
+            // Only `output` is decided at run time; any other setting without a value is off.
+            || {
+                if self.key == "output" {
+                    "(auto)"
+                } else {
+                    "(none)"
+                }
+                .to_owned()
+            },
+            ToString::to_string,
+        )
     }
 
     fn shown_source(&self) -> String {
@@ -188,7 +200,8 @@ impl Render for Listing {
 /// The outcome of `set` and `unset`.
 #[derive(Debug, Serialize)]
 struct Changed {
-    profile: String,
+    /// The profile changed; `null` for a setting every profile shares, such as `update.auto`.
+    profile: Option<String>,
     key: &'static str,
     /// The stored value; `null` after `unset`.
     value: Option<Value>,
@@ -199,13 +212,14 @@ struct Changed {
 
 impl Render for Changed {
     fn human(&self, _: Ui) -> String {
+        let place = self.profile.as_ref().map_or_else(
+            || "for every profile".to_owned(),
+            |profile| format!("in profile `{profile}`"),
+        );
         match (&self.value, self.applied) {
-            (Some(value), _) => format!(
-                "set `{}` to `{value}` in profile `{}`\n",
-                self.key, self.profile
-            ),
-            (None, true) => format!("removed `{}` from profile `{}`\n", self.key, self.profile),
-            (None, false) => format!("`{}` was not set in profile `{}`\n", self.key, self.profile),
+            (Some(value), _) => format!("set `{}` to `{value}` {place}\n", self.key),
+            (None, true) => format!("removed `{}` {place}\n", self.key),
+            (None, false) => format!("`{}` was not set {place}\n", self.key),
         }
     }
 }

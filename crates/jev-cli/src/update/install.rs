@@ -216,6 +216,44 @@ with the install script, or update it the way it was installed",
         Version::parse(text.trim()).ok()
     }
 
+    /// Removes a staged binary that will not be used, such as one no newer than the running `jev`
+    /// or one that failed to go in. Best effort: what cannot be removed is tried again later.
+    pub(crate) fn discard_staged(&self) {
+        if let Ok(_lock) = self.lock() {
+            let _ = fs::remove_file(self.ready());
+            let _ = fs::remove_file(self.ready_version());
+        }
+    }
+
+    /// Whether the binary can be replaced without elevated rights: its directory takes new files
+    /// and the binary is not read-only. The file written to find out is removed at once.
+    ///
+    /// # Errors
+    ///
+    /// Why it cannot, for a person to read.
+    pub(crate) fn writable(&self) -> Result<(), String> {
+        let dir = self.exe.parent().unwrap_or_else(|| Path::new("."));
+        let probe = dir.join(format!(".jev-write-test.{}", std::process::id()));
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+            .map_err(|error| {
+                format!(
+                    "cannot write to {} ({error}), and jev never asks for elevated rights",
+                    dir.display()
+                )
+            })?;
+        let _ = fs::remove_file(&probe);
+        if fs::metadata(&self.exe).is_ok_and(|metadata| metadata.permissions().readonly()) {
+            return Err(format!(
+                "{} is read-only, and jev never asks for elevated rights",
+                self.exe.display()
+            ));
+        }
+        Ok(())
+    }
+
     /// Swaps the staged binary in, keeping the current one as the previous version, and runs the
     /// new one's self-test. When the self-test fails the current binary is put back.
     ///
@@ -590,6 +628,59 @@ mod tests {
             );
         }
         assert_eq!(read(installation.exe()), "v1");
+    }
+
+    #[test]
+    fn a_staged_binary_can_be_discarded() {
+        let installation = installed("v1");
+        installation.stage(b"v2", &Version::new(2, 0, 0)).unwrap();
+
+        installation.discard_staged();
+
+        assert_eq!(installation.staged(), None);
+        assert_eq!(read(installation.exe()), "v1");
+    }
+
+    #[test]
+    fn a_binary_in_a_writable_directory_can_be_replaced_and_nothing_is_left_behind() {
+        let installation = installed("v1");
+        let dir = installation.exe().parent().unwrap().to_owned();
+
+        assert_eq!(installation.writable(), Ok(()));
+        let names: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names.len(), 1, "{names:?}");
+
+        let mut permissions = fs::metadata(installation.exe()).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(installation.exe(), permissions.clone()).unwrap();
+        let read_only = installation.writable();
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        fs::set_permissions(installation.exe(), permissions).unwrap();
+        assert!(read_only.unwrap_err().contains("is read-only"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_that_cannot_be_written_means_the_binary_cannot_be_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let installation = installed("v1");
+        let dir = installation.exe().parent().unwrap().to_owned();
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+        let outcome = installation.writable();
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+
+        // Root can write anywhere; the check only means something for everyone else.
+        if let Err(reason) = outcome {
+            assert!(
+                reason.contains("never asks for elevated rights"),
+                "{reason}"
+            );
+        }
     }
 
     #[test]

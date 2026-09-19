@@ -55,6 +55,7 @@ impl Sandbox {
             "JEV_OUTPUT",
             "JEV_PROFILE",
             "JEV_NO_INPUT",
+            "JEV_AUTO_UPDATE",
             "TYPESAFE_API_KEY",
             "TYPESAFE_BASE_URL",
             "TYPESAFE_DEFAULT_MODEL",
@@ -135,6 +136,9 @@ fn with_no_configuration_every_setting_is_its_default() {
         ("max_retries", json!(2)),
         ("concurrency", json!(4)),
         ("warn_unpinned", json!(false)),
+        ("update.auto", json!(true)),
+        ("update.channel", json!("stable")),
+        ("update.pin_version", Value::Null),
     ];
     let rows = listed(&output);
     assert_eq!(rows.len(), expected.len());
@@ -214,6 +218,24 @@ fn config_list_reports_the_value_and_the_source_of_every_key() {
                 "default".to_owned(),
                 Value::Null
             ),
+            (
+                "update.auto".to_owned(),
+                json!(true),
+                "default".to_owned(),
+                Value::Null
+            ),
+            (
+                "update.channel".to_owned(),
+                json!("stable"),
+                "default".to_owned(),
+                Value::Null
+            ),
+            (
+                "update.pin_version".to_owned(),
+                Value::Null,
+                "default".to_owned(),
+                Value::Null
+            ),
         ]
     );
 }
@@ -228,12 +250,13 @@ fn the_human_listing_shows_where_each_value_comes_from() {
         .env("TYPESAFE_BASE_URL", "http://127.0.0.1:4010"));
 
     for line in [
-        "SETTING        VALUE",
-        "profile        default                default",
-        "base_url       http://127.0.0.1:4010  env TYPESAFE_BASE_URL",
-        "model          jev-1.13.0             profile `default`",
-        "output         table                  flag --output",
-        "timeout        30s                    default",
+        "SETTING             VALUE",
+        "profile             default                default",
+        "base_url            http://127.0.0.1:4010  env TYPESAFE_BASE_URL",
+        "model               jev-1.13.0             profile `default`",
+        "output              table                  flag --output",
+        "timeout             30s                    default",
+        "update.pin_version  (none)                 default",
     ] {
         assert!(output.contains(line), "missing {line:?} in:\n{output}");
     }
@@ -310,6 +333,74 @@ fn set_get_and_unset_round_trip_and_keep_a_persons_comments() {
             .jev()
             .args(["config", "get", "model", "-o", "table"])),
         "jev-latest\n"
+    );
+}
+
+#[test]
+fn the_update_settings_are_shared_by_every_profile() {
+    let sandbox = Sandbox::with_config("update", "[profiles.work]\nmodel = \"jev-1.13.0\"\n");
+
+    let set = json_of(&ok(sandbox.jev().args([
+        "config",
+        "set",
+        "update.auto",
+        "off",
+        "--profile",
+        "work",
+    ])));
+    assert_eq!(
+        set,
+        json!({ "profile": null, "key": "update.auto", "value": false, "changed": true })
+    );
+    assert_eq!(
+        ok(sandbox.jev().args([
+            "config",
+            "set",
+            "update.channel",
+            "prerelease",
+            "-o",
+            "table"
+        ])),
+        "set `update.channel` to `prerelease` for every profile\n"
+    );
+    assert!(
+        sandbox
+            .text()
+            .ends_with("[update]\nauto = false\nchannel = \"prerelease\"\n"),
+        "{}",
+        sandbox.text()
+    );
+
+    let got = json_of(&ok(sandbox.jev().args(["config", "get", "update.auto"])));
+    assert_eq!(
+        (&got["value"], &got["source"], &got["origin"]),
+        (&json!(false), &json!("config"), &json!("update.auto"))
+    );
+    let from_env = json_of(&ok(sandbox
+        .jev()
+        .args(["config", "get", "update.auto"])
+        .env("JEV_AUTO_UPDATE", "yes")));
+    assert_eq!(
+        (&from_env["value"], &from_env["source"], &from_env["origin"]),
+        (&json!(true), &json!("env"), &json!("JEV_AUTO_UPDATE"))
+    );
+    assert_eq!(
+        ok(sandbox
+            .jev()
+            .args(["config", "unset", "update.auto", "-o", "table"])),
+        "removed `update.auto` for every profile\n"
+    );
+
+    let bad = run(sandbox
+        .jev()
+        .args(["config", "get", "model"])
+        .env("JEV_AUTO_UPDATE", "maybe"));
+    assert_eq!((bad.code, bad.stdout.as_str()), (2, ""));
+    assert!(
+        bad.stderr
+            .contains("JEV_AUTO_UPDATE: `maybe` is not a valid `update.auto`"),
+        "{}",
+        bad.stderr
     );
 }
 

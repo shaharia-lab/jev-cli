@@ -27,10 +27,13 @@ pub(crate) enum Key {
     MaxRetries,
     Concurrency,
     WarnUnpinned,
+    UpdateAuto,
+    UpdateChannel,
+    UpdatePinVersion,
 }
 
 impl Key {
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 10] = [
         Self::BaseUrl,
         Self::Model,
         Self::Output,
@@ -38,7 +41,26 @@ impl Key {
         Self::MaxRetries,
         Self::Concurrency,
         Self::WarnUnpinned,
+        Self::UpdateAuto,
+        Self::UpdateChannel,
+        Self::UpdatePinVersion,
     ];
+
+    /// The table of `config.toml` that holds the setting once for every profile, or `None` for a
+    /// setting each profile holds for itself. The updater's settings are about the binary, which
+    /// every profile shares, so they live in `[update]`.
+    pub(crate) const fn table(self) -> Option<&'static str> {
+        match self {
+            Self::UpdateAuto | Self::UpdateChannel | Self::UpdatePinVersion => Some("update"),
+            _ => None,
+        }
+    }
+
+    /// The name of the setting inside its table: `auto` for `update.auto`.
+    pub(crate) fn field(self) -> &'static str {
+        let name = self.name();
+        name.rsplit_once('.').map_or(name, |(_, field)| field)
+    }
 
     /// The name used in `config.toml` and on the command line.
     pub(crate) const fn name(self) -> &'static str {
@@ -50,6 +72,9 @@ impl Key {
             Self::MaxRetries => "max_retries",
             Self::Concurrency => "concurrency",
             Self::WarnUnpinned => "warn_unpinned",
+            Self::UpdateAuto => "update.auto",
+            Self::UpdateChannel => "update.channel",
+            Self::UpdatePinVersion => "update.pin_version",
         }
     }
 
@@ -67,6 +92,11 @@ impl Key {
             Self::WarnUnpinned => {
                 "remind me to pin a versioned model id when a request used an alias"
             }
+            Self::UpdateAuto => "update jev automatically in the background",
+            Self::UpdateChannel => "releases to update to: stable or prerelease",
+            Self::UpdatePinVersion => {
+                "stay on this version: turns automatic updates off (unset: follow the channel)"
+            }
         }
     }
 
@@ -76,6 +106,7 @@ impl Key {
             Self::BaseUrl => Some("TYPESAFE_BASE_URL"),
             Self::Model => Some("TYPESAFE_DEFAULT_MODEL"),
             Self::Output => Some("JEV_OUTPUT"),
+            Self::UpdateAuto => Some("JEV_AUTO_UPDATE"),
             _ => None,
         }
     }
@@ -89,20 +120,26 @@ impl Key {
             Self::Timeout => Some("--timeout"),
             Self::MaxRetries => Some("--max-retries"),
             Self::Concurrency => Some("--concurrency"),
-            Self::WarnUnpinned => None,
+            Self::WarnUnpinned
+            | Self::UpdateAuto
+            | Self::UpdateChannel
+            | Self::UpdatePinVersion => None,
         }
     }
 
-    /// The built-in default. `None` means "decided at run time", which only `output` uses.
+    /// The built-in default. `None` means "decided at run time" for `output`, and "none" for
+    /// `update.pin_version`.
     pub(crate) fn default_value(self) -> Option<Value> {
         match self {
             Self::BaseUrl => Some(Value::Text("https://api.typesafe.ai".to_owned())),
             Self::Model => Some(Value::Text("jev-latest".to_owned())),
-            Self::Output => None,
+            Self::Output | Self::UpdatePinVersion => None,
             Self::Timeout => Some(Value::Duration(Duration::from_secs(30))),
             Self::MaxRetries => Some(Value::Count(2)),
             Self::Concurrency => Some(Value::Count(4)),
             Self::WarnUnpinned => Some(Value::Switch(false)),
+            Self::UpdateAuto => Some(Value::Switch(true)),
+            Self::UpdateChannel => Some(Value::Text("stable".to_owned())),
         }
     }
 
@@ -167,11 +204,18 @@ impl Key {
             Self::Timeout => duration::parse(text).map(Value::Duration).map_err(invalid),
             Self::MaxRetries => parse_count(text, 0, 100).map(Value::Count).map_err(invalid),
             Self::Concurrency => parse_count(text, 1, 64).map(Value::Count).map_err(invalid),
-            Self::WarnUnpinned => match text.to_lowercase().as_str() {
+            Self::WarnUnpinned | Self::UpdateAuto => match text.to_lowercase().as_str() {
                 "true" | "yes" | "on" | "1" => Ok(Value::Switch(true)),
                 "false" | "no" | "off" | "0" => Ok(Value::Switch(false)),
                 _ => Err(invalid("expected true or false".to_owned())),
             },
+            Self::UpdateChannel => match text.to_lowercase().as_str() {
+                channel @ ("stable" | "prerelease") => Ok(Value::Text(channel.to_owned())),
+                _ => Err(invalid("expected stable or prerelease".to_owned())),
+            },
+            Self::UpdatePinVersion => semver::Version::parse(text.trim_start_matches('v'))
+                .map(|version| Value::Text(version.to_string()))
+                .map_err(|_| invalid("expected a version such as 0.3.1".to_owned())),
         }
     }
 }
@@ -224,6 +268,8 @@ pub(crate) enum Source {
     Env(&'static str),
     /// A profile in `config.toml`.
     Profile(String),
+    /// A table of `config.toml` outside the profiles, such as `[update]`; holds the setting's name.
+    Config(&'static str),
     /// The built-in default.
     Default,
 }
@@ -235,16 +281,19 @@ impl Source {
             Self::Flag(_) => "flag",
             Self::Env(_) => "env",
             Self::Profile(_) => "profile",
+            Self::Config(_) => "config",
             Self::Default => "default",
         }
     }
 
-    /// The flag, the variable or the profile; nothing for a default.
+    /// The flag, the variable, the profile or the setting's name in the file; nothing for a
+    /// default.
     pub(crate) fn origin(&self) -> Option<String> {
         match self {
             Self::Flag(flag) => Some((*flag).to_owned()),
             Self::Env(variable) => Some((*variable).to_owned()),
             Self::Profile(profile) => Some(profile.clone()),
+            Self::Config(key) => Some((*key).to_owned()),
             Self::Default => None,
         }
     }
@@ -280,7 +329,9 @@ impl Flags {
             Key::Timeout => self.timeout.map(Value::Duration),
             Key::MaxRetries => self.max_retries.map(Value::Count),
             Key::Concurrency => self.concurrency.map(Value::Count),
-            Key::WarnUnpinned => None,
+            Key::WarnUnpinned | Key::UpdateAuto | Key::UpdateChannel | Key::UpdatePinVersion => {
+                None
+            }
         }
     }
 }
@@ -296,8 +347,9 @@ pub(crate) struct Settings {
 impl Settings {
     /// Resolves every setting: **flag, then environment, then the profile, then the default.**
     ///
-    /// `active_profile` and `profiles` come from `config.toml`. The `default` profile always
-    /// exists, whether or not the file mentions it.
+    /// `active_profile`, `profiles` and `shared` (the settings held once for every profile, such
+    /// as `[update]`) come from `config.toml`. The `default` profile always exists, whether or not
+    /// the file mentions it.
     ///
     /// # Errors
     ///
@@ -308,6 +360,7 @@ impl Settings {
         env: &Env,
         active_profile: Option<&str>,
         profiles: &IndexMap<String, IndexMap<Key, Value>>,
+        shared: &IndexMap<Key, Value>,
     ) -> Result<Self, CliError> {
         let (name, source) = if let Some(name) = &flags.profile {
             (name.clone(), Source::Flag("--profile"))
@@ -362,6 +415,17 @@ impl Settings {
                     value: Some(key.parse(text).map_err(|error| blame(error, variable))?),
                     source: Source::Env(variable),
                 }
+            } else if key.table().is_some() {
+                shared.get(&key).map_or_else(
+                    || Setting {
+                        value: key.default_value(),
+                        source: Source::Default,
+                    },
+                    |value| Setting {
+                        value: Some(value.clone()),
+                        source: Source::Config(key.name()),
+                    },
+                )
             } else if let Some(value) = stored.and_then(|profile| profile.get(&key)) {
                 Setting {
                     value: Some(value.clone()),
@@ -399,6 +463,19 @@ impl Settings {
         match &self.profile.value {
             Some(Value::Text(name)) => name,
             _ => DEFAULT_PROFILE,
+        }
+    }
+
+    /// The value of an on-or-off setting.
+    pub(crate) fn switch(&self, key: Key) -> bool {
+        self.get(key).value == Some(Value::Switch(true))
+    }
+
+    /// The value of a setting that is text, when it has one.
+    pub(crate) fn text(&self, key: Key) -> Option<&str> {
+        match &self.get(key).value {
+            Some(Value::Text(text)) => Some(text),
+            _ => None,
         }
     }
 
@@ -509,6 +586,39 @@ mod tests {
                 "4",
             ),
             Key::WarnUnpinned => (None, None, "true", "false"),
+            Key::UpdateAuto => (None, Some(("JEV_AUTO_UPDATE", "false")), "false", "true"),
+            Key::UpdateChannel => (None, None, "prerelease", "stable"),
+            Key::UpdatePinVersion => (None, None, "0.3.1", ""),
+        }
+    }
+
+    type Stored<'a> = Vec<(Key, &'a str)>;
+
+    /// Resolves with `values` stored where `config.toml` keeps each key: in the default profile,
+    /// or in the table shared by every profile.
+    fn resolve_stored(flags: &Flags, env: &Env, values: &[(Key, &str)]) -> Settings {
+        let (shared, own): (Stored<'_>, Stored<'_>) =
+            values.iter().partition(|(key, _)| key.table().is_some());
+        let shared = shared
+            .into_iter()
+            .map(|(key, text)| (key, key.parse(text).unwrap()))
+            .collect();
+        Settings::resolve(
+            flags,
+            env,
+            None,
+            &profiles(&[(DEFAULT_PROFILE, own.as_slice())]),
+            &shared,
+        )
+        .unwrap()
+    }
+
+    /// Where a value stored in `config.toml` is reported to come from.
+    fn stored_source(key: Key) -> Source {
+        if key.table().is_some() {
+            Source::Config(key.name())
+        } else {
+            Source::Profile(DEFAULT_PROFILE.into())
         }
     }
 
@@ -516,7 +626,7 @@ mod tests {
     fn every_setting_follows_flag_then_env_then_profile_then_default() {
         for key in Key::ALL {
             let (flags, variable, profile_value, default_value) = layers(key);
-            let with_profile = profiles(&[(DEFAULT_PROFILE, &[(key, profile_value)])]);
+            let stored = [(key, profile_value)];
             let env = variable.map_or_else(Env::default, |pair| Env::from([pair]));
             let shown = |settings: &Settings| {
                 settings
@@ -528,13 +638,7 @@ mod tests {
             };
 
             // Everything set: the highest layer that exists for this setting wins.
-            let all = Settings::resolve(
-                &flags.clone().unwrap_or_default(),
-                &env,
-                None,
-                &with_profile,
-            )
-            .unwrap();
+            let all = resolve_stored(&flags.clone().unwrap_or_default(), &env, &stored);
             match (&flags, variable) {
                 (Some(_), _) => assert!(
                     matches!(all.get(key).source, Source::Flag(_)),
@@ -544,34 +648,23 @@ mod tests {
                 (None, Some(_)) => {
                     assert!(matches!(all.get(key).source, Source::Env(_)), "{key:?}");
                 }
-                (None, None) => assert_eq!(
-                    all.get(key).source,
-                    Source::Profile(DEFAULT_PROFILE.into()),
-                    "{key:?}"
-                ),
+                (None, None) => assert_eq!(all.get(key).source, stored_source(key), "{key:?}"),
             }
 
             // Without the flag: the environment, when this setting has a variable.
-            let no_flag = Settings::resolve(&Flags::default(), &env, None, &with_profile).unwrap();
+            let no_flag = resolve_stored(&Flags::default(), &env, &stored);
             if let Some((name, value)) = variable {
                 assert_eq!(no_flag.get(key).source, Source::Env(name), "{key:?}");
                 assert_eq!(shown(&no_flag), value, "{key:?}");
             }
 
-            // Without flag or environment: the profile.
-            let profile_only =
-                Settings::resolve(&Flags::default(), &Env::default(), None, &with_profile).unwrap();
-            assert_eq!(
-                profile_only.get(key).source,
-                Source::Profile(DEFAULT_PROFILE.into()),
-                "{key:?}"
-            );
+            // Without flag or environment: the profile, or the table every profile shares.
+            let profile_only = resolve_stored(&Flags::default(), &Env::default(), &stored);
+            assert_eq!(profile_only.get(key).source, stored_source(key), "{key:?}");
             assert_eq!(shown(&profile_only), profile_value, "{key:?}");
 
             // With nothing set: the default.
-            let nothing =
-                Settings::resolve(&Flags::default(), &Env::default(), None, &Profiles::new())
-                    .unwrap();
+            let nothing = resolve_stored(&Flags::default(), &Env::default(), &[]);
             assert_eq!(nothing.get(key).source, Source::Default, "{key:?}");
             assert_eq!(shown(&nothing), default_value, "{key:?}");
         }
@@ -590,12 +683,32 @@ mod tests {
             ..Flags::default()
         };
 
-        let by_flag = Settings::resolve(&flag, &env, Some("lab"), &stored).unwrap();
-        let by_env = Settings::resolve(&Flags::default(), &env, Some("lab"), &stored).unwrap();
-        let by_config =
-            Settings::resolve(&Flags::default(), &Env::default(), Some("lab"), &stored).unwrap();
-        let by_default =
-            Settings::resolve(&Flags::default(), &Env::default(), None, &stored).unwrap();
+        let by_flag =
+            Settings::resolve(&flag, &env, Some("lab"), &stored, &IndexMap::new()).unwrap();
+        let by_env = Settings::resolve(
+            &Flags::default(),
+            &env,
+            Some("lab"),
+            &stored,
+            &IndexMap::new(),
+        )
+        .unwrap();
+        let by_config = Settings::resolve(
+            &Flags::default(),
+            &Env::default(),
+            Some("lab"),
+            &stored,
+            &IndexMap::new(),
+        )
+        .unwrap();
+        let by_default = Settings::resolve(
+            &Flags::default(),
+            &Env::default(),
+            None,
+            &stored,
+            &IndexMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(
             (by_flag.profile_name(), by_flag.profile.source.kind()),
@@ -627,7 +740,8 @@ mod tests {
             ..Flags::default()
         };
 
-        let error = Settings::resolve(&typo, &Env::default(), None, &stored).unwrap_err();
+        let error =
+            Settings::resolve(&typo, &Env::default(), None, &stored, &IndexMap::new()).unwrap_err();
 
         assert_eq!(error.exit.code(), 2);
         assert_eq!(
@@ -640,7 +754,8 @@ mod tests {
                 &Flags::default(),
                 &Env::default(),
                 Some("default"),
-                &Profiles::new()
+                &Profiles::new(),
+                &IndexMap::new()
             )
             .is_ok()
         );
@@ -654,10 +769,22 @@ mod tests {
             ..Flags::default()
         };
 
-        let from_env =
-            Settings::resolve(&Flags::default(), &env, None, &Profiles::new()).unwrap_err();
-        let from_flag =
-            Settings::resolve(&flags, &Env::default(), None, &Profiles::new()).unwrap_err();
+        let from_env = Settings::resolve(
+            &Flags::default(),
+            &env,
+            None,
+            &Profiles::new(),
+            &IndexMap::new(),
+        )
+        .unwrap_err();
+        let from_flag = Settings::resolve(
+            &flags,
+            &Env::default(),
+            None,
+            &Profiles::new(),
+            &IndexMap::new(),
+        )
+        .unwrap_err();
 
         assert!(
             from_env
@@ -682,6 +809,27 @@ mod tests {
     fn values_are_validated_per_setting() {
         assert!(Key::Timeout.parse("500ms").is_ok());
         assert!(Key::WarnUnpinned.parse("off").is_ok());
+        for (text, on) in [
+            ("false", false),
+            ("0", false),
+            ("no", false),
+            ("OFF", false),
+            ("on", true),
+        ] {
+            assert_eq!(
+                Key::UpdateAuto.parse(text).unwrap(),
+                Value::Switch(on),
+                "{text}"
+            );
+        }
+        assert_eq!(
+            Key::UpdatePinVersion.parse("v0.3.1").unwrap(),
+            Value::Text("0.3.1".into())
+        );
+        assert_eq!(
+            Key::UpdateChannel.parse("PreRelease").unwrap(),
+            Value::Text("prerelease".into())
+        );
         assert!(Key::BaseUrl.parse("http://127.0.0.1:4010").is_ok());
         for (key, wrong) in [
             (Key::BaseUrl, "ftp://example.com"),
@@ -694,6 +842,9 @@ mod tests {
             (Key::Concurrency, "0"),
             (Key::Concurrency, "65"),
             (Key::WarnUnpinned, "maybe"),
+            (Key::UpdateAuto, "sometimes"),
+            (Key::UpdateChannel, "nightly"),
+            (Key::UpdatePinVersion, "latest"),
         ] {
             let error = key.parse(wrong).unwrap_err();
             assert_eq!(error.exit.code(), 2, "{key:?} {wrong:?}");
