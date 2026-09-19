@@ -1,0 +1,31 @@
+# New advisories are published without any change to this repository, so the dependency audit
+# also runs on a schedule. A failure here means a dependency needs attention.
+
+name: Security audit
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    name: Advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
+        with:
+          tool: cargo-deny,cargo-audit
+      - run: cargo deny --locked check advisories
+      - run: cargo audit --deny unsound --deny yanked

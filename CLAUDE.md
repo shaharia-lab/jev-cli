@@ -10,8 +10,10 @@ typed questions (`noul` = yes/no probability, `choice` = one of up to 255 option
 a 2–10 level rubric) and get calibrated probabilities back. The CLI makes that usable from a terminal,
 shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (including an MCP server mode).
 
-Status: **pre-implementation.** The PRD is approved; work is tracked as a GitHub epic with sub-issues
-linked by native blocked-by relationships. Pick issues whose blockers are closed.
+Status: **early implementation.** The workspace, CI and governance files exist; the command surface
+does not yet (the `jev` binary only prints its version). Work is tracked in epic
+[#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
+relationships. Pick issues whose blockers are closed.
 
 ## Read before designing or coding
 
@@ -93,8 +95,27 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
 - Conventional Commits for PR titles (`feat:`, `fix:`, `docs:`, `chore:` …); release-please cuts releases.
 - `main` requires a pull request, signed commits and linear history. Work on a branch, one issue per PR,
   and reference the issue and the PRD requirement ids it satisfies.
-- Quality gates: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --workspace`,
-  `cargo deny check`. Builds use `--locked`.
+- Run every CI gate locally with **`make check`** before pushing. Individually:
+
+  | Gate | Command |
+  | --- | --- |
+  | Format | `cargo fmt --all --check` (fix: `cargo fmt --all`) |
+  | Lint | `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` |
+  | Test | `cargo test --workspace --all-features --locked` |
+  | MSRV | `make msrv` (checks with `rust-version` from `Cargo.toml`) |
+  | Docs | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked` |
+  | Supply chain | `cargo deny --locked check` and `cargo audit --deny unsound --deny yanked` |
+  | Repo policy | `scripts/ci/check-action-pins.sh`, `scripts/ci/check-client-deps.sh` |
+
+- If `cargo` is not on `PATH` in a fresh shell, run `. "$HOME/.cargo/env"` first.
+- The development toolchain is pinned in `rust-toolchain.toml` (Dependabot bumps it). The MSRV is
+  `rust-version` in the root `Cargo.toml`; policy is latest stable minus two, changed deliberately.
+- Lints live in `[workspace.lints]` in the root `Cargo.toml` and `clippy.toml`. `unwrap`, `expect`,
+  `panic!` and slice indexing are linted outside tests: return an error instead. Fix the cause
+  rather than adding `#[allow]`; an unavoidable allow needs a comment saying why.
+- Dependency policy is `deny.toml`: permissive licences only, no OpenSSL or `native-tls`, crates.io
+  only. `jev-client` must not depend on CLI, terminal or config crates (CI checks this).
+- Every third-party GitHub Action is pinned to a full commit SHA with the version in a comment.
 - Tests run against a local mock server (`wiremock`); CLI behaviour is asserted with `assert_cmd` and
   snapshot tests on stdout, stderr **and** exit code. Live API tests are opt-in only.
 - Isolate all test state with `JEV_CONFIG_DIR`; never touch the real user config or keychain.

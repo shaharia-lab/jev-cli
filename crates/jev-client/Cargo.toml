@@ -1,0 +1,16 @@
+[package]
+name = "jev-client"
+description = "Unofficial Rust client for TypeSafe AI's Jev model: typed requests, offline validation, retries and typed errors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords = ["jev", "typesafe", "client", "ai"]
+categories = ["api-bindings"]
+readme = "README.md"
+
+[lints]
+workspace = true

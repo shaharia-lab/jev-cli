@@ -1,0 +1,6 @@
+# Toolchain used for development and CI, pinned so a new Rust release cannot break an unrelated
+# pull request. Dependabot bumps it. The minimum supported version is `rust-version` in Cargo.toml.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

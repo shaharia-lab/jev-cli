@@ -1,0 +1,50 @@
+# cargo-deny policy: advisories, licences, banned crates and crate sources.
+# Run locally with `cargo deny check`. CI fails on any violation.
+
+[graph]
+all-features = true
+
+[advisories]
+# Vulnerabilities and unsound crates are denied by default. A yanked crate is denied too, because
+# a yank usually means "do not ship this".
+yanked = "deny"
+# An unmaintained crate fails the build only when we depend on it directly; a transitive one is
+# not ours to replace, and `cargo audit` still reports it.
+unmaintained = "workspace"
+# Add an entry here only with a comment explaining why the advisory does not apply.
+ignore = []
+
+[licenses]
+# Permissive licences compatible with shipping a binary under `MIT OR Apache-2.0`.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.93
+# The list is written ahead of the dependencies that need it.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+    # TLS goes through rustls so release binaries have no system library dependency and
+    # certificate verification behaves the same on every platform.
+    { crate = "openssl", reason = "use rustls; the binary must not depend on OpenSSL" },
+    { crate = "openssl-sys", reason = "use rustls; the binary must not depend on OpenSSL" },
+    { crate = "native-tls", reason = "use rustls; the binary must not depend on a system TLS stack" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

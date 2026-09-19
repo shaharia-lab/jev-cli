@@ -1,0 +1,35 @@
+# Weekly dependency updates. Commit prefixes follow Conventional Commits so release tooling and
+# the changelog treat them correctly.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Keeps the pinned development toolchain in rust-toolchain.toml current. The minimum supported
+  # version (`rust-version` in Cargo.toml) is a deliberate decision and is never bumped automatically.
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(toolchain)"

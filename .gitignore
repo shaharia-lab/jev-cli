@@ -1,1 +1,10 @@
 docs/upstream/
+
+# Rust build output
+/target/
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store

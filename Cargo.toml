@@ -1,0 +1,43 @@
+[workspace]
+resolver = "3"
+members = ["crates/jev-client", "crates/jev-cli"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+# Minimum supported Rust version. Policy: latest stable minus two releases, bumped only in
+# minor releases of jev. CI builds the workspace with exactly this toolchain.
+rust-version = "1.96"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/shaharia-lab/jev-cli"
+homepage = "https://github.com/shaharia-lab/jev-cli"
+authors = ["Shaharia Lab"]
+keywords = ["jev", "typesafe", "cli", "ai"]
+categories = ["command-line-utilities"]
+
+[workspace.dependencies]
+jev-client = { path = "crates/jev-client", version = "0.0.0" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+# User input must never panic the CLI: failures map to documented exit codes instead.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+# Leftovers that must not reach main.
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+# Pedantic lints that cost more than they give here.
+module_name_repetitions = "allow"
+# Transitive duplicates are reported by `cargo deny check bans`, which can be configured per crate.
+multiple_crate_versions = "allow"
