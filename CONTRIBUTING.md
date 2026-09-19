@@ -95,9 +95,16 @@ versions or `CHANGELOG.md` by hand.
 3. That workflow builds all six targets (x86_64 and aarch64 of static-musl Linux, macOS and
    Windows) on native runners, checks each binary's size, version and (on Linux) static linking,
    packs `jev-<version>-<triple>.tar.gz` (`.zip` on Windows) with the licences, man pages and
-   shell completions, and adds the JSON Schemas and `SHA256SUMS`. The owner approves the
-   `release` environment; the assets are uploaded to the draft, downloaded again and verified,
-   and only then is the release published.
+   shell completions, and adds the JSON Schemas, a CycloneDX SBOM and `SHA256SUMS`. The owner
+   approves the `release` environment, the only place the signing key is available; that job
+   signs every asset and `SHA256SUMS` with minisign and uploads them to the draft. Build
+   provenance is attested for every asset and binary. The assets are then downloaded again and
+   verified (checksums, signatures against `crates/jev-cli/keys/release-primary.pub` with the
+   standard minisign CLI, and attestations), and only then is the release published.
+
+`scripts/release/self-test.sh` (part of `make check` and CI) checks the committed public keys and
+drives signing and verification with a throwaway key, including tampered assets. Key rotation and
+manual verification are described in [`SECURITY.md`](SECURITY.md).
 
 A failed run is resumed with **Re-run failed jobs**, or with
 `gh workflow run release.yml --ref vX.Y.Z` once it is too old to re-run. Publishing can run any number of times: a
