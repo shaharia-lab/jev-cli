@@ -108,6 +108,15 @@ code that decides whether a prompt is allowed. To give a pending command its beh
 `Pending` arguments in `cli.rs`, add a module under `commands/`, route it in `commands::run`, and
 give it a `Doc` in `help/docs.rs`.
 
+A human form never prints text `jev` did not write itself as it stands: `output::printable` writes
+its control characters out as escapes, so a server's message, a model card, a question id echoed
+from a request file or a batch row cannot drive the terminal. `Ui`'s styling methods and `Cell` do
+it for whatever they are given, which covers most values; anything interpolated into a human string
+without them applies `printable` itself, and the escaped text is what `Cell` measures, so the
+columns still line up. Machine formats escape control characters themselves and must stay
+byte-faithful, and so must the single raw values `--field`, `jev config get` and `jev config path`
+print for a script. `tests/escape.rs` holds a sentinel escape sequence to each of these surfaces.
+
 Help follows one standard (product rule 1). In `cli.rs` a command has only its one-line purpose (a
 one-paragraph doc comment) and its arguments; everything else is its `Doc`: when to use it versus
 its siblings, input, output, exit codes, and 2 to 4 examples, one machine-readable. `help::apply`

@@ -15,7 +15,7 @@ use crate::credentials::{
 };
 use crate::error::CliError;
 use crate::notice::Notice;
-use crate::output::{Cell, Render, Table, Ui};
+use crate::output::{Cell, Render, Table, Ui, printable};
 
 pub(crate) fn run(command: &AuthCommand, context: &mut Context<'_>) -> Result<(), CliError> {
     match command {
@@ -69,9 +69,10 @@ fn read_key(arguments: &LoginArgs, context: &mut Context<'_>) -> Result<ApiKey, 
         "the API key",
         "pipe the key in: `printf %s \"$KEY\" | jev auth login --with-token`; or skip storing it and set TYPESAFE_API_KEY",
     )?;
+    // The prompt goes straight to the terminal, and the profile name comes from the config file.
     let typed = rpassword::prompt_password(format!(
         "API key for profile `{}` (input is hidden): ",
-        context.settings()?.profile_name()
+        printable(context.settings()?.profile_name())
     ))
     .map_err(|error| {
         CliError::usage(format!("could not read the key: {error}"))
@@ -229,9 +230,13 @@ struct LoggedIn {
 impl Render for LoggedIn {
     fn human(&self, _: Ui) -> String {
         let verified = if self.verified { "verified and " } else { "" };
+        // The fingerprint is four characters of a key, which `ApiKey::new` holds to printable
+        // ASCII; the profile name comes from the config file and the path from `JEV_CONFIG_DIR`.
         format!(
             "key {} {verified}stored for profile `{}` in {}\n",
-            self.fingerprint, self.profile, self.stored_in
+            self.fingerprint,
+            printable(&self.profile),
+            printable(&self.stored_in)
         )
     }
 }
@@ -311,7 +316,11 @@ impl Render for LoggedOut {
         }
         let mut text = String::new();
         for profile in &self.removed {
-            let _ = writeln!(text, "removed the stored key of profile `{profile}`");
+            let _ = writeln!(
+                text,
+                "removed the stored key of profile `{}`",
+                printable(profile)
+            );
         }
         text
     }

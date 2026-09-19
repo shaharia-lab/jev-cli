@@ -11,7 +11,7 @@ use super::Context;
 use crate::cli::ValidateArgs;
 use crate::error::CliError;
 use crate::input::{self, StateSource};
-use crate::output::{Render, Ui};
+use crate::output::{Render, Ui, printable};
 
 pub(crate) fn run(arguments: &ValidateArgs, context: &mut Context<'_>) -> Result<(), CliError> {
     let mut document =
@@ -113,7 +113,13 @@ impl Render for Validation {
         } else {
             ui.error_label("invalid")
         };
-        let mut text = format!("{}: {verdict}{}\n", self.file, counts(&self.summary));
+        // A finding quotes the document it checked, and the file name came from the command
+        // line, so both are neutralised before a terminal sees them.
+        let mut text = format!(
+            "{}: {verdict}{}\n",
+            printable(&self.file),
+            counts(&self.summary)
+        );
 
         // Grouped by question, in the order the questions first appear.
         let mut groups: IndexMap<Option<&str>, Vec<&Finding>> = IndexMap::new();
@@ -138,9 +144,14 @@ impl Render for Validation {
                     finding.path.as_str()
                 };
                 let _ = writeln!(text, "  {label}  {}  {}", finding.rule.id(), ui.dim(place));
-                let _ = writeln!(text, "           {}", finding.message);
+                let _ = writeln!(text, "           {}", printable(&finding.message));
                 if let Some(suggestion) = &finding.suggestion {
-                    let _ = writeln!(text, "           {} {suggestion}", ui.dim("fix:"));
+                    let _ = writeln!(
+                        text,
+                        "           {} {}",
+                        ui.dim("fix:"),
+                        printable(suggestion)
+                    );
                 }
             }
         }

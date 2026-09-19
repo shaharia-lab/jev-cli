@@ -14,7 +14,7 @@ use crate::evaluate::{self, Evaluation, PrepareOptions, Prepared};
 use crate::exit::Exit;
 use crate::gate::{self, Condition};
 use crate::input::{self, StateSource};
-use crate::output::{Render, Ui};
+use crate::output::{Render, Ui, printable};
 
 pub(crate) fn run(arguments: &EvalArgs, context: &mut Context<'_>) -> Result<Exit, CliError> {
     // A malformed condition is a usage error before the file is even read.
@@ -226,12 +226,14 @@ impl Preview {
 impl Render for Preview {
     fn human(&self, ui: Ui) -> String {
         let body = serde_json::to_string_pretty(&self.body).unwrap_or_default();
+        // The base URL, the model name and where it came from are all configuration or file
+        // content; `body` is JSON, which escapes control characters itself.
         let mut text = format!(
             "{}\nPOST {}\nmodel {} (from {})\n",
             ui.bold("dry run: nothing was sent"),
-            self.endpoint,
-            self.requested_model,
-            self.model_origin
+            printable(&self.endpoint),
+            printable(&self.requested_model),
+            printable(&self.model_origin)
         );
         if let Some(size) = &self.size_estimate {
             let _ = writeln!(

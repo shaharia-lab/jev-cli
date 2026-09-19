@@ -9,7 +9,7 @@ use serde::Serialize;
 use super::engine::Job;
 use super::{Ids, Keyed, Row, RowProblem};
 use crate::evaluate::{self, PrepareOptions};
-use crate::output::{Render, Ui};
+use crate::output::{Render, Ui, printable};
 
 /// How many problems the plan lists before counting the rest.
 const MAX_LISTED_PROBLEMS: usize = 100;
@@ -144,7 +144,7 @@ impl Render for Plan {
                 let _ = writeln!(
                     text,
                     "estimated cost: ${cost:.6} on {}",
-                    self.requested_model
+                    printable(&self.requested_model)
                 );
             }
             None if self.estimated_input_tokens.is_none() => {
@@ -154,12 +154,13 @@ impl Render for Plan {
                 let _ = writeln!(
                     text,
                     "estimated cost: unknown for `{}`; a versioned model id such as `jev-1.13.0` has a price",
-                    self.requested_model
+                    printable(&self.requested_model)
                 );
             }
         }
         for problem in &self.problems {
-            let _ = writeln!(text, "- {}", problem.describe());
+            // A problem quotes the row it came from, which is customer data.
+            let _ = writeln!(text, "- {}", printable(&problem.describe()));
         }
         text
     }

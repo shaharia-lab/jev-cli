@@ -8,7 +8,7 @@ use crate::cli::{Command, UpdateArgs};
 use crate::error::CliError;
 use crate::exit::Exit;
 use crate::notice::Notice;
-use crate::output::{Render, Ui};
+use crate::output::{Render, Ui, printable};
 use crate::update::auto::{self, StateFile};
 use crate::update::{
     self, Channel, GitHubReleases, InstallMethod, Installation, MINIMUM_VERSION, Newest, Release,
@@ -388,17 +388,21 @@ impl Render for Report {
     fn human(&self, ui: Ui) -> String {
         let arrow = if ui.has_unicode() { "→" } else { "->" };
         let current = &self.current_version;
-        let version = self.version.as_deref().unwrap_or("?");
+        // A version name and a release URL come from the release's metadata on GitHub, and the
+        // command is built from the install method; none of them is `jev`'s own text.
+        let version = printable(self.version.as_deref().unwrap_or("?"));
         let mut lines = vec![match self.status {
             Status::UpToDate if self.version.is_none() => {
                 format!("jev {current}: no release is published yet")
             }
             Status::UpToDate => format!("jev {current} is up to date (latest release: {version})"),
             Status::UpdateAvailable => {
-                format!("jev {} is available (this is {current})", ui.bold(version))
+                format!("jev {} is available (this is {current})", ui.bold(&version))
             }
-            Status::Updated => format!("jev updated {current} {arrow} {}", ui.bold(version)),
-            Status::RolledBack => format!("jev rolled back {current} {arrow} {}", ui.bold(version)),
+            Status::Updated => format!("jev updated {current} {arrow} {}", ui.bold(&version)),
+            Status::RolledBack => {
+                format!("jev rolled back {current} {arrow} {}", ui.bold(&version))
+            }
             Status::Managed => format!(
                 "jev was installed with {}, which updates it",
                 self.install_method
@@ -407,12 +411,16 @@ impl Render for Report {
             ),
         }];
         if let Some(command) = &self.command {
-            lines.push(format!("  {} {command}", ui.dim("run:")));
+            lines.push(format!(
+                "  {} {}",
+                ui.dim("run:"),
+                printable(command.as_str())
+            ));
         }
         if let Some(url) = &self.release_url
             && matches!(self.status, Status::UpdateAvailable | Status::Updated)
         {
-            lines.push(format!("  {} {url}", ui.dim("changelog:")));
+            lines.push(format!("  {} {}", ui.dim("changelog:"), printable(url)));
         }
         if self.status == Status::Updated {
             lines.push(format!("  {} jev update --rollback", ui.dim("undo:")));

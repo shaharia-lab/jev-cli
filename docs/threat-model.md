@@ -69,8 +69,12 @@ Nothing from a response is trusted:
   verbosity level logs a body by itself.
 - Error text is never quoted from a body of unknown shape; a 422 echoes the request, and only its
   summary is shown.
-- Control characters in anything `jev` prints for a person — a server's message, a hint, a request
-  id — are written out as escapes, so a message cannot drive the terminal.
+- Control characters in anything `jev` prints for a person are written out as escapes, so no text
+  `jev` did not write itself can drive the terminal (CWE-150). That covers errors and notices, the
+  answer envelope, tables, the model list, validation findings and a batch plan, whether colour is
+  on or off. The machine formats keep the value exactly as it was sent, since JSON and YAML escape
+  control characters themselves and a program needs the value unchanged; so do `--field`,
+  `jev config get` and `jev config path`, each of which prints one raw value for a script.
 
 ### 3. Files the user names
 
@@ -163,7 +167,7 @@ command also has a scenario of its own.
 | Finding | Severity | Status |
 | --- | --- | --- |
 | A response body that echoed the `Authorization` header reached `--raw` output and any unknown answer kept as raw JSON | Low (needs a hostile or misbehaving endpoint) | Fixed: the body is scrubbed before it is parsed, logged or kept |
-| Terminal escape sequences in a server's error message, or in text quoted from a file, were printed to the terminal unchanged | Low | Fixed for errors and notices; the rest of human output is tracked in [#80](https://github.com/shaharia-lab/jev-cli/issues/80) |
+| Terminal escape sequences in a server's error message, or in text quoted from a file, were printed to the terminal unchanged | Low | Fixed: errors and notices here, and the rest of human output in [#80](https://github.com/shaharia-lab/jev-cli/issues/80) |
 | The self-test of a newly downloaded binary ran with the API key in its environment | Informational | Fixed: the probe removes it, as the background check already did |
 | The GitHub App credentials that publish the Homebrew tap and the release pull request were repository-level secrets, so any workflow on a branch could read them | Low (requires write access to this repository) | Fixed in [#83](https://github.com/shaharia-lab/jev-cli/pull/83): both jobs now take them from a deployment environment |
 
