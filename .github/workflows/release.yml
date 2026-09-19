@@ -130,7 +130,10 @@ jobs:
           if readelf --dynamic "$BIN" | grep -q NEEDED; then
             echo "::error::$BIN links shared libraries:"; readelf --dynamic "$BIN" | grep NEEDED; exit 1
           fi
-          ldd "$BIN" 2>&1 | tee /dev/stderr | grep -Eq 'not a dynamic executable|statically linked'
+          # ldd exits non-zero for a binary that is not dynamic, which is the point.
+          linkage=$(ldd "$BIN" 2>&1 || true)
+          echo "ldd: $linkage"
+          grep -Eq 'not a dynamic executable|statically linked' <<< "$linkage"
           docker run --rm --volume "$PWD/$(dirname "$BIN"):/dist:ro" \
             alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 \
             /dist/jev version
