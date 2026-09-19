@@ -134,7 +134,7 @@ model: jev-latest
 questions:
   is_urgent:
     type: noul
-    instructions: Does `ticket.text` convey urgency?
+    instructions: Does this ticket convey urgency?
     criteria:
       "true": Explicitly time-sensitive
       "false": No urgency expressed
