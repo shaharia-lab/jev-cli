@@ -948,7 +948,13 @@ async fn a_run_writes_the_records_jev_batch_run_writes_reports_progress_and_retu
         6,
         "three rows from the command, three from the tool"
     );
-    assert_eq!(bodies[3..], bodies[..3]);
+    // Rows are sent concurrently, so each run's requests arrive in any order: compare them as
+    // sets. `--ordered` orders the records, which are compared above.
+    let (mut cli_sent, mut tool_sent) = (bodies[..3].to_vec(), bodies[3..].to_vec());
+    for requests in [&mut cli_sent, &mut tool_sent] {
+        requests.sort_by_key(ToString::to_string);
+    }
+    assert_eq!(tool_sent, cli_sent);
 
     let progress = run.notifications();
     assert!(!progress.is_empty(), "{}", run.stdout);

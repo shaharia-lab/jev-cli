@@ -858,8 +858,9 @@ async fn sigint_finishes_the_rows_in_flight_prints_the_summary_and_exits_130() {
     );
 }
 
-/// Answers 429 with `retry-after: 1` to the first request, then 200 after 50 ms, and remembers
-/// when each request arrived.
+/// Answers 429 with `retry-after: 1` to the first request, then 200 after 200 ms, and remembers
+/// when each request arrived. The 200s are slow so that a worker whose first request was already
+/// on its way cannot finish it and start another before the refused worker has seen its 429.
 struct RateLimited {
     arrivals: std::sync::Mutex<Vec<std::time::Instant>>,
 }
@@ -874,7 +875,7 @@ impl wiremock::Respond for RateLimited {
                 .set_body_json(json!({ "detail": { "error_type": "rate_limit_error", "message": "Slow down." } }))
         } else {
             ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(50))
+                .set_delay(Duration::from_millis(200))
                 .set_body_json(answer())
         }
     }
@@ -920,19 +921,32 @@ async fn a_429_on_one_worker_pauses_every_worker_for_its_retry_after() {
     let arrivals = arrivals.arrivals.lock().unwrap().clone();
     assert_eq!(arrivals.len(), 13, "one retry");
     let refused = arrivals[0];
-    // Only the other workers' first requests, already on their way, arrive during the server's
-    // second; after it, requests start one at a time, spaced out.
     let mut since: Vec<Duration> = arrivals
         .iter()
         .map(|arrival| arrival.duration_since(refused))
         .collect();
     since.sort_unstable();
-    let (paused, later) = since.split_at(4);
-    assert!(paused[3] < Duration::from_millis(990), "{since:?}");
-    assert!(later[0] >= Duration::from_millis(990), "{since:?}");
-    for pair in later.windows(2).take(3) {
+    // The bounds below hold however slow the machine, because sleeps never end early; they
+    // assume only that the refused worker sees its 429 before another worker's 200 arrives.
+    //
+    // During the server's second, at most the other three workers' first requests arrive: those
+    // that had passed the throttle before the 429 came back. How many had depends on how fast the
+    // workers started, so it is a bound, not a count. A throttle that paused only the refused
+    // worker would let the others run through every row in that second.
+    let pause = Duration::from_millis(990);
+    let (during, after) = since.split_at(since.partition_point(|since| *since < pause));
+    assert!(during.len() <= 4, "{since:?}");
+    // After it, calls start one at a time. The gap starts at 100 ms and narrows by an eighth with
+    // each success, so with at most 11 successes before the last start it stays above 20 ms: the
+    // n-th paced start is at least n - 1 gaps after the pause. Of the arrivals after the pause,
+    // all are paced but the first requests that were on their way yet arrived late, of which
+    // there are at most `3 - early`.
+    let early = during.len() - 1;
+    for (index, arrival) in after.iter().enumerate() {
+        let paced_before = (index + early).saturating_sub(3);
+        let gaps = u32::try_from(paced_before).unwrap();
         assert!(
-            pair[1].saturating_sub(pair[0]) >= Duration::from_millis(50),
+            *arrival >= pause + Duration::from_millis(20) * gaps,
             "{since:?}"
         );
     }
