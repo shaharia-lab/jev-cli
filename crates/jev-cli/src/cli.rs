@@ -4,6 +4,7 @@
 //! it, input, output, exit codes, examples) is its `Doc` in `help/docs.rs`, attached by [`command`].
 
 use std::ffi::OsString;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::builder::FalseyValueParser;
@@ -628,6 +629,18 @@ pub(crate) struct McpServeArgs {
     /// Refuse, before sending, any call whose estimated cost in US dollars is above this
     #[arg(long, value_name = "USD", value_parser = parse_usd, help_heading = "Guardrails")]
     pub(crate) max_cost_usd_per_call: Option<f64>,
+
+    /// Offer the `batch_run` tool, reading and writing files only inside this directory; repeat for more
+    #[arg(long, value_name = "DIR", help_heading = "Batch")]
+    pub(crate) allow_dir: Vec<PathBuf>,
+
+    /// Refuse, before sending, any `batch_run` over more rows than this
+    #[arg(long, value_name = "N", requires = "allow_dir", value_parser = clap::value_parser!(u64).range(1..), help_heading = "Batch")]
+    pub(crate) max_batch_rows: Option<u64>,
+
+    /// Refuse, before sending, any `batch_run` whose estimated cost in US dollars is above this
+    #[arg(long, value_name = "USD", requires = "allow_dir", value_parser = parse_usd, help_heading = "Batch")]
+    pub(crate) max_batch_cost_usd: Option<f64>,
 }
 
 /// An amount of US dollars: a finite number, zero or more.

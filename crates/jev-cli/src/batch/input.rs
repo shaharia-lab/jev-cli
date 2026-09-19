@@ -5,13 +5,15 @@ use std::io::{self, BufRead, BufReader, Read};
 use std::path::Path;
 
 use clap::ValueEnum;
-use serde::Serialize;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::error::CliError;
 
 /// The format of a batch's input.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
 pub(crate) enum RowFormat {
     /// One JSON value per line
     Jsonl,

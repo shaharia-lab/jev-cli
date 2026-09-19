@@ -149,7 +149,9 @@ extra questions add tokens, not round trips.
 
 `jev mcp serve` exposes Jev to an MCP client as tools. MCP tools: `evaluate`, `noul`, `choice`,
 `score`, `validate`, `list_models`. Each result is the same envelope as `jev eval -o json`, plus
-the session's calls and estimated spend.
+the session's calls and estimated spend. A server started with `--allow-dir <dir>` also offers
+`batch_run`, which runs `jev batch run` over files inside those directories only, with optional
+`--max-batch-rows` and `--max-batch-cost-usd` caps.
 
 - **Prefer the MCP tools** for a judgment you need yourself during a conversation, when your
   client already lists them: structured arguments, no shell quoting, no files.

@@ -9,14 +9,16 @@ use jev_client::{Choice, Noul, Request, Score, Transport};
 use schemars::JsonSchema;
 use serde_json::{Map, Value, json};
 
-use super::{Session, with_session};
+use super::roots::Roots;
+use super::{Reporter, Session, batch_run, with_session};
 use crate::commands::shortcut::{ANSWER, Single};
 use crate::commands::validate::Validation;
 use crate::error::CliError;
 use crate::schemas;
 
 /// What a tool does with its arguments.
-pub(super) type Handler<T> = fn(&mut Session<T>, &Map<String, Value>) -> Result<Value, CliError>;
+pub(super) type Handler<T> =
+    fn(&mut Session<T>, &Map<String, Value>, &mut Reporter<'_>) -> Result<Value, CliError>;
 
 /// One tool, as `tools/list` describes it and `tools/call` runs it.
 pub(super) struct Tool<T> {
@@ -26,6 +28,8 @@ pub(super) struct Tool<T> {
     input_schema: Value,
     /// Whether the tool reaches the API (and costs money), rather than working offline.
     open_world: bool,
+    /// Whether the tool leaves everything as it was, rather than writing files.
+    read_only: bool,
     pub(super) call: Handler<T>,
 }
 
@@ -39,9 +43,9 @@ impl<T> Tool<T> {
             "inputSchema": self.input_schema,
             "annotations": {
                 "title": self.title,
-                "readOnlyHint": true,
+                "readOnlyHint": self.read_only,
                 "destructiveHint": false,
-                "idempotentHint": !self.open_world,
+                "idempotentHint": !self.open_world && self.read_only,
                 "openWorldHint": self.open_world
             }
         })
@@ -62,17 +66,22 @@ unknown), `request_id`, `latency_ms`, `warnings` (validation lints, only when th
 `session` (calls made and estimated spend so far in this session). The request is validated \
 offline first: an invalid one is a tool error listing every finding, and nothing is sent.";
 
-/// Every tool this server offers, in the order `tools/list` shows them.
-pub(super) fn all<T: Transport>() -> Vec<Tool<T>> {
+/// Every tool this server offers, in the order `tools/list` shows them. `batch_run` is offered
+/// only with directories it may use.
+pub(super) fn all<T: Transport + 'static>(batch: Option<&Roots>) -> Vec<Tool<T>> {
     let request = schema_of::<Request>();
-    vec![
+    let mut tools = vec![
         evaluate(&request),
         noul(&request),
         choice(&request),
         score(&request),
         validate(&request),
         list_models(),
-    ]
+    ];
+    if let Some(roots) = batch {
+        tools.push(batch_run(&request, roots));
+    }
+    tools
 }
 
 /// Several questions about one state.
@@ -92,6 +101,7 @@ fn evaluate<T: Transport>(request: &Map<String, Value>) -> Tool<T> {
         ),
         input_schema: evaluate_schema(request),
         open_world: true,
+        read_only: true,
         call: evaluate_tool::<T>,
     }
 }
@@ -112,6 +122,7 @@ fn noul<T: Transport>(request: &Map<String, Value>) -> Tool<T> {
         ),
         input_schema: single_schema::<Noul>(request),
         open_world: true,
+        read_only: true,
         call: noul_tool::<T>,
     }
 }
@@ -134,6 +145,7 @@ fn choice<T: Transport>(request: &Map<String, Value>) -> Tool<T> {
         ),
         input_schema: single_schema::<Choice>(request),
         open_world: true,
+        read_only: true,
         call: choice_tool::<T>,
     }
 }
@@ -155,6 +167,7 @@ fn score<T: Transport>(request: &Map<String, Value>) -> Tool<T> {
         ),
         input_schema: single_schema::<Score>(request),
         open_world: true,
+        read_only: true,
         call: score_tool::<T>,
     }
 }
@@ -176,6 +189,7 @@ fn validate<T: Transport>(request: &Map<String, Value>) -> Tool<T> {
             .to_owned(),
         input_schema: validate_schema(request),
         open_world: false,
+        read_only: true,
         call: validate_tool::<T>,
     }
 }
@@ -194,13 +208,44 @@ fn list_models<T: Transport>() -> Tool<T> {
             .to_owned(),
         input_schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         open_world: true,
+        read_only: true,
         call: list_models_tool::<T>,
+    }
+}
+
+/// One question set over every row of a file.
+fn batch_run<T: Transport + 'static>(request: &Map<String, Value>, roots: &Roots) -> Tool<T> {
+    Tool {
+        name: "batch_run",
+        title: "Evaluate every row of a file",
+        description: format!(
+            "Apply one set of questions to every row of a JSONL or CSV file, one API call per \
+             row, and write one JSON record per row to a new file, exactly as `jev batch run \
+             --out` does. Use it for many states (tens to thousands); use `evaluate` for one \
+             state, and `validate` to check the questions first. Files are read and written \
+             only inside {}; a relative path is taken from the first. `out` must not exist \
+             yet. Each row's state is the whole row, one field (`state_field`) or an object of \
+             some fields (`state_fields`). Every row is checked and priced before anything is \
+             sent: a bad row, or a run over the server's row or cost limit, is a tool error and \
+             costs nothing. Progress is reported when the call has a `progressToken`. The \
+             result is the run's summary: `rows_total`, `ok`, `failed` (rows whose record is \
+             an error), `skipped`, `input_tokens`, `cost_usd` (estimated), `wall_time_ms`, \
+             `rows_per_second`, `retries`, `models`, `stopped_by`, then `out` (the records \
+             file), `warnings` and `session`. Each record has `id`, `status` (`ok` or \
+             `error`) and either the answers or an `error`. {JEV_LIMITS}",
+            roots.listed()
+        ),
+        input_schema: batch_run_schema(request),
+        open_world: true,
+        read_only: false,
+        call: batch_run::call::<T>,
     }
 }
 
 fn evaluate_tool<T: Transport>(
     session: &mut Session<T>,
     arguments: &Map<String, Value>,
+    _: &mut Reporter<'_>,
 ) -> Result<Value, CliError> {
     // The arguments are the request itself: validation reports anything that does not belong.
     let document = Document::from_value(Value::Object(arguments.clone()));
@@ -215,6 +260,7 @@ fn evaluate_tool<T: Transport>(
 fn noul_tool<T: Transport>(
     session: &mut Session<T>,
     arguments: &Map<String, Value>,
+    _: &mut Reporter<'_>,
 ) -> Result<Value, CliError> {
     single(session, "noul", arguments)
 }
@@ -222,6 +268,7 @@ fn noul_tool<T: Transport>(
 fn choice_tool<T: Transport>(
     session: &mut Session<T>,
     arguments: &Map<String, Value>,
+    _: &mut Reporter<'_>,
 ) -> Result<Value, CliError> {
     single(session, "choice", arguments)
 }
@@ -229,6 +276,7 @@ fn choice_tool<T: Transport>(
 fn score_tool<T: Transport>(
     session: &mut Session<T>,
     arguments: &Map<String, Value>,
+    _: &mut Reporter<'_>,
 ) -> Result<Value, CliError> {
     single(session, "score", arguments)
 }
@@ -276,6 +324,7 @@ fn single<T: Transport>(
 fn validate_tool<T: Transport>(
     _: &mut Session<T>,
     arguments: &Map<String, Value>,
+    _: &mut Reporter<'_>,
 ) -> Result<Value, CliError> {
     let document = Document::from_value(Value::Object(arguments.clone()));
     // As `jev validate` does: the model and the state may be left to whoever evaluates it.
@@ -288,6 +337,7 @@ fn validate_tool<T: Transport>(
 fn list_models_tool<T: Transport>(
     session: &mut Session<T>,
     _: &Map<String, Value>,
+    _: &mut Reporter<'_>,
 ) -> Result<Value, CliError> {
     let transport = session.transport.as_ref().map_err(Clone::clone)?;
     let reply = session.runtime.block_on(transport.list_models())?;
@@ -319,6 +369,37 @@ fn evaluate_schema(request: &Map<String, Value>) -> Value {
         model.insert("description".to_owned(), json!(MODEL));
     }
     schema.insert("required".to_owned(), json!(["state", "questions"]));
+    Value::Object(schema)
+}
+
+/// The schema of `batch_run`: its own arguments, with `questions` and `model` as a request has
+/// them.
+fn batch_run_schema(request: &Map<String, Value>) -> Value {
+    let mut schema = schema_of::<batch_run::Arguments>();
+    schema.remove("description");
+    if let Some(Value::Object(properties)) = schema.get_mut("properties") {
+        for name in ["questions", "model"] {
+            let own = properties
+                .get(name)
+                .and_then(|own| own.get("description"))
+                .cloned();
+            if let Some(Value::Object(from_request)) = request
+                .get("properties")
+                .and_then(|properties| properties.get(name))
+            {
+                let mut property = from_request.clone();
+                let description = if name == "model" {
+                    Some(json!(MODEL))
+                } else {
+                    own
+                };
+                if let Some(description) = description {
+                    property.insert("description".to_owned(), description);
+                }
+                properties.insert(name.to_owned(), Value::Object(property));
+            }
+        }
+    }
     Value::Object(schema)
 }
 
@@ -377,7 +458,7 @@ mod tests {
     use super::all;
 
     fn tools() -> Vec<Value> {
-        all::<HttpTransport>()
+        all::<HttpTransport>(None)
             .iter()
             .map(super::Tool::describe)
             .collect()

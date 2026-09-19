@@ -6,15 +6,19 @@
 //! which must carry nothing but protocol messages. Logs, notices and warnings go to stderr.
 //!
 //! Every tool that evaluates goes through [`crate::evaluate::prepare`] and
-//! [`crate::evaluate::send`], like the commands do. The tools themselves are in [`tools`].
+//! [`crate::evaluate::send`], like the commands do. The tools themselves are in [`tools`]; the
+//! file access `batch_run` has is confined by [`roots`].
 
+mod batch_run;
+mod roots;
 mod tools;
 
-use std::io::{BufRead, BufReader, ErrorKind};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
+use std::sync::Arc;
 
 use jev_client::pricing::{self, Price};
 use jev_client::validate::{Document, Finding};
-use jev_client::{Transport, Usage};
+use jev_client::{Throttle, Transport, Usage};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
@@ -24,6 +28,8 @@ use crate::config::Settings;
 use crate::error::CliError;
 use crate::evaluate::{self, Evaluation, PrepareOptions, Prepared};
 
+use self::batch_run::Access;
+use self::roots::Roots;
 use self::tools::Tool;
 
 /// Protocol versions this server speaks, newest first. A client asking for another version is
@@ -57,6 +63,19 @@ pub(crate) fn serve(arguments: &McpServeArgs, context: &mut Context<'_>) -> Resu
     // Read once: a server without a usable key still starts, so that `validate` works and every
     // other tool can say what is wrong. The failure is returned by each call that needs the API.
     let transport = context.transport(&settings);
+    let batch = if arguments.allow_dir.is_empty() {
+        None
+    } else {
+        Some(Access {
+            roots: Roots::new(&arguments.allow_dir)?,
+            transport: transport
+                .clone()
+                .map(|transport| Arc::new(transport.with_throttle(Arc::new(Throttle::new())))),
+            max_rows: arguments.max_batch_rows,
+            max_cost_usd: arguments.max_batch_cost_usd,
+        })
+    };
+    let tools = tools::all(batch.as_ref().map(|batch| &batch.roots));
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -71,8 +90,9 @@ pub(crate) fn serve(arguments: &McpServeArgs, context: &mut Context<'_>) -> Resu
             max_cost_usd_per_call: arguments.max_cost_usd_per_call,
             spend: Spend::default(),
             runtime,
+            batch,
         },
-        tools: tools::all(),
+        tools,
     };
     tracing::debug!("serving MCP over stdio");
 
@@ -89,7 +109,7 @@ pub(crate) fn serve(arguments: &McpServeArgs, context: &mut Context<'_>) -> Resu
                 return Err(CliError::internal(format!("could not read stdin: {error}")));
             }
         }
-        let Some(reply) = server.handle(&line) else {
+        let Some(reply) = server.handle(&line, &mut *stdout) else {
             continue;
         };
         let written = writeln!(stdout, "{reply}").and_then(|()| stdout.flush());
@@ -114,10 +134,10 @@ struct Server<T> {
     tools: Vec<Tool<T>>,
 }
 
-impl<T: Transport> Server<T> {
+impl<T: Transport + 'static> Server<T> {
     /// Answers one line from the client. Notifications, and lines with nothing on them, get no
-    /// answer.
-    fn handle(&mut self, line: &[u8]) -> Option<Value> {
+    /// answer. A tool may send notifications to `out` while it runs.
+    fn handle(&mut self, line: &[u8], out: &mut dyn Write) -> Option<Value> {
         if line.iter().all(u8::is_ascii_whitespace) {
             return None;
         }
@@ -154,7 +174,7 @@ impl<T: Transport> Server<T> {
             "tools/list" => {
                 Ok(json!({ "tools": self.tools.iter().map(Tool::describe).collect::<Vec<_>>() }))
             }
-            "tools/call" => self.call(params),
+            "tools/call" => self.call(params, out),
             _ => Err((METHOD_NOT_FOUND, format!("Method not found: `{method}`"))),
         };
         Some(match outcome {
@@ -165,7 +185,11 @@ impl<T: Transport> Server<T> {
 
     /// Runs a tool. A tool that fails answers with a tool error, which the model gets to read; only
     /// a call that names no known tool is a protocol error.
-    fn call(&mut self, params: Option<&Value>) -> Result<Value, (i64, String)> {
+    fn call(
+        &mut self,
+        params: Option<&Value>,
+        out: &mut dyn Write,
+    ) -> Result<Value, (i64, String)> {
         let name = params
             .and_then(|params| params.get("name"))
             .and_then(Value::as_str)
@@ -178,10 +202,20 @@ impl<T: Transport> Server<T> {
             .iter()
             .find(|tool| tool.name == name)
             .ok_or_else(|| (INVALID_PARAMS, format!("Unknown tool: `{name}`")))?;
+        let mut reporter = Reporter {
+            token: params
+                .and_then(|params| params.get("_meta"))
+                .and_then(|meta| meta.get("progressToken"))
+                .filter(|token| token.is_string() || token.is_number())
+                .cloned(),
+            out,
+        };
         let empty = Map::new();
         let result = match params.and_then(|params| params.get("arguments")) {
-            None | Some(Value::Null) => (tool.call)(&mut self.session, &empty),
-            Some(Value::Object(arguments)) => (tool.call)(&mut self.session, arguments),
+            None | Some(Value::Null) => (tool.call)(&mut self.session, &empty, &mut reporter),
+            Some(Value::Object(arguments)) => {
+                (tool.call)(&mut self.session, arguments, &mut reporter)
+            }
             Some(_) => Err(
                 CliError::usage("the tool's arguments must be a JSON object")
                     .hint("pass the arguments as an object, as the tool's input schema describes"),
@@ -231,6 +265,33 @@ fn failure(id: &Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
+/// A tool call's way to tell the client how far it has got: `notifications/progress`, sent only
+/// when the call asked for them with a `progressToken`.
+pub(super) struct Reporter<'a> {
+    token: Option<Value>,
+    out: &'a mut dyn Write,
+}
+
+impl Reporter<'_> {
+    /// Reports `progress` out of `total`, which must grow from one report to the next.
+    fn progress(&mut self, progress: u64, total: Option<u64>, message: &str) {
+        let Some(token) = &self.token else {
+            return;
+        };
+        let mut params = Map::new();
+        params.insert("progressToken".to_owned(), token.clone());
+        params.insert("progress".to_owned(), json!(progress));
+        if let Some(total) = total {
+            params.insert("total".to_owned(), json!(total));
+        }
+        params.insert("message".to_owned(), json!(message));
+        let notification =
+            json!({ "jsonrpc": "2.0", "method": "notifications/progress", "params": params });
+        // A client that has gone away is noticed when the call's result is written.
+        let _ = writeln!(self.out, "{notification}").and_then(|()| self.out.flush());
+    }
+}
+
 /// What lasts between tool calls: the settings read at start-up, the API connection, and the
 /// money spent so far.
 struct Session<T> {
@@ -241,6 +302,8 @@ struct Session<T> {
     max_cost_usd_per_call: Option<f64>,
     spend: Spend,
     runtime: tokio::runtime::Runtime,
+    /// What `batch_run` needs, when the server was started with --allow-dir.
+    batch: Option<Access<T>>,
 }
 
 impl<T: Transport> Session<T> {
@@ -356,6 +419,15 @@ impl Spend {
         match cost_usd {
             Some(cost) => self.estimated_cost_usd += cost,
             None => self.unpriced_calls += 1,
+        }
+    }
+
+    /// Records a batch run: `ok` evaluations answered, costing `cost_usd` between them.
+    fn record_batch(&mut self, ok: u64, cost_usd: Option<f64>) {
+        self.calls += ok;
+        match cost_usd {
+            Some(cost) => self.estimated_cost_usd += cost,
+            None => self.unpriced_calls += ok,
         }
     }
 }

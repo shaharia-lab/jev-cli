@@ -137,7 +137,13 @@ through `Session::evaluate`, which is `prepare`, the `--max-cost-usd-per-call` c
 Input schemas are generated from the `jev-client` types with every definition inlined. A tool that
 fails returns a tool error (`isError`) carrying `CliError::to_json()`; only an unknown method or
 tool is a JSON-RPC error. The key and settings are read once at start-up, and a server without a key
-still starts so that `validate` works.
+still starts so that `validate` works. `batch_run` (`commands/mcp/batch_run.rs`) is listed only with
+`--allow-dir`, and opens files only through `roots::Roots`: every path is canonicalised and must
+land inside a root, an output is created with `create_new` in a canonicalised parent, and after
+opening, the path is resolved again so a directory swapped for a symlink is caught. It prices every
+row as `--dry-run` does and refuses a run over `--max-batch-rows` or `--max-batch-cost-usd` before
+creating the output. A tool reports progress through the `Reporter` it is handed, the one other
+writer to stdout, and only when the call carried a `progressToken`.
 
 The batch engine (`batch/`) knows nothing of `clap`, so the MCP server can drive it too. Rows are
 read lazily on a thread of their own and handed to the pool through a channel with one slot per
