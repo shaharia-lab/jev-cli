@@ -155,6 +155,29 @@ dry run: everything is built, checked and packed, and nothing is published.
 - Match the surrounding code's naming, idiom and comment density. Document public items in
   `jev-client`.
 
+## User documentation
+
+The pages a user reads are [`README.md`](README.md) and the three in [`docs/`](docs/README.md):
+the command reference, the exit-code and JSON contract, and configuration. They must stand on
+their own: the planning documents under `docs/prd/` and `docs/context/` are deleted before the
+first release, so never link to them from a user page.
+
+[`docs/commands.md`](docs/commands.md) is **generated** from the command tree by
+`crates/jev-cli/src/reference.rs`, like the man pages. Never edit it by hand; after changing a
+command, a flag or its help, run:
+
+```bash
+make reference
+```
+
+`crates/jev-cli/tests/docs.rs` holds all of it to the binary: the committed reference must be
+exactly what this build renders, every `jev` command and flag the pages name must exist in
+`jev spec`, their exit-code tables must be the spec's, every setting they name must be real (and
+every real setting must be documented), every request file they show must pass
+`jev validate --strict`, and the README's quick start is run, as written, against a mock of the
+API. When you
+change the quick start, change `QUICK_START` in that test with it.
+
 ## The agent skill
 
 [`skills/jev-cli/SKILL.md`](skills/jev-cli/SKILL.md) teaches an AI agent to use `jev`. It

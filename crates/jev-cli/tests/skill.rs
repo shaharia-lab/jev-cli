@@ -7,12 +7,17 @@
 // the helper functions an integration test shares, where failing fast is equally the point.
 #![allow(clippy::unwrap_used, clippy::panic, clippy::indexing_slicing)]
 
-use std::collections::{BTreeMap, BTreeSet};
+#[path = "support/contract.rs"]
+mod contract;
+
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use assert_cmd::Command;
 use serde_json::{Value, json};
+
+use crate::contract::{Contract, code, commands, flags, invocations, problems};
 
 /// `jev`, isolated from the environment of whoever runs the tests, with no configuration, no key
 /// and an API address nothing listens on.
@@ -57,321 +62,12 @@ fn spec() -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-/// What `jev spec` says exists: implemented command paths with their flags, and global flags.
-struct Contract {
-    commands: BTreeMap<String, BTreeSet<String>>,
-    pending: BTreeSet<String>,
-    global: BTreeSet<String>,
-}
-
-impl Contract {
-    fn load() -> Self {
-        let spec = spec();
-        let flags = |entries: &Value| -> BTreeSet<String> {
-            let mut names = BTreeSet::new();
-            for flag in entries.as_array().unwrap() {
-                names.insert(flag["name"].as_str().unwrap().to_owned());
-                if let Some(short) = flag["short"].as_str() {
-                    names.insert(short.to_owned());
-                }
-            }
-            names
-        };
-        let mut global = flags(&spec["global_flags"]);
-        global.extend(["--help", "-h", "--version", "-V"].map(str::to_owned));
-        let mut commands = BTreeMap::new();
-        let mut pending = BTreeSet::new();
-        for command in spec["commands"].as_array().unwrap() {
-            let path = command["path"].as_str().unwrap().to_owned();
-            if command["implemented"].as_bool().unwrap() {
-                commands.insert(path, flags(&command["flags"]));
-            } else {
-                pending.insert(path);
-            }
-        }
-        Self {
-            commands,
-            pending,
-            global,
-        }
-    }
-
-    /// The command a list of words names: the longest implemented path, or a group such as
-    /// `schema` that some implemented path starts with.
-    fn resolve(&self, words: &[String]) -> Result<String, String> {
-        let names: Vec<&str> = words
-            .iter()
-            .take_while(|word| !word.starts_with('-'))
-            .map(String::as_str)
-            .collect();
-        for length in (1..=names.len()).rev() {
-            let candidate = names[..length].join(" ");
-            if self.pending.contains(&candidate) {
-                return Err(format!("`jev {candidate}` is not implemented yet"));
-            }
-            if self.commands.contains_key(&candidate)
-                || self
-                    .commands
-                    .keys()
-                    .any(|path| path.starts_with(&format!("{candidate} ")))
-            {
-                return Ok(candidate);
-            }
-        }
-        match names.first() {
-            Some(name) => Err(format!("`jev {name}` is not a command")),
-            None => Ok(String::new()),
-        }
-    }
-
-    fn has_flag(&self, command: &str, flag: &str) -> bool {
-        self.global.contains(flag)
-            || self
-                .commands
-                .get(command)
-                .is_some_and(|flags| flags.contains(flag))
-    }
-
-    fn any_has_flag(&self, flag: &str) -> bool {
-        self.global.contains(flag) || self.commands.values().any(|flags| flags.contains(flag))
-    }
-}
-
-/// A word of a shell command, and whether it was quoted (a quoted word is never a flag).
-#[derive(Debug)]
-struct Word {
-    text: String,
-    quoted: bool,
-}
-
-/// Splits shell text into simple commands: words, split at `|`, `||`, `&&`, `;` and `;;`, with
-/// comments and redirection targets dropped and quotes honoured. Enough for documentation.
-fn commands(text: &str) -> Vec<Vec<Word>> {
-    let mut commands = vec![Vec::new()];
-    let mut chars = text.chars().peekable();
-    let mut skip_next = false;
-    while let Some(&c) = chars.peek() {
-        if c.is_whitespace() {
-            chars.next();
-            continue;
-        }
-        if matches!(c, '|' | '&' | ';') {
-            while chars.peek().is_some_and(|c| matches!(c, '|' | '&' | ';')) {
-                chars.next();
-            }
-            commands.push(Vec::new());
-            continue;
-        }
-        if matches!(c, '>' | '<') {
-            while chars.peek().is_some_and(|c| matches!(c, '>' | '<')) {
-                chars.next();
-            }
-            skip_next = true;
-            continue;
-        }
-        if c == '#' {
-            break;
-        }
-        let mut word = String::new();
-        let mut quoted = false;
-        while let Some(&c) = chars.peek() {
-            if c.is_whitespace() || matches!(c, '|' | '&' | ';' | '>' | '<') {
-                break;
-            }
-            chars.next();
-            if c == '\'' || c == '"' {
-                quoted = true;
-                for inner in chars.by_ref() {
-                    if inner == c {
-                        break;
-                    }
-                    word.push(inner);
-                }
-            } else {
-                word.push(c);
-            }
-        }
-        if std::mem::take(&mut skip_next) {
-            continue;
-        }
-        commands
-            .last_mut()
-            .unwrap()
-            .push(Word { text: word, quoted });
-    }
-    commands.retain(|command| !command.is_empty());
-    commands
-}
-
-/// The `jev` invocations in a simple command: one that starts with `jev` (after shell keywords),
-/// and one after a `--` that hands the rest of the line to another program, as in
-/// `claude mcp add jev -- jev mcp serve`.
-fn invocations(command: &[Word]) -> Vec<&[Word]> {
-    let mut found = Vec::new();
-    let start = command
-        .iter()
-        .position(|word| !matches!(word.text.as_str(), "if" | "then" | "!" | "else" | "do"))
-        .unwrap_or(command.len());
-    if command.get(start).is_some_and(|word| word.text == "jev") {
-        found.push(&command[start + 1..]);
-    } else if let Some(separator) = command.iter().position(|word| word.text == "--")
-        && command
-            .get(separator + 1)
-            .is_some_and(|word| word.text == "jev")
-    {
-        found.push(&command[separator + 2..]);
-    }
-    found
-}
-
-/// The flags in a list of words: `--name` (before any `=`), and each letter of `-abc`.
-fn flags(words: &[Word]) -> Vec<String> {
-    let mut flags = Vec::new();
-    for word in words.iter().filter(|word| !word.quoted) {
-        let text = word.text.as_str();
-        if let Some(long) = text.strip_prefix("--") {
-            if !long.is_empty() {
-                flags.push(format!("--{}", long.split('=').next().unwrap()));
-            }
-        } else if let Some(short) = text.strip_prefix('-')
-            && !short.is_empty()
-            && short.chars().all(|c| c.is_ascii_alphabetic())
-        {
-            flags.extend(short.chars().map(|c| format!("-{c}")));
-        }
-    }
-    flags
-}
-
-/// A piece of code in the skill: a line of a shell block, or an inline code span.
-struct Code {
-    line: usize,
-    text: String,
-    /// In a table row such as "| `jev choice` | `--expect` |", the command named by an earlier
-    /// cell, which a bare flag after it belongs to.
-    context: Option<String>,
-    inline: bool,
-}
-
-/// Every piece of shell in the skill, and every fenced block by language.
-fn code(skill: &str) -> (Vec<Code>, Vec<(String, String)>) {
-    let mut pieces = Vec::new();
-    let mut blocks = Vec::new();
-    let mut fence: Option<(String, String)> = None;
-    let mut continued = String::new();
-    for (index, line) in skill.lines().enumerate() {
-        let number = index + 1;
-        if let Some(language) = line.trim_start().strip_prefix("```") {
-            match fence.take() {
-                Some(block) => blocks.push(block),
-                None => fence = Some((language.trim().to_owned(), String::new())),
-            }
-            continue;
-        }
-        if let Some((language, body)) = &mut fence {
-            body.push_str(line);
-            body.push('\n');
-            if matches!(language.as_str(), "bash" | "sh" | "shell") {
-                if let Some(head) = line.strip_suffix('\\') {
-                    continued.push_str(head);
-                    continued.push(' ');
-                } else {
-                    continued.push_str(line);
-                    pieces.push(Code {
-                        line: number,
-                        text: std::mem::take(&mut continued),
-                        context: None,
-                        inline: false,
-                    });
-                }
-            }
-            continue;
-        }
-        let spans: Vec<&str> = line.split('`').collect();
-        assert!(
-            spans.len() % 2 == 1,
-            "SKILL.md:{number}: a code span runs onto the next line; keep each on one line"
-        );
-        let mut context = None;
-        for span in spans.iter().skip(1).step_by(2) {
-            pieces.push(Code {
-                line: number,
-                text: (*span).to_owned(),
-                context: context.clone(),
-                inline: true,
-            });
-            if line.starts_with('|')
-                && let Some(rest) = span.strip_prefix("jev ")
-            {
-                context = Some(rest.split_whitespace().collect::<Vec<_>>().join(" "));
-            }
-        }
-    }
-    assert!(fence.is_none(), "SKILL.md: a code block is never closed");
-    (pieces, blocks)
-}
-
 #[test]
 fn every_command_and_flag_the_skill_names_exists_in_the_spec() {
-    let contract = Contract::load();
-    let (pieces, _) = code(&skill());
-    let mut problems = Vec::new();
-    let mut checked = 0;
-    for piece in &pieces {
-        for command in commands(&piece.text) {
-            let invoked = invocations(&command);
-            for words in &invoked {
-                checked += 1;
-                let path = match contract.resolve(
-                    &words
-                        .iter()
-                        .map(|word| word.text.clone())
-                        .collect::<Vec<_>>(),
-                ) {
-                    Ok(path) => path,
-                    Err(problem) => {
-                        problems.push(format!("SKILL.md:{}: {problem}", piece.line));
-                        continue;
-                    }
-                };
-                for flag in flags(words) {
-                    if !contract.has_flag(&path, &flag) {
-                        problems.push(format!(
-                            "SKILL.md:{}: `jev {path}` has no flag {flag}",
-                            piece.line
-                        ));
-                    }
-                }
-            }
-            // A span that is only flags, such as `--fail-under`, belongs to the command named
-            // earlier on its line, or else to some command.
-            if invoked.is_empty() && piece.inline && command[0].text.starts_with('-') {
-                for flag in flags(&command) {
-                    let known = match &piece.context {
-                        Some(context) => contract
-                            .resolve(
-                                &context
-                                    .split(' ')
-                                    .map(str::to_owned)
-                                    .collect::<Vec<String>>(),
-                            )
-                            .is_ok_and(|path| contract.has_flag(&path, &flag)),
-                        None => contract.any_has_flag(&flag),
-                    };
-                    if !known {
-                        problems.push(format!(
-                            "SKILL.md:{}: no command {} has the flag {flag}",
-                            piece.line,
-                            piece
-                                .context
-                                .as_ref()
-                                .map_or_else(String::new, |context| format!("`jev {context}`")),
-                        ));
-                    }
-                }
-            }
-        }
-    }
+    let contract = Contract::new(&spec());
+    let (pieces, _) = code("SKILL.md", &skill());
+
+    let (problems, checked) = problems(&contract, "SKILL.md", &pieces, &[]);
     assert!(
         problems.is_empty(),
         "the skill names what jev does not have:\n{}",
@@ -444,11 +140,11 @@ fn the_mcp_tools_the_skill_lists_are_the_servers() {
 
 #[test]
 fn every_request_file_in_the_skill_is_valid() {
-    let (_, blocks) = code(&skill());
+    let (_, blocks) = code("SKILL.md", &skill());
     let files: Vec<&String> = blocks
         .iter()
-        .filter(|(language, _)| matches!(language.as_str(), "yaml" | "json"))
-        .map(|(_, body)| body)
+        .filter(|block| matches!(block.language.as_str(), "yaml" | "json"))
+        .map(|block| &block.body)
         .collect();
     assert!(!files.is_empty(), "the skill shows no request file");
     for (index, body) in files.into_iter().enumerate() {

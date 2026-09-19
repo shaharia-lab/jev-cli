@@ -1,6 +1,21 @@
+# Documentation
+
+## Using `jev`
+
+| Page | Covers |
+| --- | --- |
+| [commands.md](commands.md) | Every command, flag, default and example — generated from the command tree, so it matches the binary. Regenerate it with `make reference`. |
+| [exit-codes.md](exit-codes.md) | The exit-code contract, the gating flags, and the JSON that `jev` prints on stdout and stderr. |
+| [configuration.md](configuration.md) | Settings and their precedence, the configuration file, profiles, the API key, environment variables and updates. |
+
+The [README](../README.md) is the place to start, [SECURITY.md](../SECURITY.md) has the security
+model, and [`skills/jev-cli/SKILL.md`](../skills/jev-cli/SKILL.md) is the same ground written for
+an AI agent.
+
 # Development context
 
-Background material for building `jev-cli`. Nothing here is user-facing documentation for the CLI itself.
+Background material for building `jev-cli`. The rest of this directory is not user-facing
+documentation for the CLI itself.
 
 ## `prd/` — product requirements (committed)
 
