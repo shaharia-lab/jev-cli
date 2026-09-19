@@ -6,11 +6,10 @@
 // Clippy's `allow-unwrap-in-tests` covers `#[test]` functions only, not the helpers they share.
 #![allow(clippy::unwrap_used)]
 
-use std::io::Read;
-use std::process::Stdio;
+#[path = "support/pty.rs"]
+mod pty;
 
-use pty_process::Size;
-use pty_process::blocking::{Command, open};
+use std::process::Stdio;
 
 /// Never the real user configuration: a directory that does not exist and that nothing writes to.
 const NO_CONFIG: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/no-config");
@@ -28,34 +27,21 @@ const ISOLATED: [&str; 8] = [
 
 /// Runs `jev` with stdout on a pseudo-terminal and returns what a person would see.
 fn on_a_terminal(arguments: &[&str], environment: &[(&str, &str)]) -> String {
-    let (mut pty, pts) = open().unwrap();
-    pty.resize(Size::new(40, 120)).unwrap();
-
-    let mut command = Command::new(env!("CARGO_BIN_EXE_jev"))
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_jev"));
+    command
         .args(arguments)
         .stdin(Stdio::null())
         .stderr(Stdio::null());
     for variable in ISOLATED {
-        command = command.env_remove(variable);
+        command.env_remove(variable);
     }
-    for (name, value) in environment {
-        command = command.env(name, value);
-    }
-    command = command.env("JEV_CONFIG_DIR", NO_CONFIG);
-    let mut child = command.spawn(pts).unwrap();
+    command.envs(environment.iter().copied());
+    command.env("JEV_CONFIG_DIR", NO_CONFIG);
 
-    // Reading ends with an error (EIO on Linux) once the child has exited and closed its side.
-    let mut seen = Vec::new();
-    let mut buffer = [0_u8; 4096];
-    while let Ok(read) = pty.read(&mut buffer) {
-        if read == 0 {
-            break;
-        }
-        seen.extend(buffer.iter().take(read));
-    }
-    assert!(child.wait().unwrap().success());
+    let (status, seen) = pty::run(command, pty::Stream::Stdout);
+    assert!(status.success(), "{status}: {seen:?}");
     // A terminal turns "\n" into "\r\n".
-    String::from_utf8(seen).unwrap().replace("\r\n", "\n")
+    seen.replace("\r\n", "\n")
 }
 
 fn piped(arguments: &[&str]) -> String {
