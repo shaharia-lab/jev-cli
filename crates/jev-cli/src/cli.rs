@@ -582,10 +582,60 @@ pub(crate) enum SchemaCommand {
     Error(Pending),
 }
 
+const MCP_SERVE_EXAMPLES: &str = "\
+Tools: evaluate (a state and many questions), noul, choice, score (one question each),
+validate (offline, needs no key) and list_models. A result is the same JSON envelope as
+`jev eval -o json`, plus `session` (calls made and estimated spend so far); a failure is a tool
+error carrying the same JSON error object `jev` prints on stderr.
+
+Examples:
+  # Register with Claude Code
+  claude mcp add jev -- jev mcp serve
+
+  # Refuse any call estimated above a tenth of a cent (pin a versioned model so it has a price)
+  jev mcp serve --model jev-1.13.0 --max-cost-usd-per-call 0.001
+
+  # Use a profile's key and settings; logs go to stderr, never stdout
+  jev mcp serve --profile work -v
+
+  # Check it from a shell: list the tools as one JSON-RPC line on stdout
+  echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | jev mcp serve
+
+Exit codes: 0 the client closed stdin · 1 stdout could not be written · 2 usage or a broken
+configuration. API failures never end the server: each one is a tool error with its own code.";
+
+/// Arguments of `jev mcp serve`.
+#[derive(Debug, Args)]
+#[command(after_help = MCP_SERVE_EXAMPLES)]
+pub(crate) struct McpServeArgs {
+    /// Refuse, before sending, any call whose estimated cost in US dollars is above this
+    #[arg(long, value_name = "USD", value_parser = parse_usd, help_heading = "Guardrails")]
+    pub(crate) max_cost_usd_per_call: Option<f64>,
+}
+
+/// An amount of US dollars: a finite number, zero or more.
+fn parse_usd(text: &str) -> Result<f64, String> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .ok_or_else(|| format!("`{text}` is not an amount of US dollars, such as 0.01"))
+}
+
 #[derive(Debug, Subcommand)]
 pub(crate) enum McpCommand {
-    /// Serve jev's tools to an MCP client over stdio
-    Serve(Pending),
+    /// Serve jev's tools to an MCP client (Claude Code, Claude Desktop, Cursor, VS Code) over stdio
+    ///
+    /// Speaks the Model Context Protocol on stdin and stdout, one JSON-RPC message per line, until
+    /// the client closes stdin. stdout carries protocol messages only; logs, notices and warnings go
+    /// to stderr. Use this when an AI agent should call Jev as a tool; from a shell script or CI,
+    /// call `jev eval`, `jev noul`, `jev choice` or `jev score` directly instead.
+    ///
+    /// The API key, base URL and model come from the usual places (--profile, the environment, the
+    /// profile), read once at start-up. The key is never part of a tool's input, result or error.
+    /// Every call is validated offline before anything is sent, and an invalid request is a tool
+    /// error listing every finding.
+    Serve(McpServeArgs),
 }
 
 #[cfg(test)]

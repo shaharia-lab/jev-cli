@@ -17,7 +17,7 @@ use crate::input;
 use crate::output::{Render, ResultEnvelope, Ui};
 
 /// The id of a shortcut's only question. It is never sent to the model, and never shown.
-const ANSWER: &str = "answer";
+pub(crate) const ANSWER: &str = "answer";
 
 pub(crate) fn noul(arguments: &NoulArgs, context: &mut Context<'_>) -> Result<Exit, CliError> {
     let criteria = if let Some(path) = &arguments.criteria_file {
@@ -214,7 +214,7 @@ impl Shortcut<'_> {
 /// The result of a shortcut: the one answer's own fields at the top level, so that
 /// `--field noul`, `--field choice` and `--field score` work, followed by the same facts about
 /// the call that `jev eval` reports.
-struct Single(ResultEnvelope);
+pub(crate) struct Single(pub(crate) ResultEnvelope);
 
 impl Serialize for Single {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

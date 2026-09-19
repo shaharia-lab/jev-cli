@@ -34,6 +34,52 @@ Planned for the first version:
   server mode
 - API key from `TYPESAFE_API_KEY` or a private credentials file, no telemetry, signed and verified self-updates
 
+## Use it from an AI agent (MCP)
+
+`jev mcp serve` runs `jev` as a [Model Context Protocol](https://modelcontextprotocol.io) server
+over stdio. It offers six tools: `evaluate` (a state and many questions in one call), `noul`,
+`choice` and `score` (one question each), `validate` (offline, free, needs no key) and
+`list_models`. Each result is the same JSON envelope `jev eval -o json` prints, plus `session`,
+the calls made and the estimated spend so far; each failure is a tool error carrying the JSON error
+object `jev` prints on stderr. Every request is validated before anything is sent.
+
+Give it a key once with `jev auth login` (or set `TYPESAFE_API_KEY` in the environment the client
+starts it from), so that the key never has to appear in a client's configuration. If the client
+cannot find `jev` on its `PATH`, use the full path that `command -v jev` prints.
+
+**Claude Code**
+
+```bash
+claude mcp add jev -- jev mcp serve
+```
+
+**Claude Desktop** (`claude_desktop_config.json`), **Cursor** (`~/.cursor/mcp.json`, or
+`.cursor/mcp.json` in a project) and a project's **`.mcp.json`**:
+
+```json
+{
+  "mcpServers": {
+    "jev": { "command": "jev", "args": ["mcp", "serve"] }
+  }
+}
+```
+
+**VS Code** (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "jev": { "type": "stdio", "command": "jev", "args": ["mcp", "serve"] }
+  }
+}
+```
+
+To cap what an agent can spend, pin a versioned model (an alias such as `jev-latest` has no known
+price, so a capped server refuses it) and set a per-call limit:
+`"args": ["mcp", "serve", "--model", "jev-1.13.0", "--max-cost-usd-per-call", "0.001"]`. Add
+`"--profile", "<name>"` to use a profile's key and settings. Logs go to stderr; stdout carries only
+protocol messages.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) to build and test, and [`CLAUDE.md`](CLAUDE.md) for the

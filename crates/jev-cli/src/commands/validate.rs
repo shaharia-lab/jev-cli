@@ -64,7 +64,7 @@ pub(crate) fn run(arguments: &ValidateArgs, context: &mut Context<'_>) -> Result
 
 /// The result of `jev validate`. This shape is versioned public API.
 #[derive(Debug, Serialize)]
-struct Validation {
+pub(crate) struct Validation {
     /// The file that was checked, or `stdin`.
     file: String,
     /// `true` when nothing stands in the way of evaluating the request. Warnings do not count,
@@ -86,7 +86,7 @@ struct Summary {
 }
 
 impl Validation {
-    fn new(file: &str, report: Report, strict: bool) -> Self {
+    pub(crate) fn new(file: &str, report: Report, strict: bool) -> Self {
         let summary = Summary {
             errors: report.errors().count(),
             warnings: report.warnings().count(),
