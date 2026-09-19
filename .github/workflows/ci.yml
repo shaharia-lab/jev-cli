@@ -130,6 +130,20 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo doc --workspace --no-deps --all-features --locked
 
+  # `cargo publish --dry-run` for both crates (DIST-4): each is packed as crates.io would receive
+  # it and built from that package alone, jev-cli against the packaged jev-client. Nothing is
+  # uploaded; releases publish in release.yml.
+  package:
+    name: crates.io packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo publish --workspace --dry-run --locked
+
   supply-chain:
     name: Supply chain (cargo-deny, cargo-audit)
     runs-on: ubuntu-latest
@@ -162,6 +176,8 @@ jobs:
         run: scripts/release/self-test.sh
       - name: Homebrew formulas carry the release checksums; tap publishing is idempotent
         run: scripts/release/homebrew-self-test.sh
+      - name: crates.io publishing goes library first and skips what is already published
+        run: scripts/release/crates-self-test.sh
       # shellcheck, pwsh and PSScriptAnalyzer come with the runner image.
       - name: ShellCheck and PSScriptAnalyzer on install.sh and install.ps1
         run: scripts/ci/lint-install-scripts.sh
@@ -181,7 +197,7 @@ jobs:
   ci-ok:
     name: CI result
     if: always()
-    needs: [fmt, test, performance, msrv, docs, supply-chain, policy]
+    needs: [fmt, test, performance, msrv, docs, package, supply-chain, policy]
     runs-on: ubuntu-latest
     steps:
       - name: Fail unless every job succeeded

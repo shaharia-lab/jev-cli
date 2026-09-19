@@ -60,7 +60,14 @@ otherwise add the directory to `PATH` in your shell profile, or your user `PATH`
 They never use `sudo` or ask for elevation. Before installing anything they check the archive's
 SHA-256 against the release's `SHA256SUMS` and, when [minisign](https://jedisct1.github.io/minisign/)
 is installed, the signatures of both against the release keys, and they say which checks ran.
-A script install updates itself with `jev update`. Other platforms: `cargo install jev-cli --locked`.
+A script install updates itself with `jev update`.
+
+With Rust's tooling, from [crates.io](https://crates.io/crates/jev-cli) (stable releases only):
+`cargo binstall jev-cli` downloads the release archive for your platform and checks its minisign
+signature, and `cargo install jev-cli --locked` builds it from source, on any platform Rust
+supports. Either way cargo owns the install: `jev update` names the command that updates it
+instead of replacing the binary. The library behind `jev` is published as
+[`jev-client`](https://crates.io/crates/jev-client).
 
 ## Use it from an AI agent (MCP)
 

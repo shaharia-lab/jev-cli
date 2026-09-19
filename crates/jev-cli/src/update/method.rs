@@ -16,7 +16,7 @@ pub(crate) enum InstallMethod {
     SelfManaged,
     /// A Homebrew formula: Homebrew updates it.
     Homebrew,
-    /// `cargo install`: cargo updates it.
+    /// `cargo install` or `cargo binstall`: cargo updates it.
     Cargo,
     /// None of these, such as an archive unpacked by hand. `jev update` replaces the binary when
     /// asked to.
@@ -32,7 +32,8 @@ impl InstallMethod {
         if exe.components().any(|part| part.as_os_str() == "Cellar") {
             return Self::Homebrew;
         }
-        // `cargo install` puts binaries in <root>/bin and records them in <root>/.crates.toml.
+        // `cargo install` puts binaries in <root>/bin and records them in <root>/.crates.toml;
+        // `cargo binstall` records its installs there too, besides its own <root>/binstall.
         let root = exe
             .parent()
             .filter(|dir| dir.file_name().is_some_and(|name| name == "bin"))
@@ -122,6 +123,12 @@ mod tests {
             (
                 "tools/bin/jev",
                 &["tools/.crates2.json"],
+                InstallMethod::Cargo,
+            ),
+            // What `cargo binstall` 1.23 leaves behind.
+            (
+                ".cargo/bin/jev",
+                &[".cargo/.crates.toml", ".cargo/binstall/crates-v1.json"],
                 InstallMethod::Cargo,
             ),
             (

@@ -340,6 +340,14 @@ The formulas come from `scripts/release/homebrew-formula.sh` (checksums from the
 formula keeps the binary in the keg (`Cellar/jev/<version>/bin/jev`, beside Homebrew's
 `INSTALL_RECEIPT.json`), which is how `jev update` recognises a managed install.
 
+crates.io gets `jev-client`, then `jev-cli`, from `scripts/release/crates-publish.sh` (the `crates`
+job: `stable`, `release` environment, `CARGO_REGISTRY_TOKEN`), which skips a version already in the
+index because a publish can never be undone. `crates/jev-cli` packages only what builds `jev`
+(`include`), and `[package.metadata.binstall]` names the release archives and the primary key
+(`self-test.sh` holds it to `keys/release-primary.pub`). CI runs `cargo publish --workspace --dry-run`.
+`cargo install` and `cargo binstall` both record the install in `<root>/.crates.toml`, which is how
+`jev update` recognises them.
+
 Every release asset and `SHA256SUMS` is signed with **minisign** (PRD Q1) by the one release job
 that can reach the signing key (the `release` environment: `v*` tags, owner approval). The public
 keys are `crates/jev-cli/keys/release-primary.pub` (signs) and `release-next.pub` (rotation); the

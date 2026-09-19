@@ -1,10 +1,12 @@
 //! Captures what `jev version` reports: the commit, the build date and the target triple.
 //!
-//! A release pipeline sets `JEV_BUILD_COMMIT` and `SOURCE_DATE_EPOCH`. Without them the commit is
-//! read from git when the build happens inside a checkout, and is `unknown` otherwise (for example
-//! when installing from crates.io).
+//! A release pipeline sets `JEV_BUILD_COMMIT` and `SOURCE_DATE_EPOCH`. Without them the commit of
+//! a crate installed from crates.io is the one `cargo package` recorded in `.cargo_vcs_info.json`;
+//! inside a checkout it is read from git, and it is `unknown` otherwise.
 
 use std::env;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,11 +14,17 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=JEV_BUILD_COMMIT");
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
-    println!("cargo:rerun-if-changed=../../.git/HEAD");
 
+    // A published crate never asks git: a checkout that happens to enclose cargo's registry (a
+    // home directory kept in git) would lend it its own commit.
+    let packaged = packaged_commit();
+    if packaged.is_none() {
+        println!("cargo:rerun-if-changed=../../.git/HEAD");
+    }
     let commit = env::var("JEV_BUILD_COMMIT")
         .ok()
         .filter(|commit| !commit.trim().is_empty())
+        .or(packaged)
         .or_else(git_commit)
         .unwrap_or_else(|| "unknown".to_owned());
     let target = env::var("TARGET").unwrap_or_else(|_| "unknown".to_owned());
@@ -24,6 +32,24 @@ fn main() {
     println!("cargo:rustc-env=JEV_BUILD_COMMIT={}", commit.trim());
     println!("cargo:rustc-env=JEV_BUILD_DATE={}", build_date());
     println!("cargo:rustc-env=JEV_BUILD_TARGET={target}");
+}
+
+/// The commit `cargo package` recorded for a published crate, shortened like `git_commit`'s.
+fn packaged_commit() -> Option<String> {
+    let dir = env::var_os("CARGO_MANIFEST_DIR")?;
+    let info = fs::read_to_string(Path::new(&dir).join(".cargo_vcs_info.json")).ok()?;
+    // {"git": {"sha1": "<40 hex digits>", ...}, ...}: small and fixed enough not to need a parser.
+    let (_, rest) = info.split_once("\"sha1\"")?;
+    let sha1 = rest
+        .trim_start()
+        .strip_prefix(':')?
+        .trim_start()
+        .strip_prefix('"')?;
+    let short = sha1.get(..12)?;
+    short
+        .chars()
+        .all(|c| c.is_ascii_hexdigit())
+        .then(|| short.to_owned())
 }
 
 fn git_commit() -> Option<String> {

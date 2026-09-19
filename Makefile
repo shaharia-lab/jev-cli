@@ -1,11 +1,11 @@
 # Local equivalents of the CI jobs. `make check` runs everything a pull request must pass.
 # On Windows without make, run the cargo commands below directly.
 
-.PHONY: check hooks fmt fmt-check lint test msrv doc deny audit policy bench schemas dist-assets
+.PHONY: check hooks fmt fmt-check lint test msrv doc package deny audit policy bench schemas dist-assets
 
 MSRV := $(shell sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
 
-check: fmt-check lint test msrv doc deny audit policy
+check: fmt-check lint test msrv doc package deny audit policy
 
 # Once per clone: installs the pre-commit and pre-push git hooks.
 hooks:
@@ -32,6 +32,11 @@ msrv:
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked
 
+# Both crates exactly as crates.io would receive them, jev-cli built against the packaged
+# jev-client. Uploads nothing.
+package:
+	cargo publish --workspace --dry-run --locked
+
 deny:
 	cargo deny --locked check
 
@@ -44,6 +49,7 @@ policy:
 	scripts/ci/check-pr-title.sh --self-test
 	scripts/release/self-test.sh  # the signing round trip needs minisign; skipped without it
 	scripts/release/homebrew-self-test.sh
+	scripts/release/crates-self-test.sh
 	scripts/ci/lint-install-scripts.sh  # ShellCheck and PSScriptAnalyzer; skipped when missing
 	SKIP=no-commit-to-branch,cargo-fmt,cargo-clippy pre-commit run --all-files
 
