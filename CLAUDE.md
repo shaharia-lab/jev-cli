@@ -80,6 +80,13 @@ type whose doc comment has rustdoc links or examples sets `#[schemars(descriptio
 agents read those descriptions (a test enforces this). Public structs are `#[non_exhaustive]` with
 constructors, so adding a field is not a breaking change.
 
+`HttpTransport` is the only code that touches the network for the API. TLS is `rustls` with the
+`ring` provider and the platform certificate verifier, built explicitly (no process-global provider,
+no `aws-lc`, no OpenSSL). Redirects are never followed. Server-supplied error text is scrubbed of the
+key and never quotes a body of unknown shape, because a 422 echoes `state`. Tests run against
+`wiremock` with a fake `Clock`, so nothing sleeps; `tests/http_transport.rs` holds the sentinel-key
+leak test, which must keep passing at `TRACE` level.
+
 Commands depend on traits (`Transport`, `CredentialStore`, `Clock`, `UpdateSource`) so they are testable
 with fakes. Errors use `thiserror` in the library; the binary has one error → exit-code mapping.
 
