@@ -28,7 +28,8 @@ relationships. Pick issues whose blockers are closed.
 | Full upstream docs (gitignored mirror) | run `scripts/fetch-upstream-docs.sh`, then `docs/upstream/` |
 
 The planning docs under `docs/prd/` and `docs/context/` will be removed before the first public release.
-Anything durable belongs in this file, the README, or code comments.
+Anything durable belongs in this file, the README, the user pages in `docs/` (`commands.md`,
+`exit-codes.md`, `configuration.md`), or code comments. A user page never links to the planning docs.
 
 Decisions in the PRD's decision log (§16) are settled. Do not re-open them; raise a question instead.
 
@@ -201,6 +202,15 @@ Completion scripts (`jev completion`, via `clap_complete`) and man pages (`man.r
 `clap_mangen`) are rendered from `cli::command()`, help attached, so they follow the tree with no
 extra work when a command is added. `make dist-assets` (`examples/dist-assets.rs`) writes both for
 release archives and packages; it runs on the build host, so it serves cross-compiled targets too.
+The user-facing command reference, `docs/commands.md`, is generated the same way: `reference.rs`
+renders the Markdown from the `CommandTree` behind `jev spec`, `make reference` writes the file,
+and a test fails when the committed copy is stale. It leaves the version out on purpose, so a
+release cannot make it stale. The README and the pages in `docs/` are held to the binary by
+`tests/docs.rs`, which shares its shell and spec reader with `tests/skill.rs`
+(`tests/support/contract.rs`): every command, flag and setting they name must exist, their
+exit-code tables must be the spec's, their request files must validate, and the README's quick
+start is run against a mock. User docs must not link to `docs/prd/` or `docs/context/`, which are
+deleted before the first release.
 
 Test hooks live behind the `internal-test-hooks` cargo feature (`jev debug render|error|prompt|panic`).
 CI turns it on with `--all-features`; a second, default-features test run proves that release builds

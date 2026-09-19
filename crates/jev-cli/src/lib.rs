@@ -27,6 +27,7 @@ mod logging;
 mod man;
 mod notice;
 mod output;
+mod reference;
 mod schemas;
 mod suggest;
 mod update;
@@ -62,6 +63,13 @@ pub fn command() -> clap::Command {
 #[must_use]
 pub fn completion_script(shell: Shell) -> Vec<u8> {
     commands::completion::script(shell)
+}
+
+/// The Markdown command reference published as `docs/commands.md`, rendered from the same command
+/// tree and help as `--help` and `jev spec`. `make reference` writes the file.
+#[must_use]
+pub fn command_reference() -> String {
+    reference::markdown()
 }
 
 /// Writes the man pages, `jev.1` and one per command such as `jev-auth-login.1`, into

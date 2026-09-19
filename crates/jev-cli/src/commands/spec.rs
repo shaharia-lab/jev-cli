@@ -27,86 +27,90 @@ pub(crate) fn run(context: &mut Context<'_>) -> Result<(), CliError> {
 }
 
 /// The command tree. This shape is versioned public API.
+///
+/// The fields are `pub(crate)` because [`crate::reference`] renders the Markdown command
+/// reference from this same document, so that the reference cannot say something `jev spec` and
+/// `--help` do not.
 #[derive(Debug, Serialize)]
 pub(crate) struct CommandTree {
     spec_version: u32,
-    name: String,
+    pub(crate) name: String,
     /// The version of `jev` this describes.
     version: &'static str,
-    about: String,
-    description: String,
+    pub(crate) about: String,
+    pub(crate) description: String,
     /// Flags every command accepts, before or after the command's name.
-    global_flags: Vec<Flag>,
+    pub(crate) global_flags: Vec<Flag>,
     /// The whole exit-code contract.
-    exit_codes: Vec<ExitCodeSpec>,
-    examples: &'static [Example],
+    pub(crate) exit_codes: Vec<ExitCodeSpec>,
+    pub(crate) examples: &'static [Example],
     /// Every command that can be run, in the order of `jev --help`.
-    commands: Vec<CommandSpec>,
+    pub(crate) commands: Vec<CommandSpec>,
 }
 
 #[derive(Debug, Serialize)]
-struct CommandSpec {
+pub(crate) struct CommandSpec {
     /// The words after `jev`, such as `auth login`.
-    path: String,
-    usage: String,
-    about: String,
+    pub(crate) path: String,
+    pub(crate) usage: String,
+    pub(crate) about: String,
     /// `false` for a command that is in the tree but answers "not implemented" for now.
-    implemented: bool,
-    when_to_use: Option<&'static str>,
-    input: Option<&'static str>,
-    output: Option<&'static str>,
-    arguments: Vec<Argument>,
+    pub(crate) implemented: bool,
+    pub(crate) when_to_use: Option<&'static str>,
+    pub(crate) input: Option<&'static str>,
+    pub(crate) output: Option<&'static str>,
+    pub(crate) arguments: Vec<Argument>,
     /// The command's own flags; `global_flags` apply as well.
-    flags: Vec<Flag>,
-    exit_codes: Vec<ExitCodeSpec>,
-    examples: &'static [Example],
+    pub(crate) flags: Vec<Flag>,
+    pub(crate) exit_codes: Vec<ExitCodeSpec>,
+    pub(crate) examples: &'static [Example],
 }
 
 #[derive(Debug, Serialize)]
-struct Argument {
-    name: String,
+pub(crate) struct Argument {
+    pub(crate) name: String,
     #[serde(rename = "type")]
-    kind: &'static str,
-    required: bool,
-    multiple: bool,
-    help: String,
+    pub(crate) kind: &'static str,
+    pub(crate) required: bool,
+    pub(crate) multiple: bool,
+    pub(crate) help: String,
 }
 
 #[derive(Debug, Serialize)]
-struct Flag {
+pub(crate) struct Flag {
     /// The long form, such as `--state-file`.
-    name: String,
-    short: Option<String>,
+    pub(crate) name: String,
+    pub(crate) short: Option<String>,
     /// What the value is called in the help, such as `PATH`. `null` for a switch.
-    value_name: Option<String>,
+    pub(crate) value_name: Option<String>,
     /// `boolean`, `count`, `enum`, `integer`, `number`, `duration` or `string`.
     #[serde(rename = "type")]
-    kind: &'static str,
-    required: bool,
+    pub(crate) kind: &'static str,
+    pub(crate) required: bool,
     /// Whether the flag may be repeated.
-    multiple: bool,
-    default: Option<Value>,
+    pub(crate) multiple: bool,
+    pub(crate) default: Option<Value>,
     /// The accepted values of an `enum`.
-    values: Option<Vec<PossibleValue>>,
+    pub(crate) values: Option<Vec<PossibleValue>>,
     /// The environment variable that supplies the value when the flag is not given.
-    env: Option<String>,
+    pub(crate) env: Option<String>,
     /// The setting (`jev config`) the flag overrides for one run.
-    setting: Option<&'static str>,
-    heading: Option<String>,
-    help: String,
+    pub(crate) setting: Option<&'static str>,
+    pub(crate) heading: Option<String>,
+    pub(crate) help: String,
 }
 
 #[derive(Debug, Serialize)]
-struct PossibleValue {
-    value: String,
+pub(crate) struct PossibleValue {
+    pub(crate) value: String,
     help: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-struct ExitCodeSpec {
-    code: u8,
-    name: &'static str,
-    meaning: &'static str,
+pub(crate) struct ExitCodeSpec {
+    pub(crate) code: u8,
+    pub(crate) name: &'static str,
+    pub(crate) meaning: &'static str,
 }
 
 impl ExitCodeSpec {

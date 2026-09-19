@@ -1,7 +1,7 @@
 # Local equivalents of the CI jobs. `make check` runs everything a pull request must pass.
 # On Windows without make, run the cargo commands below directly.
 
-.PHONY: check hooks fmt fmt-check lint test msrv doc package deny audit policy bench schemas dist-assets
+.PHONY: check hooks fmt fmt-check lint test msrv doc package deny audit policy bench schemas reference dist-assets
 
 MSRV := $(shell sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
 
@@ -65,6 +65,11 @@ schemas:
 	for name in request questions batch-record output error; do \
 		cargo run --quiet --locked -p jev-cli -- schema $$name -o json > schemas/$$name.schema.json || exit 1; \
 	done
+
+# Regenerates docs/commands.md, the user-facing command reference, from the command tree. A test
+# fails when it is out of date, so run this after changing a command, a flag or its help.
+reference:
+	cargo run --quiet --locked -p jev-cli --example command-reference -- docs/commands.md
 
 # Man pages and shell completion scripts for a release archive or a package, generated from the
 # command tree on the build host (so also for cross-compiled targets). DIR defaults to
