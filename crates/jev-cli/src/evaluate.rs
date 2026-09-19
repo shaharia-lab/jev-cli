@@ -197,6 +197,7 @@ pub(crate) async fn send(
     Ok(Evaluation {
         envelope,
         raw_body: reply.raw_body,
+        attempts: reply.meta.attempts,
     })
 }
 
@@ -206,20 +207,26 @@ pub(crate) struct Evaluation {
     pub(crate) envelope: ResultEnvelope,
     /// The response body exactly as received, for `--raw`.
     pub(crate) raw_body: Option<String>,
+    /// How many API calls it took, retries included.
+    pub(crate) attempts: u32,
 }
 
 impl Evaluation {
     /// A reminder to pin the model, when the request used an alias.
     pub(crate) fn unpinned_notice(&self) -> Option<Notice> {
-        let (requested, resolved) = (&self.envelope.requested_model, &self.envelope.model);
-        (requested != resolved).then(|| {
-            Notice::warning(
-                "unpinned_model",
-                format!("`{requested}` is an alias, answered this time by `{resolved}`; aliases move without notice, and thresholds tuned on one version may not hold on the next"),
-            )
-            .hint(format!("pin the version: --model {resolved}, or `jev config set model {resolved}`"))
-        })
+        unpinned_notice(&self.envelope.requested_model, &self.envelope.model)
     }
+}
+
+/// A reminder to pin the model, when `requested` is an alias that `resolved` answered for.
+pub(crate) fn unpinned_notice(requested: &str, resolved: &str) -> Option<Notice> {
+    (requested != resolved).then(|| {
+        Notice::warning(
+            "unpinned_model",
+            format!("`{requested}` is an alias, answered this time by `{resolved}`; aliases move without notice, and thresholds tuned on one version may not hold on the next"),
+        )
+        .hint(format!("pin the version: --model {resolved}, or `jev config set model {resolved}`"))
+    })
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ use std::time::Duration;
 use clap::builder::FalseyValueParser;
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand};
 
+use crate::batch::RowFormat;
 use crate::gate::AbstainBand;
 use crate::input::{InputFormat, StateFormat};
 use crate::output::Format;
@@ -386,6 +387,120 @@ pub(crate) struct LogoutArgs {
     pub(crate) all: bool,
 }
 
+const BATCH_RUN_ABOUT: &str = "\
+Evaluate every row of a JSONL or CSV file against one question set, one API call per row, and write \
+one result record per row.
+
+Use it for more than a handful of states. For one state use `jev eval` (many questions) or \
+`jev noul`/`choice`/`score` (one question); to check the question set without sending anything use \
+`jev validate`.
+
+Inputs: -f is a request file (JSON or YAML) whose `questions`, and `model` if present, are used for \
+every row; any `state` in it is replaced by the row's. The rows come from --input: JSONL (one JSON \
+value per line) or CSV with a header row, or JSONL piped on stdin. Each row's state is the whole row, \
+one field of it (--state-field), or an object of some fields (--state-fields). Its id is --id-field, \
+else its 1-based line number.
+
+Before anything is sent the question set is validated, and every row of a file is read and checked: \
+a malformed row, a missing field or a repeated id stops the run with exit 2. Piped rows can only be \
+read once, so they are checked as they arrive, and such a problem stops dispatching there.
+
+Output: JSON Lines, one record per row, in completion order, on stdout or appended to --out:
+  {\"id\": ..., \"status\": \"ok\", \"model\", \"answers\", \"usage\", \"cost_usd\", \"request_id\", \"latency_ms\"}
+  {\"id\": ..., \"status\": \"error\", \"error\": {\"code\", \"exit_code\", \"error_type\", \"message\", \"hint\", \"request_id\", ...}}
+A row that fails is recorded and the run continues, unless --fail-fast or --max-errors stops it. \
+A summary (rows, tokens, estimated cost, time, retries, models) goes to stderr, as one JSON line when \
+the output is for a program, and to --summary-json.";
+
+const BATCH_RUN_EXAMPLES: &str = "\
+Examples:
+  # Label tickets: the `body` field is the state, results keyed by ticket_id
+  jev batch run -f triage.yaml --input tickets.jsonl --state-field body --id-field ticket_id \\
+    --out results.jsonl
+
+  # A CSV export, sending only two columns, with a machine-readable summary
+  jev batch run -f triage.yaml --input export.csv --state-fields subject,body \\
+    --out results.jsonl --summary-json summary.json
+
+  # Rows from a pipeline, stopping at the first failure
+  jq -c '.items[]' dump.json | jev batch run -f triage.yaml --fail-fast > results.jsonl
+
+Exit codes: 0 every row ok · 7 some rows failed (see their records) · 2 usage, a bad question set or
+a bad input row (nothing was sent for a file) · 3 auth · 1 internal.";
+
+/// Arguments of `jev batch run`.
+// On/off command-line switches are booleans by nature; there is no state machine hiding here.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Args)]
+#[command(after_help = BATCH_RUN_EXAMPLES)]
+pub(crate) struct BatchRunArgs {
+    /// Question set: a request file (JSON or YAML) with `questions` and optionally `model`
+    #[arg(short = 'f', long, value_name = "FILE")]
+    pub(crate) file: String,
+
+    /// Rows to evaluate: a JSONL or CSV file, or `-` for JSONL on stdin [default: stdin when piped]
+    #[arg(long, value_name = "PATH", help_heading = "Rows")]
+    pub(crate) input: Option<String>,
+
+    /// Format of --input [default: csv for a `.csv` file, jsonl otherwise]
+    #[arg(long, value_enum, value_name = "FORMAT", help_heading = "Rows")]
+    pub(crate) input_format: Option<RowFormat>,
+
+    /// Send this one field of each row as its state [default: the whole row]
+    #[arg(
+        long,
+        value_name = "NAME",
+        conflicts_with = "state_fields",
+        help_heading = "Rows"
+    )]
+    pub(crate) state_field: Option<String>,
+
+    /// Send an object of only these fields as the state, e.g. `subject,body`
+    #[arg(
+        long,
+        value_name = "NAME,...",
+        value_delimiter = ',',
+        help_heading = "Rows"
+    )]
+    pub(crate) state_fields: Vec<String>,
+
+    /// Field that identifies each row in the results; must be unique [default: the line number]
+    #[arg(long, value_name = "NAME", help_heading = "Rows")]
+    pub(crate) id_field: Option<String>,
+
+    /// Write the records to this file instead of stdout; it must not exist yet, or be empty
+    #[arg(long, value_name = "PATH", help_heading = "Results")]
+    pub(crate) out: Option<String>,
+
+    /// Also write the end-of-run summary to this file, as one JSON object
+    #[arg(long, value_name = "PATH", help_heading = "Results")]
+    pub(crate) summary_json: Option<String>,
+
+    /// Requests in flight at once, 1 to 64; shared keys get rate limited above about 8 [default: 4]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=64))]
+    pub(crate) concurrency: Option<u32>,
+
+    /// Stop sending at the first row that fails; rows in flight still finish
+    #[arg(long, conflicts_with = "max_errors")]
+    pub(crate) fail_fast: bool,
+
+    /// Stop sending once N rows have failed; rows in flight still finish
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+    pub(crate) max_errors: Option<u64>,
+
+    /// Treat validation warnings as errors
+    #[arg(long, help_heading = "Sending")]
+    pub(crate) strict: bool,
+
+    /// Skip the offline estimate of each request's size
+    #[arg(long, help_heading = "Sending")]
+    pub(crate) skip_size_check: bool,
+
+    /// Remind me on stderr to pin a versioned model id when the run used an alias
+    #[arg(long, help_heading = "Sending")]
+    pub(crate) warn_unpinned: bool,
+}
+
 /// Arguments of a command whose behaviour has not been written yet. Everything is accepted so
 /// that the answer is always "not implemented", never a complaint about a flag.
 #[derive(Debug, Args)]
@@ -441,10 +556,21 @@ pub(crate) enum Command {
     Debug(crate::commands::debug::DebugCommand),
 }
 
+impl Command {
+    /// The value of `--concurrency`, which only `jev batch run` has, for the settings resolver.
+    pub(crate) const fn concurrency(&self) -> Option<u32> {
+        match self {
+            Self::Batch(BatchCommand::Run(arguments)) => arguments.concurrency,
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub(crate) enum BatchCommand {
     /// Evaluate every row of an input file, writing one result record per row
-    Run(Pending),
+    #[command(long_about = BATCH_RUN_ABOUT)]
+    Run(BatchRunArgs),
 }
 
 #[derive(Debug, Subcommand)]

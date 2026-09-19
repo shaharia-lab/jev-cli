@@ -30,6 +30,8 @@ pub(crate) struct CliError {
     pub(crate) details: Option<Value>,
     /// Extra lines for a person, shown between the message and the hint.
     pub(crate) lines: Vec<String>,
+    /// How many API calls were made before giving up, retries included; 0 when none was.
+    pub(crate) attempts: u32,
 }
 
 impl CliError {
@@ -45,6 +47,7 @@ impl CliError {
             retryable: false,
             details: None,
             lines: Vec::new(),
+            attempts: 0,
         }
     }
 
@@ -228,6 +231,7 @@ impl From<jev_client::Error> for CliError {
             retryable: error.is_retryable(),
             details: None,
             lines: Vec::new(),
+            attempts: error.attempts(),
         }
     }
 }

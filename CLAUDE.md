@@ -12,7 +12,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
-exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`,
+exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`, `jev batch run`,
 `jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
@@ -138,6 +138,14 @@ Input schemas are generated from the `jev-client` types with every definition in
 fails returns a tool error (`isError`) carrying `CliError::to_json()`; only an unknown method or
 tool is a JSON-RPC error. The key and settings are read once at start-up, and a server without a key
 still starts so that `validate` works.
+
+The batch engine (`batch/`) knows nothing of `clap`, so the MCP server can drive it too. Rows are
+read lazily on a thread of their own and handed to the pool through a channel with one slot per
+worker, so memory is O(concurrency), never O(rows); only ids are remembered, as 16-byte fingerprints.
+A file is read twice: once to check every row (mapping, repeated ids) before anything is sent, then
+to send. Piped rows can be read only once, so they are checked as they arrive. Like `jev mcp serve`,
+`jev batch run` writes to stdout as it goes: one record per row, flushed at once, in completion
+order. A row that fails is a record, not an error; the run exits 7 when any did.
 
 Gates (`gate.rs`) turn an answer into an exit code. **Exit 10 means exactly one thing: evaluated
 successfully, condition false.** It is returned as `Ok(Exit::GateFalse)`, never as an error: the

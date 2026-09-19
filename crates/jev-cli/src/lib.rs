@@ -4,6 +4,7 @@
 //! The library is [`jev_client`]: that is the crate to build on.
 #![forbid(unsafe_code)]
 
+mod batch;
 mod cli;
 mod client;
 mod commands;
@@ -120,6 +121,7 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
         output: global.output.or_else(|| Format::scan(arguments)),
         timeout: global.timeout,
         max_retries: global.max_retries,
+        concurrency: cli.command.concurrency(),
     };
     let store = config::config_dir(&env).map(ConfigStore::new);
     let loaded = store.clone().and_then(|store| {
@@ -158,7 +160,8 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
     }
 
     let stdout = io::stdout();
-    let stdin = io::stdin();
+    // Not locked for the whole run: `jev batch run` reads piped rows on a thread of its own.
+    let mut stdin = io::stdin();
     let mut context = Context {
         output: Output {
             format,
@@ -178,7 +181,7 @@ fn run(arguments: &[String], terminal: Terminal, early_format: Format) -> Result
         },
         env,
         stdout: &mut stdout.lock(),
-        stdin: &mut stdin.lock(),
+        stdin: &mut stdin,
     };
     commands::run(&cli.command, &mut context).map_err(fail)
 }

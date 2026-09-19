@@ -88,7 +88,8 @@ impl Key {
             Self::Output => Some("--output"),
             Self::Timeout => Some("--timeout"),
             Self::MaxRetries => Some("--max-retries"),
-            Self::Concurrency | Self::WarnUnpinned => None,
+            Self::Concurrency => Some("--concurrency"),
+            Self::WarnUnpinned => None,
         }
     }
 
@@ -266,6 +267,8 @@ pub(crate) struct Flags {
     pub(crate) output: Option<Format>,
     pub(crate) timeout: Option<Duration>,
     pub(crate) max_retries: Option<u32>,
+    /// `jev batch run --concurrency`.
+    pub(crate) concurrency: Option<u32>,
 }
 
 impl Flags {
@@ -276,7 +279,8 @@ impl Flags {
             Key::Output => self.output.map(Value::Output),
             Key::Timeout => self.timeout.map(Value::Duration),
             Key::MaxRetries => self.max_retries.map(Value::Count),
-            Key::Concurrency | Key::WarnUnpinned => None,
+            Key::Concurrency => self.concurrency.map(Value::Count),
+            Key::WarnUnpinned => None,
         }
     }
 }
@@ -495,7 +499,15 @@ mod tests {
                 "9",
                 "2",
             ),
-            Key::Concurrency => (None, None, "9", "4"),
+            Key::Concurrency => (
+                Some(Flags {
+                    concurrency: Some(7),
+                    ..Flags::default()
+                }),
+                None,
+                "9",
+                "4",
+            ),
             Key::WarnUnpinned => (None, None, "true", "false"),
         }
     }
