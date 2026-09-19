@@ -12,5 +12,14 @@ keywords = ["jev", "typesafe", "client", "ai"]
 categories = ["api-bindings"]
 readme = "README.md"
 
+[dependencies]
+indexmap.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+jsonschema.workspace = true
+
 [lints]
 workspace = true

@@ -18,6 +18,14 @@ categories = ["command-line-utilities"]
 [workspace.dependencies]
 jev-client = { path = "crates/jev-client", version = "0.0.0" }
 
+indexmap = { version = "2.14", features = ["serde"] }
+schemars = { version = "1.2", features = ["indexmap2", "preserve_order"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+
+# Test-only.
+jsonschema = { version = "0.56", default-features = false }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
