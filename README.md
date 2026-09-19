@@ -127,6 +127,22 @@ language server at one, for example with a first line in a YAML file:
 # yaml-language-server: $schema=https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/schemas/questions.schema.json
 ```
 
+## Shell completions and man pages
+
+`jev completion <shell>` prints a completion script for the commands and flags of the `jev` you
+run. Enable it once per shell, and run it again after upgrading:
+
+| Shell | Enable it |
+| --- | --- |
+| Bash | add `source <(jev completion bash)` to `~/.bashrc` |
+| Zsh | add `source <(jev completion zsh)` to `~/.zshrc`, after `compinit` |
+| Fish | `jev completion fish > ~/.config/fish/completions/jev.fish` |
+| PowerShell | add `jev completion powershell \| Out-String \| Invoke-Expression` to `$PROFILE` |
+
+Man pages (`man jev`, `man jev-noul`, ...) are generated from the same definitions as `--help`.
+From a checkout, `make dist-assets` writes them and the four completion scripts to
+`target/dist-assets/`; `MANPATH="$PWD/target/dist-assets/man:$MANPATH" man jev` reads them.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) to build and test, and [`CLAUDE.md`](CLAUDE.md) for the

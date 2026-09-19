@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`, `jev batch run`,
-`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema`, `jev completion` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -194,6 +194,11 @@ change, temp file, rename. Edits go through `toml_edit` and must preserve a pers
 existing file is never given keys nobody asked for. Warnings are `Notice`s on stderr: text for a
 person, one JSON line for a program, nothing under `--quiet`. Read the environment through `Env`, not
 `std::env`, so it can be tested.
+
+Completion scripts (`jev completion`, via `clap_complete`) and man pages (`man.rs`, via
+`clap_mangen`) are rendered from `cli::command()`, help attached, so they follow the tree with no
+extra work when a command is added. `make dist-assets` (`examples/dist-assets.rs`) writes both for
+release archives and packages; it runs on the build host, so it serves cross-compiled targets too.
 
 Test hooks live behind the `internal-test-hooks` cargo feature (`jev debug render|error|prompt|panic`).
 CI turns it on with `--all-features`; a second, default-features test run proves that release builds

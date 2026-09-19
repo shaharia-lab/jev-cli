@@ -1,6 +1,30 @@
 Print a shell completion script
 
-Usage: jev completion [OPTIONS]
+When to use:
+Use `jev completion` once, when installing jev, to make the shell complete its commands, flags and
+flag values on Tab. The script is generated from the same definitions as the help, so re-run it
+after upgrading jev. It is for people at a shell: a program or an AI agent that needs the command
+tree should read `jev spec` instead.
+
+Input:
+SHELL: bash, zsh, fish or powershell. Nothing else is read: no API key, no configuration, no
+network.
+
+Output:
+The completion script, printed as is on stdout whatever --output says. Load it from the shell's
+start-up file or save it where the shell looks for completions (see the examples).
+
+Usage: jev completion [OPTIONS] <SHELL>
+
+Arguments:
+  <SHELL>
+          The shell to print the script for
+
+          Possible values:
+          - bash:       For Bash, to source from ~/.bashrc
+          - zsh:        For Zsh, to source from ~/.zshrc or save as `_jev` in a directory on $fpath
+          - fish:       For fish, to save as ~/.config/fish/completions/jev.fish
+          - powershell: For PowerShell 5.1 or 7, to load from $PROFILE
 
 Options:
   -h, --help
@@ -57,3 +81,20 @@ Global options:
 
   -v, --verbose...
           Log to stderr; repeat for more (-v requests and retries, -vv everything)
+
+Exit codes:
+  0    success, and any gate condition holds
+  2    no shell, or one jev has no script for
+
+Examples:
+  # Bash: add this line to ~/.bashrc
+  source <(jev completion bash)
+
+  # Zsh: add this line to ~/.zshrc, after compinit
+  source <(jev completion zsh)
+
+  # Fish: save it where fish loads completions from
+  jev completion fish > ~/.config/fish/completions/jev.fish
+
+  # PowerShell: add this line to $PROFILE
+  jev completion powershell | Out-String | Invoke-Expression

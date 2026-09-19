@@ -21,6 +21,7 @@ mod input;
 mod interaction;
 mod interrupt;
 mod logging;
+mod man;
 mod notice;
 mod output;
 mod schemas;
@@ -44,11 +45,29 @@ use crate::interaction::Interaction;
 use crate::notice::Notifier;
 use crate::output::{Format, Output, Ui};
 
+pub use crate::commands::completion::Shell;
+
 /// The command tree with its full help, for tooling that generates documentation or completions
 /// from it.
 #[must_use]
 pub fn command() -> clap::Command {
     cli::command()
+}
+
+/// The completion script `jev completion <shell>` prints, for packaging it with a release.
+#[must_use]
+pub fn completion_script(shell: Shell) -> Vec<u8> {
+    commands::completion::script(shell)
+}
+
+/// Writes the man pages, `jev.1` and one per command such as `jev-auth-login.1`, into
+/// `directory`, for packaging them with a release.
+///
+/// # Errors
+///
+/// When a page cannot be written.
+pub fn write_man_pages(directory: &std::path::Path) -> std::io::Result<()> {
+    man::write_all(directory)
 }
 
 /// Runs `jev` with the process's arguments, environment and standard streams.

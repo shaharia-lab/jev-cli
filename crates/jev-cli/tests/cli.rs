@@ -244,10 +244,7 @@ fn a_usage_error_is_a_json_object_on_stderr_when_the_output_is_for_a_program() {
 
 #[test]
 fn commands_without_behaviour_say_so_whatever_flags_follow() {
-    let cases = [
-        (vec!["update", "--check"], "update", 25),
-        (vec!["completion", "zsh"], "completion", 17),
-    ];
+    let cases = [(vec!["update", "--check"], "update", 25)];
 
     for (arguments, name, issue) in cases {
         let run = run(jev().args(&arguments));
