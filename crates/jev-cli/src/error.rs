@@ -58,6 +58,11 @@ impl CliError {
         Self::new(code, Exit::Auth, message)
     }
 
+    /// A spending guardrail refused a call before anything was sent.
+    pub(crate) fn cost_limit(message: impl Into<String>) -> Self {
+        Self::new("cost_limit", Exit::Usage, message)
+    }
+
     /// Something that should never happen did.
     pub(crate) fn internal(message: impl Into<String>) -> Self {
         Self::new("internal", Exit::Internal, message).hint(format!(

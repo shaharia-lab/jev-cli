@@ -13,7 +13,7 @@ shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (incl
 Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
 transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
 exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`,
-`jev models list`, `jev auth`, `jev config`, `jev profile` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
+`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve` and `jev version` work; every other command answers "not implemented" and names its tracking issue. Work is tracked in epic
 [#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
 relationships. Pick issues whose blockers are closed.
 
@@ -117,6 +117,16 @@ possible source**: a caller that leaves stdin open would make `jev` hang, and ag
 request file with its own `state` therefore never reads stdin; `--state-file -` is the explicit way.
 Integration tests run `jev` against `wiremock` with `TYPESAFE_BASE_URL` pointed at it (loopback
 http is allowed), and default to an address nothing listens on so a test can never reach the real API.
+
+`jev mcp serve` (`commands/mcp/`) is a hand-rolled JSON-RPC loop over stdio, not an SDK: one
+message per line, and that loop is the only writer to stdout, so logs and notices can only reach
+stderr. Tools live in `commands/mcp/tools.rs`; adding one means a constructor and a line in
+`tools::all()`, and a tool that is not listed there cannot be called. Every evaluating tool goes
+through `Session::evaluate`, which is `prepare`, the `--max-cost-usd-per-call` check, then `send`.
+Input schemas are generated from the `jev-client` types with every definition inlined. A tool that
+fails returns a tool error (`isError`) carrying `CliError::to_json()`; only an unknown method or
+tool is a JSON-RPC error. The key and settings are read once at start-up, and a server without a key
+still starts so that `validate` works.
 
 Gates (`gate.rs`) turn an answer into an exit code. **Exit 10 means exactly one thing: evaluated
 successfully, condition false.** It is returned as `Ok(Exit::GateFalse)`, never as an error: the

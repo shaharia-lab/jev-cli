@@ -251,7 +251,6 @@ fn commands_without_behaviour_say_so_whatever_flags_follow() {
             13,
         ),
         (vec!["schema", "batch-record"], "schema batch-record", 16),
-        (vec!["mcp", "serve", "--allow-dir", "."], "mcp serve", 18),
         (vec!["completion", "zsh"], "completion", 17),
     ];
 

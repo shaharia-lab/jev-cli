@@ -5,6 +5,7 @@ mod config;
 #[cfg(feature = "internal-test-hooks")]
 pub(crate) mod debug;
 mod eval;
+mod mcp;
 mod models;
 mod profile;
 mod shortcut;
@@ -149,7 +150,7 @@ pub(crate) fn run(command: &Command, context: &mut Context<'_>) -> Result<Exit, 
         Command::Schema(SchemaCommand::Output(_)) => pending("schema output", 16),
         Command::Schema(SchemaCommand::Error(_)) => pending("schema error", 16),
         Command::Spec(_) => pending("spec", 15),
-        Command::Mcp(McpCommand::Serve(_)) => pending("mcp serve", 18),
+        Command::Mcp(McpCommand::Serve(arguments)) => mcp::serve(arguments, context),
         Command::Update(_) => pending("update", 25),
         Command::Completion(_) => pending("completion", 17),
     }
