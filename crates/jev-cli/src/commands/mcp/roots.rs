@@ -16,7 +16,13 @@ use crate::error::CliError;
 
 /// The allowed directories, resolved.
 #[derive(Debug)]
-pub(super) struct Roots(Vec<PathBuf>);
+pub(super) struct Roots {
+    roots: Vec<PathBuf>,
+    /// The first directory as given, made absolute but not resolved: what a relative path is
+    /// taken from. On Windows a resolved path is a `\\?\` path, in which `/` and `..` are
+    /// ordinary characters, so a relative path joined to it would not mean what it says.
+    base: Option<PathBuf>,
+}
 
 impl Roots {
     /// Resolves each `--allow-dir`.
@@ -41,12 +47,22 @@ impl Roots {
                 roots.push(root);
             }
         }
-        Ok(Self(roots))
+        let base = match dirs.first() {
+            Some(first) => Some(std::path::absolute(first).map_err(|error| {
+                CliError::usage(format!(
+                    "--allow-dir {} cannot be made absolute: {error}",
+                    first.display()
+                ))
+                .hint("pass the directory as an absolute path")
+            })?),
+            None => None,
+        };
+        Ok(Self { roots, base })
     }
 
     /// The allowed directories, as a tool description or an error lists them.
     pub(super) fn listed(&self) -> String {
-        self.0
+        self.roots
             .iter()
             .map(|root| format!("`{}`", root.display()))
             .collect::<Vec<_>>()
@@ -173,14 +189,14 @@ impl Roots {
                 .hint(format!("pass a path as `{argument}`")));
         }
         let path = Path::new(path);
-        Ok(match self.0.first() {
+        Ok(match &self.base {
             Some(first) if path.is_relative() => first.join(path),
             _ => path.to_path_buf(),
         })
     }
 
     fn contains(&self, resolved: &Path) -> bool {
-        self.0.iter().any(|root| resolved.starts_with(root))
+        self.roots.iter().any(|root| resolved.starts_with(root))
     }
 
     /// The error for a path that cannot be resolved. Whether it is missing is said only when its
