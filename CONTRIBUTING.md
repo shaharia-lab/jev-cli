@@ -94,7 +94,7 @@ release.
    The `PR title` check rejects a pull request whose title does not follow the format.
 2. Merging the release pull request tags `vX.Y.Z` and creates a **draft** GitHub Release. The
    tag starts `.github/workflows/release.yml`. release-please works through the
-   `jev-release-bot` GitHub App (`RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, held in the
+   `jev-release-bot` GitHub App (`RELEASE_APP_CLIENT_ID`, `RELEASE_APP_PRIVATE_KEY`, held in the
    `release-please` environment, which admits `main` only), so its pull request gets CI and its
    tag triggers the release.
 3. That workflow builds all six targets (x86_64 and aarch64 of static-musl Linux, macOS and
