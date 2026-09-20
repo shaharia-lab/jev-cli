@@ -2835,7 +2835,7 @@
         },
         {
           "description": "Install one particular release, older or newer",
-          "command": "jev update --version 0.1.0"
+          "command": "jev update --version 1.2.3"
         }
       ]
     },

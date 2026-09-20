@@ -326,7 +326,9 @@ mod tests {
         assert!(reference.contains("`TYPESAFE_DEFAULT_MODEL`"));
         assert!(
             !reference.contains(env!("CARGO_PKG_VERSION")),
-            "the version would make the file stale on every release"
+            "the version would make the file stale on every release. An example that spells out a \
+             version number trips this too, the release it happens to match: write examples \
+             against a version jev will not reach soon."
         );
         assert!(!reference.contains('\u{1b}'), "the help kept its styling");
     }
