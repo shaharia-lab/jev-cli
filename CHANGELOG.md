@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/shaharia-lab/jev-cli/compare/v0.1.0...v0.1.1) (2026-09-20)
+
+
+### Documentation
+
+* **crates:** point the crate READMEs at the user guide ([#97](https://github.com/shaharia-lab/jev-cli/issues/97)) ([2ed7d2a](https://github.com/shaharia-lab/jev-cli/commit/2ed7d2ac7b7cf6bd0973bc8c481331defdff4663))
+
 ## [0.1.0](https://github.com/shaharia-lab/jev-cli/compare/v0.1.0-rc.1...v0.1.0) (2026-09-20)
 
 
