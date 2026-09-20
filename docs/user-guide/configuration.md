@@ -1,6 +1,6 @@
 # Configuration, profiles and the API key
 
-Everything `jev` needs to make a call — a key, a base URL, a model, a timeout — can come from a
+Everything `jev` needs to make a call (a key, a base URL, a model, a timeout) can come from a
 flag, from the environment, or from a profile in one configuration file. This page says where
 each value comes from, how to change it, and where the key is kept.
 
@@ -58,7 +58,7 @@ The API key is not a setting: it never goes into the configuration file. See
 real configuration. `jev config path` works even when the file is broken, so it is the way to
 find a file that needs fixing.
 
-The file is TOML, and editing it by hand is fine — `jev config set` keeps your comments and only
+The file is TOML, and editing it by hand is fine: `jev config set` keeps your comments and only
 writes the keys you asked for:
 
 ```toml
@@ -120,7 +120,7 @@ jev auth logout                             # delete the stored key for this pro
 ```
 
 Only the last four characters of a key are ever shown (`fingerprint`), and the key never appears
-in output, logs, errors, `--dry-run` output or MCP results — `--debug-bodies` and `-vv` included.
+in output, logs, errors, `--dry-run` output or MCP results, `--debug-bodies` and `-vv` included.
 
 In an environment without a terminal, `jev` never prompts: with stdin not a TTY, `--no-input`,
 `JEV_NO_INPUT` or `CI=true` it fails with an error naming the flag or variable to use instead.
@@ -165,4 +165,4 @@ It is already off for Homebrew and cargo installs (they are updated by their pac
 when `CI=true`, and when `jev` cannot write to its own directory. The only host it contacts for
 this is GitHub Releases of `shaharia-lab/jev-cli`; every download is verified against signing keys
 compiled into the binary before anything is replaced. See
-[Security and privacy](../README.md#security-and-privacy).
+[Security and privacy](../../README.md#security-and-privacy).

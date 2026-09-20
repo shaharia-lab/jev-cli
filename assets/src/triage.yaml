@@ -1,0 +1,22 @@
+model: jev-1.13.0
+questions:
+  is_urgent:
+    type: noul
+    instructions: Does this ticket convey urgency?
+    criteria:
+      "true": Explicitly time-sensitive
+      "false": No urgency expressed
+  department:
+    type: choice
+    instructions: Which team should handle this?
+    criteria:
+      billing: Payments, invoicing, refunds
+      technical: Bugs, outages, integrations
+      other: ~
+  frustration:
+    type: score
+    instructions: How frustrated is the customer?
+    criteria:
+      - Calm
+      - Frustrated
+      - Very angry

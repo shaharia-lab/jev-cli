@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 2000px; height: 840px; }
+  body {
+    background: #0b1020;
+    background-image:
+      radial-gradient(1200px 700px at 12% 18%, rgba(46,160,120,0.16), transparent 60%),
+      radial-gradient(900px 600px at 86% 84%, rgba(56,110,220,0.14), transparent 60%),
+      linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+    background-size: auto, auto, 50px 50px, 50px 50px;
+    font-family: 'Inter', 'DejaVu Sans', sans-serif;
+    color: #e8edf6;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 0 96px;
+    gap: 64px;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: rgba(46,160,120,0.14); border: 1px solid rgba(46,160,120,0.45);
+    color: #5ee2a0; border-radius: 999px; padding: 10px 22px;
+    font-size: 19px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #3fd48a; box-shadow: 0 0 12px #3fd48a; }
+  h1 {
+    font-size: 148px; font-weight: 800; letter-spacing: -0.045em; line-height: 1;
+    margin: 34px 0 26px; color: #ffffff;
+  }
+  h1 .cursor { color: #3fd48a; font-size: 118px; vertical-align: 10px; }
+  p.tag { font-size: 34px; line-height: 1.38; color: #b7c2d6; max-width: 760px; font-weight: 400; }
+  p.tag b { color: #ffffff; font-weight: 600; }
+  .chips { display: flex; gap: 12px; margin-top: 42px; flex-wrap: nowrap; }
+  .chip {
+    background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px; padding: 11px 17px; font-size: 18px; color: #cfd8e8; font-weight: 500; white-space: nowrap;
+  }
+  .term {
+    background: #0f1626; border: 1px solid rgba(255,255,255,0.10); border-radius: 18px;
+    box-shadow: 0 40px 90px rgba(0,0,0,0.55); overflow: hidden; width: 860px; justify-self: end;
+  }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 16px 20px; background: #131b2d; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .b { width: 13px; height: 13px; border-radius: 50%; }
+  .title { margin-left: 14px; font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; font-size: 17px; color: #7d8aa3; }
+  pre {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 21px; line-height: 1.62; padding: 28px 30px 32px; color: #c6d0e2; white-space: pre;
+  }
+  .p { color: #3fd48a; }
+  .cmd { color: #e8edf6; }
+  .flag { color: #6fb3ff; }
+  .str { color: #f0c36d; }
+  .key { color: #ffffff; font-weight: 700; }
+  .dim { color: #6f7c94; }
+  .bar1 { color: #4da3ff; }
+  .ok { color: #3fd48a; }
+</style>
+</head>
+<body>
+  <div>
+    <span class="pill"><span class="dot"></span>Open source</span>
+    <h1>jev</h1>
+    <p class="tag">Ask any text a typed question and get a <b>probability</b> back, not a paragraph.
+      A semantic <b>if</b> statement for your terminal, your CI job and your AI agents.</p>
+    <div class="chips">
+      <span class="chip">Single binary</span>
+      <span class="chip">Branch on exit codes</span>
+      <span class="chip">JSON and JSON Schema</span>
+      <span class="chip">MCP server</span>
+    </div>
+  </div>
+
+  <div class="term">
+    <div class="bar">
+      <span class="b" style="background:#ff5f57"></span>
+      <span class="b" style="background:#febc2e"></span>
+      <span class="b" style="background:#28c840"></span>
+      <span class="title">support-triage</span>
+    </div>
+<pre><span class="p">❯</span> <span class="cmd">jev noul</span> <span class="str">"Is this customer angry?"</span> <span class="flag">\</span>
+    <span class="flag">--state-file</span> ticket.txt
+
+<span class="key">answer</span>  <span class="dim">noul</span>  <span class="key">yes</span>  0.96  <span class="bar1">████████████████████░</span>
+<span class="dim">model jev-1.13.0 · 280 tokens · est. $0.000012</span>
+
+<span class="p">❯</span> <span class="cmd">jev noul</span> <span class="str">"Is this about billing?"</span> <span class="flag">\</span>
+    <span class="flag">--state-file</span> ticket.txt <span class="flag">--fail-under</span> 0.7
+
+<span class="dim">gate passed: answer >= 0.7 (holds, got 0.99)</span>
+<span class="p">❯</span> <span class="cmd">echo</span> $?
+<span class="ok">0</span><span class="p">▌</span></pre>
+  </div>
+</body>
+</html>
