@@ -24,11 +24,13 @@ use crate::contract::{Contract, code, problems};
 /// A key that must never appear in any output. It is not a real credential.
 const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-8b2f";
 
-/// The documentation this test holds to the binary. `docs/commands.md` is generated, and is
-/// checked here too, so that a hand-edit of it is caught like any other drift.
-const PAGES: [&str; 22] = [
+/// The documentation this test holds to the binary, `CLAUDE.md` (the repository constitution)
+/// included. `docs/commands.md` is generated, and is checked here too, so that a hand-edit of it
+/// is caught like any other drift.
+const PAGES: [&str; 23] = [
     "README.md",
     "CONTRIBUTING.md",
+    "CLAUDE.md",
     "docs/README.md",
     "docs/commands.md",
     "docs/user-guide/installation.md",

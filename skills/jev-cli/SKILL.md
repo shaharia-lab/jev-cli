@@ -46,8 +46,22 @@ Each command in `jev spec` has `when_to_use`, `input`, `output`, `flags`, `exit_
 
 ## Before the first call
 
-1. `jev version` shows that `jev` is installed. If it is not, tell the person; do not install
-   software on their behalf without asking.
+1. `jev version` shows that `jev` is installed. If the command is not found, **ask the person
+   before installing anything**, then run the line for their platform:
+
+   | Platform | Install |
+   | --- | --- |
+   | macOS or Linux, Homebrew available | `brew install shaharia-lab/tap/jev` |
+   | macOS or Linux | `curl -fsSL https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/install.sh \| sh` |
+   | Windows, PowerShell | `irm https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/install.ps1 \| iex` |
+   | Any platform with Rust | `cargo install jev-cli --locked` |
+
+   The scripts pick the build for the machine's architecture, verify its checksum and signature,
+   never use sudo, and install into `~/.local/bin` (`%LOCALAPPDATA%\Programs\jev` on Windows).
+   If that directory is not on `PATH` in the current shell, say so rather than editing a profile.
+   Confirm with `jev version`, and read the [installation
+   guide](https://github.com/shaharia-lab/jev-cli/blob/main/docs/user-guide/installation.md) if
+   anything fails.
 2. `jev auth status --offline -o json` shows whether an API key is configured (`authenticated`,
    and `source`: `env` or `file`). It never prints the key.
 3. If there is no key, **stop and ask the person** to either export `TYPESAFE_API_KEY` or run

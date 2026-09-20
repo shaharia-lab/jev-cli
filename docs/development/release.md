@@ -72,3 +72,51 @@ ships the moment it merges, without a release. They embed the release public key
 check the checksum. `crates/jev-cli/tests/install_script.rs` runs them on every operating system
 against signed fake releases on a local server, and a lint script runs ShellCheck and
 PSScriptAnalyzer over them.
+
+## The moving parts
+
+`release-please.yml` tags and drafts the release as the `jev-release-bot` App, because a tag or a
+pull request made with `GITHUB_TOKEN` triggers no workflow. The tag starts `release.yml`, which is
+staged: plan, build on six native runners, package with a CycloneDX SBOM, publish (sign and
+upload to the draft, in the `release` environment), attest, verify, finalize, `stable`. Any other
+ref is a dry run. `scripts/release/verify-assets.sh` checks the archive layout, the full asset
+list and the signatures; change it together with the build matrix.
+
+**Homebrew.** The formulas come from `scripts/release/homebrew-formula.sh`, with checksums taken
+from the verified `SHA256SUMS`, and reach `shaharia-lab/homebrew-tap` through
+`homebrew-publish.sh` (contents API, idempotent, and it never moves `jev.rb` back to an older
+release). `homebrew-check` runs on every release run of a stable version, dry runs included:
+`brew style`, `brew audit --strict`, then `brew install` and `brew test` from that run's
+archives. The formula keeps the binary in the keg (`Cellar/jev/<version>/bin/jev`, beside
+Homebrew's `INSTALL_RECEIPT.json`), which is how `jev update` recognises a managed install.
+
+**crates.io** gets `jev-client` first, then `jev-cli` once the index has the library, from
+`scripts/release/crates-publish.sh` (the `crates` job: `stable`, `release` environment,
+`CARGO_REGISTRY_TOKEN`). A version already in the index is skipped, because a publish can never
+be undone, so re-running after a partial publish is safe. `crates/jev-cli` packages only what
+builds `jev` (its `include` list), and `[package.metadata.binstall]` names the release archives
+and the primary signing key. Every pull request runs `cargo publish --workspace --dry-run`
+(`make package`).
+
+**Signing.** Every asset and `SHA256SUMS` is signed with minisign by the one job that can reach
+the signing key. The public keys are `crates/jev-cli/keys/release-primary.pub` (which signs) and
+`release-next.pub` (for rotation); the updater trusts both and only those. Each signature's
+trusted comment is exactly `file:<name>\tversion:<version>`, and verification checks it.
+`SECURITY.md` lists the keys, and `scripts/release/self-test.sh` fails when the two disagree.
+
+**Install scripts.** `install.sh` (POSIX sh) and `install.ps1` (PowerShell 5.1 and 7) live at the
+repository root and are served to users from `main`, so a change to them ships when it merges,
+without a release. They embed the release keys, always check the checksum and check the signature
+when `minisign` is on the `PATH`, and write `<dir>/.jev-update/receipt.json` (`installer`,
+`version`, `target`), which is how `jev update` recognises a self-managed install. Their release
+constants sit in one block, one assignment per line, because
+`crates/jev-cli/tests/install_script.rs` replaces only that block to run them against a local
+server, and checks that the shipped values are GitHub over HTTPS and the committed keys.
+`install.ps1` must stay ASCII.
+
+## Cutting a release
+
+There is a skill for this: `.claude/skills/release/SKILL.md` walks an agent (or a person)
+through readiness, steering the version, approving the environment gate and verifying the
+published release. The underlying procedure is in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#releases).
