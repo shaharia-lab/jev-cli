@@ -1337,7 +1337,7 @@ jev update --check -o json
 jev update --rollback
 
 # Install one particular release, older or newer
-jev update --version 0.1.0
+jev update --version 1.2.3
 ```
 
 ### jev completion

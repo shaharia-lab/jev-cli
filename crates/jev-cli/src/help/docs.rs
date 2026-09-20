@@ -907,7 +907,7 @@ and is rolled back, is exit 1 with the code `update_verification_failed` or \
             },
             Example {
                 description: "Install one particular release, older or newer",
-                command: "jev update --version 0.1.0",
+                command: "jev update --version 1.2.3",
             },
         ],
     },
