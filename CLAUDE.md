@@ -23,12 +23,14 @@ says so when they do.
 
 | Need | Read |
 | --- | --- |
-| Server behaviour the code is built to, limits, pricing, size estimation | `docs/api-behaviour.md` |
-| Trust boundaries, what is verified where, review findings | `docs/threat-model.md` |
-| The exit-code and JSON contract as users see it | `docs/exit-codes.md` |
-| Settings, precedence, profiles, the key | `docs/configuration.md` |
+| Server behaviour the code is built to, limits, pricing, size estimation | `docs/development/api-behaviour.md` |
+| Trust boundaries, what is verified where, review findings | `docs/development/threat-model.md` |
+| The exit-code and JSON contract as users see it | `docs/user-guide/exit-codes.md` |
+| Settings, precedence, profiles, the key | `docs/user-guide/configuration.md` |
 | Everything a command does, generated from the tree | `docs/commands.md` (`make reference`) |
 | How good questions are written; model weak spots | TypeSafe's own docs and agent skill, plus `skills/jev-cli/SKILL.md` |
+| How a feature is explained to the people who use it | `docs/user-guide/` (indexed by `docs/README.md`) |
+| How the project is built, tested and released | `docs/development/`, `CONTRIBUTING.md` |
 
 The PRD and the study notes that shaped v1 (`docs/prd/`, `docs/context/`) were removed for the
 `0.1.0` release; they are in the history of this repository if a decision needs its rationale.
@@ -240,7 +242,7 @@ environment and from the credentials file, against a mock API that echoes the ke
 and asserts that the key reaches no stream and no file, that `state` reaches neither stderr nor a
 file nobody named, that only the transport and the release client can open a connection, and that
 nothing goes to a host that is neither the API nor GitHub. A new command needs a scenario there;
-the test names it until it has one. The reasoning behind all of it is `docs/threat-model.md`,
+the test names it until it has one. The reasoning behind all of it is `docs/development/threat-model.md`,
 which is user-facing and stays when the other planning docs go.
 
 Every parser of outside input is fuzzed (`fuzz/`, cargo-fuzz on nightly, a workspace of its own).
@@ -299,7 +301,7 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
 - Only input tokens are billed ($0.042 per million for `jev-1.13.0`); cost is always labelled *estimated*.
 - Score `probabilities` and `legend` are keyed by **string** level over HTTP. `legend` values echo the
   question's levels, so they can be objects or arrays, not only strings.
-- The upstream docs are not the last word; live behaviour is (`docs/api-behaviour.md`).
+- The upstream docs are not the last word; live behaviour is (`docs/development/api-behaviour.md`).
   A `null` Score level is a 422 although documented as allowed; `instructions` is optional in practice.
 - An unknown top-level request field gets an opaque `400 Invalid request.`, but an unknown field
   *inside a question* is silently accepted, so a misspelt `criteria` quietly degrades answers. The

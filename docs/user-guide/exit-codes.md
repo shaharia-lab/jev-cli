@@ -3,9 +3,9 @@
 For people writing shell scripts, CI jobs and agents around `jev`. Exit codes, the JSON that
 `jev` prints on stdout, and the JSON error it prints on stderr are a stable contract: after 1.0
 they change only in a major release, before it only in a minor release, and
-[`CHANGELOG.md`](../CHANGELOG.md) says so when they do.
+[`CHANGELOG.md`](../../CHANGELOG.md) says so when they do.
 
-The command reference in [`commands.md`](commands.md) lists the codes each command can return.
+The command reference in [`commands.md`](../commands.md) lists the codes each command can return.
 `jev spec` prints the same contract as JSON, and `jev schema output|error|batch-record` prints a
 JSON Schema for each shape below.
 
@@ -54,8 +54,8 @@ esac
 | `--assert CONDITION` | `jev eval` | The condition over one question's answer is false, e.g. `--assert 'is_urgent >= 0.7'`; repeat it and all must hold. |
 | `--abstain-band LO,HI` | `jev noul` | (Exit **11**) The probability is inside the band, where the model cannot tell. |
 
-A condition that could never be decided — an unknown question id, a choice compared with `>=`, an
-option that does not exist — is exit 2, checked before anything is sent, so it costs nothing.
+A condition that could never be decided (an unknown question id, a choice compared with `>=`, an
+option that does not exist) is exit 2, checked before anything is sent, so it costs nothing.
 
 ## Where the output goes
 
@@ -181,5 +181,5 @@ jev schema error -o json > error.schema.json
 jev schema batch-record -o json > batch-record.schema.json
 ```
 
-The same files are committed in [`schemas/`](../schemas), and `jev spec` prints every command,
+The same files are committed in [`schemas/`](../../schemas), and `jev spec` prints every command,
 flag, default and exit code as JSON for tooling that builds command lines.

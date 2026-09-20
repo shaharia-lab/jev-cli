@@ -33,7 +33,7 @@ Security fixes go into the latest release only. There are no long-term support b
 ## Security design
 
 These are the rules the project is built to, each enforced by tests or continuous integration.
-[`docs/threat-model.md`](docs/threat-model.md) is the long form: what is worth protecting, which
+[`docs/development/threat-model.md`](docs/development/threat-model.md) is the long form: what is worth protecting, which
 inputs are not trusted, where each protection lives, and the findings of the last review.
 
 - **The API key never travels through command-line arguments.** It comes from the

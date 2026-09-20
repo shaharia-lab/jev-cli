@@ -95,7 +95,7 @@ jobs:
           if [ "$RESULT" = failure ]; then
             body="The live smoke suite failed: $RUN_URL
 
-          The TypeSafe API may have changed. Read the failing assertion in the run log and compare it with docs/api-behaviour.md."
+          The TypeSafe API may have changed. Read the failing assertion in the run log and compare it with docs/development/api-behaviour.md."
             if [ -n "$number" ]; then
               gh issue comment "$number" --body "Failed again: $RUN_URL"
             else

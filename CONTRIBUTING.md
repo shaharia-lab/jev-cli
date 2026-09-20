@@ -157,16 +157,28 @@ dry run: everything is built, checked and packed, and nothing is published.
 
 ## User documentation
 
-The pages a user reads are [`README.md`](README.md) and the three in [`docs/`](docs/README.md):
-the command reference, the exit-code and JSON contract, and configuration. They must stand on
-their own, so never link them to a page written for contributors, and never to a planning document:
-the PRD and the study notes that shaped v1 were removed for `0.1.0`, and a test keeps them from
-coming back. If a decision's rationale is needed, it is in this repository's history.
+[`docs/`](docs/README.md) has two halves, and [`docs/README.md`](docs/README.md) indexes both.
+[`docs/user-guide/`](docs/user-guide) is written for people using `jev`: installation, quick
+start, the question types, writing questions, scripting and CI, exit codes, batch runs,
+configuration, MCP, updates, troubleshooting and the FAQ.
+[`docs/development/`](docs/development) is written for contributors: setup, architecture,
+testing, releasing, plus [`api-behaviour.md`](docs/development/api-behaviour.md), which records
+what the TypeSafe API actually does where that differs from its documentation, and
+[`threat-model.md`](docs/development/threat-model.md). Update `api-behaviour.md` whenever the
+nightly live smoke test catches the server changing.
 
-Two pages in `docs/` are written for contributors rather than users:
-[`api-behaviour.md`](docs/api-behaviour.md), which records what the TypeSafe API actually does
-where that differs from its documentation, and [`threat-model.md`](docs/threat-model.md). Update
-`api-behaviour.md` whenever the nightly live smoke test catches the server changing.
+The README and the user guide must stand on their own, so never link them to a page written for
+contributors, and never to a planning document: the PRD and the study notes that shaped v1 were
+removed for `0.1.0`, and a test keeps them from coming back. If a decision's rationale is needed,
+it is in this repository's history.
+
+Write documentation the way the existing pages do: short sentences, tables where a reader is
+scanning, an example for anything a person will type, and no em dashes. Prefer linking the
+generated command reference to restating a flag list by hand.
+
+The README is the project's first impression: it carries the banner and the terminal demo from
+[`assets/`](assets/README.md), which are generated from the sources in `assets/src/` and can be
+remade when the tool changes.
 
 [`docs/commands.md`](docs/commands.md) is **generated** from the command tree by
 `crates/jev-cli/src/reference.rs`, like the man pages. Never edit it by hand; after changing a

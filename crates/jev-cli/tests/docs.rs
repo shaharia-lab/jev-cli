@@ -26,33 +26,61 @@ const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-8b2f";
 
 /// The documentation this test holds to the binary. `docs/commands.md` is generated, and is
 /// checked here too, so that a hand-edit of it is caught like any other drift.
-const PAGES: [&str; 7] = [
+const PAGES: [&str; 22] = [
     "README.md",
     "CONTRIBUTING.md",
     "docs/README.md",
-    "docs/api-behaviour.md",
     "docs/commands.md",
-    "docs/exit-codes.md",
-    "docs/configuration.md",
+    "docs/user-guide/installation.md",
+    "docs/user-guide/quick-start.md",
+    "docs/user-guide/question-types.md",
+    "docs/user-guide/writing-questions.md",
+    "docs/user-guide/scripting-and-ci.md",
+    "docs/user-guide/exit-codes.md",
+    "docs/user-guide/batch.md",
+    "docs/user-guide/configuration.md",
+    "docs/user-guide/mcp.md",
+    "docs/user-guide/updates.md",
+    "docs/user-guide/troubleshooting.md",
+    "docs/user-guide/faq.md",
+    "docs/development/setup.md",
+    "docs/development/architecture.md",
+    "docs/development/testing.md",
+    "docs/development/release.md",
+    "docs/development/api-behaviour.md",
+    "docs/development/threat-model.md",
 ];
 
 /// The pages a reader of a release sees, which must stand on their own. The planning documents
 /// under `docs/prd/` and `docs/context/` were removed for `0.1.0`; this keeps a link to them, and
 /// so the documents themselves, from coming back.
-const USER_PAGES: [&str; 4] = [
+const USER_PAGES: [&str; 14] = [
     "README.md",
     "docs/commands.md",
-    "docs/exit-codes.md",
-    "docs/configuration.md",
+    "docs/user-guide/installation.md",
+    "docs/user-guide/quick-start.md",
+    "docs/user-guide/question-types.md",
+    "docs/user-guide/writing-questions.md",
+    "docs/user-guide/scripting-and-ci.md",
+    "docs/user-guide/exit-codes.md",
+    "docs/user-guide/batch.md",
+    "docs/user-guide/configuration.md",
+    "docs/user-guide/mcp.md",
+    "docs/user-guide/updates.md",
+    "docs/user-guide/troubleshooting.md",
+    "docs/user-guide/faq.md",
 ];
 
-/// Flags of other programs the pages name on their own: the install scripts' options and
-/// `npx skills -g`.
-const OTHER_PROGRAMS: [&str; 4] = [
+/// Flags of other programs the pages name on their own: the install scripts' options,
+/// `npx skills -g`, and the `cargo` and `git` flags the developer guide mentions.
+const OTHER_PROGRAMS: [&str; 7] = [
     "--install-dir",
     "--no-modify-path",
     "--require-signature",
     "-g",
+    "--all-features",
+    "--locked",
+    "--no-verify",
 ];
 
 /// The quick start of the README, verbatim. Each line must be in the README, and each runs here
@@ -203,7 +231,7 @@ fn the_exit_code_tables_are_the_specs() {
         .collect();
 
     // The reference page lists the whole contract, code and name.
-    let documented: BTreeSet<(u8, String)> = exit_code_rows(&page("docs/exit-codes.md"))
+    let documented: BTreeSet<(u8, String)> = exit_code_rows(&page("docs/user-guide/exit-codes.md"))
         .into_iter()
         .filter(|cells| cells.len() > 3)
         .map(|cells| (cells[1].parse().unwrap(), cells[2].clone()))
@@ -267,11 +295,11 @@ fn every_setting_the_documentation_names_is_a_real_one() {
     assert!(checked >= 5, "only {checked} settings named in examples");
 
     // And every setting jev has is documented, so that a new one cannot be forgotten.
-    let configuration = page("docs/configuration.md");
+    let configuration = page("docs/user-guide/configuration.md");
     for key in &keys {
         assert!(
             configuration.contains(&format!("`{key}`")),
-            "docs/configuration.md does not document the setting `{key}`"
+            "docs/user-guide/configuration.md does not document the setting `{key}`"
         );
     }
 }
@@ -468,7 +496,7 @@ async fn the_readme_quick_start_works() {
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "billing\n");
 }
 
-/// The gate example of the README and of `docs/exit-codes.md`: exit 10, the answer printed as
+/// The gate example of the README and of `docs/user-guide/exit-codes.md`: exit 10, the answer printed as
 /// usual, and nothing on stderr.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_gate_that_does_not_hold_exits_10_without_an_error() {

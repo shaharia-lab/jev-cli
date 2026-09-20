@@ -6,9 +6,9 @@ what is written or is not written down at all. `jev` is built to the behaviour, 
 several of the rules below are the reason a piece of code exists.
 
 Everything here was observed on 2026-09-19 against `jev-1.13.0`.
-[`crates/jev-cli/tests/live.rs`](../crates/jev-cli/tests/live.rs) re-checks the load-bearing ones
+[`crates/jev-cli/tests/live.rs`](../../crates/jev-cli/tests/live.rs) re-checks the load-bearing ones
 against the real API every night
-([`.github/workflows/live-smoke.yml`](../.github/workflows/live-smoke.yml)). When that job fails,
+([`.github/workflows/live-smoke.yml`](../../.github/workflows/live-smoke.yml)). When that job fails,
 the server changed: update this page and the validation that depends on the finding.
 
 ## The surface
@@ -26,12 +26,12 @@ identifies the call to TypeSafe support, so `jev` surfaces it on success and on 
 
 | Type | `criteria` | Answer fields |
 | --- | --- | --- |
-| `noul` | optional `{"true": …, "false": …}` | `noul` — P(yes), 0–1. **No `confidence`.** |
+| `noul` | optional `{"true": …, "false": …}` | `noul`: P(yes), 0 to 1. **No `confidence`.** |
 | `choice` | required map of option to description or `null`, at most 255 options | `choice`, `probabilities`, `confidence` |
 | `score` | required ordered array of 2–10 levels; the index is the level | `score` (probability-weighted mean), `legend`, `probabilities`, `confidence` |
 
 Question ids are never shown to the model, so the meaning has to be in `instructions`. `instructions`
-and every criteria value accept a string, an object or an array — and `null`, except for a Score
+and every criteria value accept a string, an object or an array, and `null`, except for a Score
 level, which is the one place the documentation and the server disagree (see below). The field names
 inside those objects are labels the model reads, not a reserved vocabulary. State is referenced from
 an instruction with a backticked path such as `` `ticket.messages[0].text` ``.
@@ -62,7 +62,7 @@ an instruction with a backticked path such as `` `ticket.messages[0].text` ``.
   `map<string, string>`. Over HTTP, `probabilities` and `legend` are keyed by the level as a
   **string** (the Python SDK re-keys them by `int`; the wire format is what `jev-client` parses).
 - **Error bodies come in three shapes**, all under `detail`: the documented
-  `{"error_type", "message"}` object, a bare string, and — for 422 — a FastAPI list of
+  `{"error_type", "message"}` object, a bare string, and, for 422, a FastAPI list of
   `{"type", "loc", "msg", "input"}`. That list **echoes the request input, including `state`**, so it
   must be treated like a request body when logging and never quoted back to the user verbatim.
 - **Field order inside an answer differs from the documentation** (`confidence` precedes
@@ -95,11 +95,11 @@ an instruction with a backticked path such as `` `ticket.messages[0].text` ``.
 `jev` refuses a request it can see is over budget before spending anything, so it needs a token
 estimate it can trust. **A flat characters-per-token ratio is badly wrong.** Measured: English prose
 6.5 characters per token, a chat log 4.2, JSON records 2.1, keyed objects 1.3, an array of numbers
-1.0 — so the ~4.5 that a first implementation used would estimate a 100k-character JSON state at 22k
+1.0, so the ~4.5 that a first implementation used would estimate a 100k-character JSON state at 22k
 tokens when it is about 47k.
 
 What holds across every kind of content, and what
-[`crates/jev-client/src/validate/size.rs`](../crates/jev-client/src/validate/size.rs) implements per
+[`crates/jev-client/src/validate/size.rs`](../../crates/jev-client/src/validate/size.rs) implements per
 character class instead:
 
 - a common word is one token; a rare long word or an identifier is about one token per 4 letters
@@ -109,7 +109,7 @@ character class instead:
 - per-request overhead is 258 to 273 tokens (an empty state plus one short Noul is 273)
 
 The estimator is held to within 15% per sample and 5% overall by
-[`crates/jev-client/tests/fixtures/token-calibration.json`](../crates/jev-client/tests/fixtures/token-calibration.json),
+[`crates/jev-client/tests/fixtures/token-calibration.json`](../../crates/jev-client/tests/fixtures/token-calibration.json),
 which stores real token counts from the API. Re-probe and update that file rather than loosening the
 bound.
 
@@ -120,10 +120,10 @@ six-digit numbers cost about 20k tokens.
 
 Jev reads literally and answers the words, not the intent. It cannot count, do arithmetic or compare
 numbers, and it reads dates as text. Those belong in code, and `jev`'s help, MCP tool descriptions
-and [agent skill](../skills/jev-cli/SKILL.md) say so wherever an agent will read them.
+and [agent skill](../../skills/jev-cli/SKILL.md) say so wherever an agent will read them.
 
 Two findings are encoded as lint rules in
-[`crates/jev-client/src/validate/lints.rs`](../crates/jev-client/src/validate/lints.rs):
+[`crates/jev-client/src/validate/lints.rs`](../../crates/jev-client/src/validate/lints.rs):
 
 - **A Choice without an escape option.** The model cannot pick an option that was not offered, so a
   Choice with no `other` / `none` / `not_stated` forces a wrong answer.

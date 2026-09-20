@@ -1,7 +1,7 @@
 # Threat model
 
 What `jev` protects, from whom, and where each protection is enforced and tested. It is the
-long form of the rules summarised in [SECURITY.md](../SECURITY.md), written for reviewers and
+long form of the rules summarised in [SECURITY.md](../../SECURITY.md), written for reviewers and
 for anyone changing the code. Report a vulnerability as SECURITY.md describes, not in a public
 issue.
 
