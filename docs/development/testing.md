@@ -46,6 +46,28 @@ and back-off are tested in milliseconds.
 | `crates/jev-client/tests/http_transport.rs` | Retries, error mapping, and the sentinel-key leak test at `TRACE` |
 | `crates/jev-client/tests/validation.rs` | Every validation rule, which cannot exist without a case here |
 
+## Test hooks
+
+The hidden debug commands (jev debug render, error, prompt and panic) exist only behind the
+`internal-test-hooks` cargo feature, and so do the update hooks `JEV_TEST_UPDATE_URL`, `JEV_TEST_UPDATE_KEY` and `JEV_TEST_VERSION`.
+CI turns the feature on with `--all-features` and then runs the suite a second time with default
+features, which proves a release build does not contain them.
+
+## What the leak net covers
+
+`crates/jev-cli/tests/secret_leak.rs` is the cross-cutting net under every per-feature sentinel
+test. It runs every command `jev spec` lists, at `-vvv`, with and without `--debug-bodies`, with
+the key in the environment and with the key in the credentials file, against a mock API that
+echoes both the key and the request, and asserts that:
+
+- the key reaches no stream and no file,
+- the `state` reaches neither stderr nor a file nobody named,
+- only the transport and the release client can open a connection,
+- nothing is sent to a host that is neither the API nor GitHub.
+
+A new command needs a scenario there, and the test names it until it has one. The reasoning is
+in the [threat model](threat-model.md).
+
 ## Snapshots
 
 Help output and the command spec are snapshot tests. After an intended change:

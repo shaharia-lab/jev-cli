@@ -82,7 +82,11 @@ toolchain:
 ## Releases
 
 Releases are cut by [release-please](https://github.com/googleapis/release-please); nobody edits
-versions or `CHANGELOG.md` by hand.
+versions or `CHANGELOG.md` by hand. [`docs/development/release.md`](docs/development/release.md)
+explains how the pipeline is staged and why, and
+[`.claude/skills/release/SKILL.md`](.claude/skills/release/SKILL.md) is the running order an AI
+agent (or a person in a hurry) can follow, from "is `main` releasable" to verifying the published
+release.
 
 1. Every merge to `main` updates a release pull request with the next version, worked out from the
    Conventional Commit titles since the last release, and its changelog entry. A `feat` bumps the
@@ -198,7 +202,9 @@ change the quick start, change `QUICK_START` in that test with it.
 
 ## The agent skill
 
-[`skills/jev-cli/SKILL.md`](skills/jev-cli/SKILL.md) teaches an AI agent to use `jev`. It
+[`skills/jev-cli/SKILL.md`](skills/jev-cli/SKILL.md) teaches an AI agent to use `jev`. It is the
+only skill that ships to users; the maintainer skills under `.claude/skills/` are for working on
+this repository. It
 installs through `npx skills add` and as a Claude Code plugin from
 [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json). It teaches a workflow and
 points at `jev spec`, `--help` and `jev schema` for the contract, rather than restating it.
