@@ -115,7 +115,10 @@ it for whatever they are given, which covers most values; anything interpolated 
 without them applies `printable` itself, and the escaped text is what `Cell` measures, so the
 columns still line up. Machine formats escape control characters themselves and must stay
 byte-faithful, and so must the single raw values `--field`, `jev config get` and `jev config path`
-print for a script. `tests/escape.rs` holds a sentinel escape sequence to each of these surfaces.
+print for a script. The `tracing` diagnostics behind `-v`/`-vv` follow the same rule through a
+`FormatFields` in `logging.rs` that runs every recorded value through `printable`, so a new
+`tracing::debug!` in either crate is safe without doing anything. `tests/escape.rs` holds a
+sentinel escape sequence to each of these surfaces.
 
 Help follows one standard (product rule 1). In `cli.rs` a command has only its one-line purpose (a
 one-paragraph doc comment) and its arguments; everything else is its `Doc`: when to use it versus

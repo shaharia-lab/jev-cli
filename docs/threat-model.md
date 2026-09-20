@@ -75,7 +75,8 @@ Nothing from a response is trusted:
   on or off. The machine formats keep the value exactly as it was sent, since JSON and YAML escape
   control characters themselves and a program needs the value unchanged; so do `--field`,
   `jev config get` and `jev config path`, each of which prints one raw value for a script. The
-  `tracing` diagnostics behind `-v`/`-vv` are the one exception; see "Known limitations".
+  `tracing` diagnostics behind `-v`/`-vv` are covered by the same rule: the subscriber's field
+  formatter neutralises every recorded value, including a response body under `--debug-bodies`.
 
 ### 3. Files the user names
 
@@ -171,12 +172,7 @@ command also has a scenario of its own.
 | Terminal escape sequences in a server's error message, or in text quoted from a file, were printed to the terminal unchanged | Low | Fixed: errors and notices here, and the rest of human output in [#80](https://github.com/shaharia-lab/jev-cli/issues/80) |
 | The self-test of a newly downloaded binary ran with the API key in its environment | Informational | Fixed: the probe removes it, as the background check already did |
 | The GitHub App credentials that publish the Homebrew tap and the release pull request were repository-level secrets, so any workflow on a branch could read them | Low (requires write access to this repository) | Fixed in [#83](https://github.com/shaharia-lab/jev-cli/pull/83): both jobs now take them from a deployment environment |
+| The `tracing` diagnostics behind `-v`/`-vv` Display-formatted values raw, so an escape sequence in one could drive the terminal | Low (needs `-v`, and a response body needs `--debug-bodies` as well) | Fixed in [#89](https://github.com/shaharia-lab/jev-cli/issues/89): the subscriber's field formatter runs every recorded value through the same `printable` helper |
 
 Nothing else in this review changed behaviour: the key handling, the updater's trust chain, the
 MCP confinement and the workflow permissions held up as documented.
-
-## Known limitations
-
-| Limitation | Scope | Why it is acceptable for now |
-| --- | --- | --- |
-| The `tracing` diagnostics behind `-v`/`-vv` do not neutralise control characters, so an escape sequence in a base URL or in a server's error message can drive the terminal there. Bare string fields such as a request id are already escaped by the formatter; the gap is the handful of values Display-formatted with `%`, and two paths interpolated into a log message. | Only at `-v` or higher, which is a deliberate act. Bodies still need `--debug-bodies`, which is byte-faithful by design, like `--raw`. | The same text is escaped wherever `jev` reports it as an error or a notice, so a reader meets a neutralised copy on the normal path. Tracked in [#90](https://github.com/shaharia-lab/jev-cli/issues/90); the fix is `printable` at those call sites, not a custom subscriber. |

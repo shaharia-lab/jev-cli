@@ -1,11 +1,18 @@
 //! Diagnostics on stderr, chosen by `--verbose`, `--quiet` and `TYPESAFE_LOG_LEVEL`.
 
+use std::fmt;
 use std::io;
 
+use tracing::field::{Field, Visit};
 use tracing::level_filters::LevelFilter;
+use tracing_subscriber::field::{MakeVisitor, RecordFields, VisitOutput};
 use tracing_subscriber::filter::Targets;
+use tracing_subscriber::fmt::FormatFields;
+use tracing_subscriber::fmt::format::{DefaultFields, Writer};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+
+use crate::output::printable;
 
 /// The crates whose events `-v` shows. `-vv` and above show every crate's.
 const OWN_TARGETS: [&str; 2] = ["jev_cli", "jev_client"];
@@ -43,9 +50,52 @@ fn parse_level(level: &str) -> Option<LevelFilter> {
     }
 }
 
+/// The usual `key=value` field format, with every recorded value passed through [`printable`].
+///
+/// A diagnostic line is the one place where text `jev` did not write itself reaches a terminal
+/// `Display`-formatted — a response body under `--debug-bodies`, an error, the `method` of an MCP
+/// request — and it is turned on precisely when something has already gone wrong. Neutralising
+/// the values here holds the diagnostic stream to the same rule as the rest of human output, and
+/// holds it for whatever a dependency logs too, which `-vv` turns on wholesale.
+///
+/// Values are neutralised, never dropped, so the line still shows what was there. Levels, targets
+/// and `jev`'s own colours are unchanged, as are the machine output formats, which do not go
+/// through a subscriber at all.
+struct PrintableFields(DefaultFields);
+
+impl<'writer> FormatFields<'writer> for PrintableFields {
+    fn format_fields<R: RecordFields>(&self, writer: Writer<'writer>, fields: R) -> fmt::Result {
+        let mut visitor = self.0.make_visitor(writer);
+        fields.record(&mut Neutralise(&mut visitor));
+        visitor.finish()
+    }
+}
+
+/// A visitor that hands each value to `V` with its control characters written out.
+///
+/// Only `record_str` and `record_debug` are implemented: every other `record_*` method, including
+/// `record_error`, defaults to `record_debug`, so none of them can get around the escaping. The
+/// string `record_debug` renders costs nothing when logging is off, which is the default.
+struct Neutralise<'visitor, V>(&'visitor mut V);
+
+impl<V: Visit> Visit for Neutralise<'_, V> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.0.record_str(field, &printable(value));
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        // `Debug` for `Arguments` writes the text as it stands, so the inner visitor formats
+        // exactly what it would have, minus the control characters.
+        let shown = format!("{value:?}");
+        self.0
+            .record_debug(field, &format_args!("{}", printable(&shown)));
+    }
+}
+
 /// Starts logging to stderr. Safe to call more than once: only the first call takes effect.
 pub(crate) fn init(filter: Targets, color: bool) {
     let layer = tracing_subscriber::fmt::layer()
+        .fmt_fields(PrintableFields(DefaultFields::new()))
         .with_writer(io::stderr)
         .with_ansi(color)
         .with_target(true)

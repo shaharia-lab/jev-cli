@@ -241,6 +241,69 @@ async fn an_answer_from_the_server_is_escaped_in_the_text_form_and_kept_in_json(
     );
 }
 
+#[tokio::test]
+async fn the_diagnostic_stream_escapes_what_the_server_sent_under_double_verbose() {
+    let server = MockServer::start().await;
+    // A gateway between `jev` and the API answers with its own error page, so the bytes are not
+    // JSON and nothing has escaped the control characters in them on the way.
+    let page = format!("<html><body>502 Bad Gateway {SENTINEL}</body></html>");
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .respond_with(
+            ResponseTemplate::new(502)
+                .insert_header("content-type", "text/html")
+                .set_body_string(&page),
+        )
+        .mount(&server)
+        .await;
+    let request = written(
+        "verbose.json",
+        &json!({
+            "model": "jev-latest",
+            "state": "a ticket",
+            "questions": { "is_urgent": { "type": "noul", "instructions": "Is it urgent?" } },
+        }),
+    );
+
+    // `-vv` logs every crate at debug; `--debug-bodies` is what puts the body on stderr at all.
+    let run = run(command(
+        Some(&server),
+        &[
+            "-vv",
+            "--debug-bodies",
+            "--max-retries",
+            "0",
+            "eval",
+            "-f",
+            &request,
+            "-o",
+            "table",
+        ],
+    ))
+    .await;
+
+    assert_eq!(run.code, 6, "{:?}", run.stderr);
+    assert!(
+        drives_a_terminal(&run.stderr).is_none(),
+        "the diagnostic stream holds {:?} in {:?}",
+        drives_a_terminal(&run.stderr),
+        run.stderr
+    );
+    assert!(
+        run.stderr.contains(ESCAPED),
+        "the body was dropped rather than escaped: {:?}",
+        run.stderr
+    );
+    // The level, the target and the message still read as they did.
+    assert!(
+        run.stderr.contains("jev_client::http::body")
+            && run.stderr.contains("response body")
+            && run.stderr.contains("502 Bad Gateway"),
+        "the diagnostic line is no longer readable: {:?}",
+        run.stderr
+    );
+}
+
 #[test]
 fn a_validation_finding_escapes_the_document_it_quotes() {
     // An unknown top-level field is reported by name, and the name is whatever the file holds.
