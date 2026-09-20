@@ -31,17 +31,19 @@ identifies the call to TypeSafe support, so `jev` surfaces it on success and on 
 | `score` | required ordered array of 2–10 levels; the index is the level | `score` (probability-weighted mean), `legend`, `probabilities`, `confidence` |
 
 Question ids are never shown to the model, so the meaning has to be in `instructions`. `instructions`
-and every criteria value accept a string, an object or an array; the field names inside those objects
-are labels the model reads, not a reserved vocabulary. State is referenced from an instruction with a
-backticked path such as `` `ticket.messages[0].text` ``.
+and every criteria value accept a string, an object or an array — and `null`, except for a Score
+level, which is the one place the documentation and the server disagree (see below). The field names
+inside those objects are labels the model reads, not a reserved vocabulary. State is referenced from
+an instruction with a backticked path such as `` `ticket.messages[0].text` ``.
 
 ## Where the server differs from its documentation
 
-- **The server does not enforce its own limits.** A Score with a single level is accepted with
-  HTTP 200 although the documented minimum is 2. An 11-level Score is refused, but only with
-  `400 {"detail": "Too many score levels. Must have at most 10 levels."}`. This is why offline
-  validation in `jev-client` is a correctness feature and not a convenience: without it a malformed
-  question is either billed and meaningless, or rejected with a message that names no question.
+- **The server does not enforce its own limits consistently.** A Score with a single level is
+  accepted with HTTP 200 although the documented minimum is 2, so a broken question is billed and
+  answers nothing. An 11-level Score *is* refused, with
+  `400 {"detail": "Too many score levels. Must have at most 10 levels."}`, but the message names no
+  question, so a request carrying twenty of them says only that one is wrong. This is why offline
+  validation in `jev-client` is a correctness feature and not a convenience.
 - **An unknown field inside a question is silently accepted.** An unknown *top-level* field, or an
   unknown question `type`, gets the uninformative
   `400 {"detail": {"error_type": "api_usage_error", "message": "Invalid request."}}`; an unknown

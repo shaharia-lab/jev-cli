@@ -10,29 +10,32 @@ typed questions (`noul` = yes/no probability, `choice` = one of up to 255 option
 a 2–10 level rubric) and get calibrated probabilities back. The CLI makes that usable from a terminal,
 shell scripts and CI (answers become exit codes), bulk jobs, and AI agents (including an MCP server mode).
 
-Status: **early implementation.** `jev-client` has the typed model, offline validation and the HTTP
-transport. The `jev` binary has the whole command tree, the output layer, structured errors and the
-exit-code contract. `jev eval`, `jev noul`, `jev choice`, `jev score`, `jev validate`, `jev batch run`,
-`jev models list`, `jev auth`, `jev config`, `jev profile`, `jev mcp serve`, `jev spec`, `jev schema`, `jev completion`, `jev update` and `jev version` work, and install-script installs update themselves in the background. Work is tracked in epic
-[#2](https://github.com/shaharia-lab/jev-cli/issues/2) with sub-issues linked by native blocked-by
-relationships. Pick issues whose blockers are closed.
+Status: **feature-complete for `0.1.0`.** `jev-client` has the typed model, offline validation and
+the HTTP transport. Every command in the tree has its behaviour — `eval`, `noul`, `choice`, `score`,
+`validate`, `batch run`, `models list`, `auth`, `config`, `profile`, `mcp serve`, `spec`, `schema`,
+`completion`, `update` and `version` — and install-script installs update themselves in the
+background. Nothing answers "not implemented" any more; `cli::Pending` and
+`CliError::not_implemented` are kept for the next command that lands before its implementation.
+Before `1.0`, flags, JSON shapes and exit codes may change in a minor release, and the changelog
+says so when they do.
 
 ## Read before designing or coding
 
 | Need | Read |
 | --- | --- |
-| Scope, numbered requirements (`FR-`, `NFR-`, `SEC-`, `REL-`, `ENG-`, `TEST-`, `DIST-`), exit codes, decision log | `docs/prd/v1.md` |
-| API shapes, errors, limits, pricing, env vars | `docs/context/02-http-api.md` |
-| Server quirks found in live testing | `docs/context/05-live-test-findings.md` |
+| Server behaviour the code is built to, limits, pricing, size estimation | `docs/api-behaviour.md` |
 | Trust boundaries, what is verified where, review findings | `docs/threat-model.md` |
-| How good questions are written; model weak spots | `docs/context/03-design-rules.md` |
-| Full upstream docs (gitignored mirror) | run `scripts/fetch-upstream-docs.sh`, then `docs/upstream/` |
+| The exit-code and JSON contract as users see it | `docs/exit-codes.md` |
+| Settings, precedence, profiles, the key | `docs/configuration.md` |
+| Everything a command does, generated from the tree | `docs/commands.md` (`make reference`) |
+| How good questions are written; model weak spots | TypeSafe's own docs and agent skill, plus `skills/jev-cli/SKILL.md` |
 
-The planning docs under `docs/prd/` and `docs/context/` will be removed before the first public release.
-Anything durable belongs in this file, the README, the user pages in `docs/` (`commands.md`,
-`exit-codes.md`, `configuration.md`), or code comments. A user page never links to the planning docs.
-
-Decisions in the PRD's decision log (§16) are settled. Do not re-open them; raise a question instead.
+The PRD and the study notes that shaped v1 (`docs/prd/`, `docs/context/`) were removed for the
+`0.1.0` release; they are in the history of this repository if a decision needs its rationale.
+Everything durable from them lives in this file, the README, the pages in `docs/`, or code comments.
+Anything new that is durable belongs there too, not in a planning document. A comment or a workflow
+that still cites a requirement id (`NFR-PERF-1`, `REL-7`, `D9`, …) is pointing at that history; the
+id is a stable name for a settled decision, not a file you can open.
 
 ## Non-negotiable product rules
 
@@ -222,8 +225,8 @@ release cannot make it stale. The README and the pages in `docs/` are held to th
 `tests/docs.rs`, which shares its shell and spec reader with `tests/skill.rs`
 (`tests/support/contract.rs`): every command, flag and setting they name must exist, their
 exit-code tables must be the spec's, their request files must validate, and the README's quick
-start is run against a mock. User docs must not link to `docs/prd/` or `docs/context/`, which are
-deleted before the first release.
+start is run against a mock. A user page must not link to `docs/prd/` or `docs/context/`: those
+planning documents were removed for `0.1.0` and a test keeps them from coming back.
 
 Test hooks live behind the `internal-test-hooks` cargo feature (`jev debug render|error|prompt|panic`).
 CI turns it on with `--all-features`; a second, default-features test run proves that release builds
@@ -296,7 +299,7 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
 - Only input tokens are billed ($0.042 per million for `jev-1.13.0`); cost is always labelled *estimated*.
 - Score `probabilities` and `legend` are keyed by **string** level over HTTP. `legend` values echo the
   question's levels, so they can be objects or arrays, not only strings.
-- The upstream docs are not the last word; live behaviour is (`docs/context/05-live-test-findings.md`).
+- The upstream docs are not the last word; live behaviour is (`docs/api-behaviour.md`).
   A `null` Score level is a 422 although documented as allowed; `instructions` is optional in practice.
 - An unknown top-level request field gets an opaque `400 Invalid request.`, but an unknown field
   *inside a question* is silently accepted, so a misspelt `criteria` quietly degrades answers. The
@@ -310,7 +313,7 @@ with fakes. Errors use `thiserror` in the library; the binary has one error → 
 
 - Conventional Commits for PR titles (`feat:`, `fix:`, `docs:`, `chore:` …); release-please cuts releases.
 - `main` requires a pull request, signed commits and linear history. Work on a branch, one issue per PR,
-  and reference the issue and the PRD requirement ids it satisfies.
+  and say in the body which issue it closes and what it changes about the contract, if anything.
 - Run every CI gate locally with **`make check`** before pushing. Individually:
 
   | Gate | Command |

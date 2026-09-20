@@ -1,3 +1,5 @@
+# A local mirror of docs.typesafe.ai some contributors keep for grepping. It is TypeSafe's content
+# and carries no open licence, so it must never be committed to this repository.
 docs/upstream/
 
 # Rust build output

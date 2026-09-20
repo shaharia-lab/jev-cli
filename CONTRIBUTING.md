@@ -159,8 +159,14 @@ dry run: everything is built, checked and packed, and nothing is published.
 
 The pages a user reads are [`README.md`](README.md) and the three in [`docs/`](docs/README.md):
 the command reference, the exit-code and JSON contract, and configuration. They must stand on
-their own: the planning documents under `docs/prd/` and `docs/context/` are deleted before the
-first release, so never link to them from a user page.
+their own, so never link them to a page written for contributors, and never to a planning document:
+the PRD and the study notes that shaped v1 were removed for `0.1.0`, and a test keeps them from
+coming back. If a decision's rationale is needed, it is in this repository's history.
+
+Two pages in `docs/` are written for contributors rather than users:
+[`api-behaviour.md`](docs/api-behaviour.md), which records what the TypeSafe API actually does
+where that differs from its documentation, and [`threat-model.md`](docs/threat-model.md). Update
+`api-behaviour.md` whenever the nightly live smoke test catches the server changing.
 
 [`docs/commands.md`](docs/commands.md) is **generated** from the command tree by
 `crates/jev-cli/src/reference.rs`, like the man pages. Never edit it by hand; after changing a

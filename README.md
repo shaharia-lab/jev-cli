@@ -8,9 +8,9 @@ Rust and built for people, shell scripts and AI agents alike.
 > sponsored by TypeSafe AI. "TypeSafe" and "Jev" belong to their owner.
 
 > [!WARNING]
-> **Early development.** Every command works, and releases are pre-releases for now. Before 1.0, flags, JSON output and exit
-> codes may change in a minor release; [CHANGELOG.md](CHANGELOG.md) calls it out when they do.
-> Progress is tracked in the [v1 epic](https://github.com/shaharia-lab/jev-cli/issues/2).
+> **Before 1.0.** Every command works and the whole surface is tested, but flags, JSON output and
+> exit codes may still change in a minor release; [CHANGELOG.md](CHANGELOG.md) calls it out when
+> they do. Pin a version if you need the contract to hold.
 
 ## What it does
 
@@ -56,9 +56,9 @@ Windows (PowerShell), into `%LOCALAPPDATA%\Programs\jev`:
 irm https://raw.githubusercontent.com/shaharia-lab/jev-cli/main/install.ps1 | iex
 ```
 
-The scripts install the latest stable release. Until there is one, name a pre-release from the
-[releases page](https://github.com/shaharia-lab/jev-cli/releases):
-`... | sh -s -- --version 0.1.0-rc.1`, or in PowerShell set `$env:JEV_INSTALL_VERSION = '0.1.0-rc.1'`
+The scripts install the latest stable release. To install a particular one from the
+[releases page](https://github.com/shaharia-lab/jev-cli/releases), including a pre-release:
+`... | sh -s -- --version 0.1.0`, or in PowerShell set `$env:JEV_INSTALL_VERSION = '0.1.0'`
 before running the script. Other options: `--install-dir <dir>`, `--no-modify-path` (the scripts
 otherwise add the directory to `PATH` in your shell profile, or your user `PATH` on Windows) and
 `--require-signature`; `sh install.sh --help` explains them.

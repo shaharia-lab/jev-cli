@@ -26,16 +26,19 @@ const SENTINEL_KEY: &str = "sentinel-key-do-not-leak-8b2f";
 
 /// The documentation this test holds to the binary. `docs/commands.md` is generated, and is
 /// checked here too, so that a hand-edit of it is caught like any other drift.
-const PAGES: [&str; 5] = [
+const PAGES: [&str; 7] = [
     "README.md",
     "CONTRIBUTING.md",
+    "docs/README.md",
+    "docs/api-behaviour.md",
     "docs/commands.md",
     "docs/exit-codes.md",
     "docs/configuration.md",
 ];
 
-/// The pages a reader of a release sees, which must stand on their own: the planning documents
-/// under `docs/prd/` and `docs/context/` are deleted before the first release.
+/// The pages a reader of a release sees, which must stand on their own. The planning documents
+/// under `docs/prd/` and `docs/context/` were removed for `0.1.0`; this keeps a link to them, and
+/// so the documents themselves, from coming back.
 const USER_PAGES: [&str; 4] = [
     "README.md",
     "docs/commands.md",

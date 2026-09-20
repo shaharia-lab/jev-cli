@@ -11,8 +11,8 @@ cargo install jev-cli --locked  # or build it from source
 See the [project README](https://github.com/shaharia-lab/jev-cli#readme) for documentation and
 other ways to install it.
 
-**Status:** early development. Before 1.0, flags, JSON output and exit codes may change in a minor
-release.
+**Status:** before 1.0. Every command works, and flags, JSON output and exit codes may still change
+in a minor release; the changelog calls it out when they do.
 
 This project is not affiliated with, endorsed by, or sponsored by TypeSafe AI.
 
