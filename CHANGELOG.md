@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.0](https://github.com/shaharia-lab/jev-cli/compare/v0.1.0-rc.1...v0.1.0) (2026-09-20)
+
+
+### Features
+
+* **install:** install.sh and install.ps1 with checksum and signature verification ([#75](https://github.com/shaharia-lab/jev-cli/issues/75)) ([b904cad](https://github.com/shaharia-lab/jev-cli/commit/b904cadb16c7b223d2cc85fc4236b337ffa30128))
+* **release:** publish jev-client and jev-cli to crates.io with cargo-binstall metadata ([#79](https://github.com/shaharia-lab/jev-cli/issues/79)) ([2efd2dd](https://github.com/shaharia-lab/jev-cli/commit/2efd2ddc427e20e0189d9ce865167d1eab03194f))
+* **update:** automatic background update with guards, opt-out and first-run notice ([#76](https://github.com/shaharia-lab/jev-cli/issues/76)) ([ff60e0a](https://github.com/shaharia-lab/jev-cli/commit/ff60e0ac83afe935e6f6d634d446bf848e9cd4c0))
+
+
+### Bug Fixes
+
+* **help:** keep the update example off the version jev is about to release ([#94](https://github.com/shaharia-lab/jev-cli/issues/94)) ([f78087c](https://github.com/shaharia-lab/jev-cli/commit/f78087c4ba7376ef324aafc8b28ce44e95e86325))
+* **logging:** neutralise escape sequences in tracing output under -v/-vv ([#92](https://github.com/shaharia-lab/jev-cli/issues/92)) ([101fead](https://github.com/shaharia-lab/jev-cli/commit/101fead5ffdee1a38f7ab94bcce154d6409b6e6c))
+* **output:** neutralise terminal escape sequences in untrusted human output ([#87](https://github.com/shaharia-lab/jev-cli/issues/87)) ([8eebc42](https://github.com/shaharia-lab/jev-cli/commit/8eebc42f7fc5c11c3b4086c974c1eb368aa144dc))
+
+
+### Documentation
+
+* close the PRD open questions and remove the planning documents ([#93](https://github.com/shaharia-lab/jev-cli/issues/93)) ([6daab75](https://github.com/shaharia-lab/jev-cli/commit/6daab751121bf316c5fed25e8948aaabb6090ae3))
+
 ## 0.1.0-rc.1 (2026-09-19)
 
 
