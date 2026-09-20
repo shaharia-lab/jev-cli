@@ -74,7 +74,8 @@ Nothing from a response is trusted:
   answer envelope, tables, the model list, validation findings and a batch plan, whether colour is
   on or off. The machine formats keep the value exactly as it was sent, since JSON and YAML escape
   control characters themselves and a program needs the value unchanged; so do `--field`,
-  `jev config get` and `jev config path`, each of which prints one raw value for a script.
+  `jev config get` and `jev config path`, each of which prints one raw value for a script. The
+  `tracing` diagnostics behind `-v`/`-vv` are the one exception; see "Known limitations".
 
 ### 3. Files the user names
 
@@ -173,3 +174,9 @@ command also has a scenario of its own.
 
 Nothing else in this review changed behaviour: the key handling, the updater's trust chain, the
 MCP confinement and the workflow permissions held up as documented.
+
+## Known limitations
+
+| Limitation | Scope | Why it is acceptable for now |
+| --- | --- | --- |
+| The `tracing` diagnostics behind `-v`/`-vv` do not neutralise control characters, so an escape sequence in a base URL or in a server's error message can drive the terminal there. Bare string fields such as a request id are already escaped by the formatter; the gap is the handful of values Display-formatted with `%`, and two paths interpolated into a log message. | Only at `-v` or higher, which is a deliberate act. Bodies still need `--debug-bodies`, which is byte-faithful by design, like `--raw`. | The same text is escaped wherever `jev` reports it as an error or a notice, so a reader meets a neutralised copy on the normal path. Tracked in [#90](https://github.com/shaharia-lab/jev-cli/issues/90); the fix is `printable` at those call sites, not a custom subscriber. |
