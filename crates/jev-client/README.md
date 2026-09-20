@@ -6,7 +6,8 @@ answers, offline validation, retries and typed errors.
 This is the library behind the [`jev` command-line tool](https://github.com/shaharia-lab/jev-cli).
 It has no command-line, terminal or configuration-file concerns, so it can be used on its own.
 
-**Status:** early development. The public API is not stable yet.
+**Status:** before 1.0. The public API is not stable yet; public structs are `#[non_exhaustive]`
+so that adding a field is not a breaking change.
 
 This project is not affiliated with, endorsed by, or sponsored by TypeSafe AI.
 

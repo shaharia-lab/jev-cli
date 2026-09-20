@@ -27,8 +27,8 @@ A bug with no security impact belongs in a normal
 
 ## Supported versions
 
-`jev` is in early development and has no release yet. Once releases exist, security fixes go into
-the latest release only, and the built-in updater brings self-managed installs to it.
+Security fixes go into the latest release only. There are no long-term support branches before
+`1.0`, and the built-in updater brings self-managed installs to the fix on their next run.
 
 ## Security design
 

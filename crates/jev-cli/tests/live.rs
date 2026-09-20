@@ -18,7 +18,7 @@
 //! - `jev` itself, built from this tree, for one call of each question type through `jev eval` and
 //!   through each shortcut, and `jev models list`. These check the output contract end to end.
 //! - `jev-client`'s transport directly, for the server quirks that `jev` works around
-//!   (`docs/context/05-live-test-findings.md`). `jev` validates before it sends, so it cannot send
+//!   (`docs/api-behaviour.md`). `jev` validates before it sends, so it cannot send
 //!   these requests; the transport sends a request as written. When one of these fails, the server
 //!   changed: update the finding, and the validation rule that depends on it.
 //!
