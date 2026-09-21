@@ -1277,7 +1277,7 @@ async fn the_background_update_check_is_started_without_the_key() {
     fs::write(bin.join(".jev-update/receipt.json"), "").unwrap();
     let exe = bin.join("jev");
     fs::copy(assert_cmd::cargo::cargo_bin("jev"), &exe).unwrap();
-    wait_until_spawnable(&exe);
+    wait_until_spawnable(&exe).await;
     // GitHub answers slowly, so the check is still running while its environment is read.
     let github = MockServer::start().await;
     Mock::given(any())
@@ -1345,24 +1345,30 @@ async fn the_background_update_check_is_started_without_the_key() {
 /// `fs::copy` can return before a CI runner's virus scanner has released the executable it just
 /// wrote, so the very next `exec` of a freshly copied binary can transiently fail with
 /// `ETXTBSY` ("Text file busy"). Run a throwaway `--help` until the kernel is actually ready to
-/// spawn it, instead of letting that race hit the real test command.
+/// spawn it, instead of letting that race hit the real test command. Off the async runtime's
+/// threads, like `run()`, since the retry loop blocks on the child process.
 #[cfg(target_os = "linux")]
-fn wait_until_spawnable(exe: &Path) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    loop {
-        match std::process::Command::new(exe).arg("--help").output() {
-            Ok(_) => return,
-            Err(err) if err.kind() == std::io::ErrorKind::ExecutableFileBusy => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "{} stayed busy: {err}",
-                    exe.display()
-                );
-                std::thread::sleep(Duration::from_millis(20));
+async fn wait_until_spawnable(exe: &Path) {
+    let exe = exe.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            match std::process::Command::new(&exe).arg("--help").output() {
+                Ok(_) => return,
+                Err(err) if err.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "{} stayed busy: {err}",
+                        exe.display()
+                    );
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(err) => panic!("failed to warm up {}: {err}", exe.display()),
             }
-            Err(err) => panic!("failed to warm up {}: {err}", exe.display()),
         }
-    }
+    })
+    .await
+    .unwrap();
 }
 
 /// The process id of `exe update --background`.
