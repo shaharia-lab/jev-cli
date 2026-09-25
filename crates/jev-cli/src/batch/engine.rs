@@ -319,7 +319,7 @@ enum Admitted {
 }
 
 fn admit(job: &Job<'_>, ids: &mut Option<Ids>, row: Result<Row, RowProblem>) -> Admitted {
-    // Kept only with `--merge`: the mapping consumes the row, and a copy costs a clone.
+    // Kept only with `--merge`: the mapping consumes the row, so keeping it costs a clone.
     let mut kept = None;
     let keyed = row.and_then(|row| {
         let line = row.line;

@@ -1566,6 +1566,34 @@ async fn merge_adds_the_whole_row_to_every_record_and_never_logs_it() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn merge_adds_each_element_of_a_json_array_as_its_row() {
+    let server = mock(true).await;
+    let dir = scratch("merge-json");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let elements = json!([{ "text": "fine 1", "tags": ["a"] }, { "text": "fine 2", "n": 2.5 }]);
+    let input = write(&dir, "rows.json", &elements.to_string());
+    let mut command = jev(Some(&server));
+    command.args(["batch", "run", "-f", &questions, "--input", &input]);
+    command.args([
+        "--input-format",
+        "json",
+        "--state-field",
+        "text",
+        "--ordered",
+        "--merge",
+    ]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let rows: Vec<Value> = lines_of(&run.stdout)
+        .into_iter()
+        .map(|record| record["row"].clone())
+        .collect();
+    assert_eq!(Value::Array(rows), elements);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn merge_adds_a_csv_row_as_an_object_of_strings() {
     let server = mock(true).await;
     let dir = scratch("merge-csv");
