@@ -76,6 +76,30 @@ you the whole file. The run exits 7 when any row failed. To find them:
 jq -r 'select(.status == "error") | .id' results.jsonl
 ```
 
+### Carrying the input row with `--merge`
+
+With `--merge`, every record, `ok` and `error` alike, also carries `row`: the whole input row as
+it was read, right after `id`. For JSONL and a JSON array that is the row's JSON value; for CSV it
+is an object of strings, one per column. The whole row goes in, not only the fields sent as the
+state, so the records are the enriched dataset and need no join back to your data by id:
+
+```json
+{"id":"t-1001","row":{"ticket_id":"t-1001","subject":"Refund","body":"Please refund me today","customer":"c-42"},"status":"ok","model":"jev-1.13.0","answers":{"is_urgent":{"type":"noul","noul":0.94}},"usage":{"input_tokens":459,"output_tokens":73},"cost_usd":0.0000193,"request_id":"req_01hq","latency_ms":412}
+{"id":"t-1002","row":{"ticket_id":"t-1002","subject":"Hi","body":"...","customer":"c-43"},"status":"error","error":{"code":"api_rejected","exit_code":4,"message":"...","retryable":false}}
+```
+
+Without `--merge` the records are exactly as above, with no `row`. The output grows by about the
+size of the input, which is why it is opt-in. `row` is written only to the records, never to a
+log, and `--resume` reads only `id` and `status`, so a run can be resumed with or without it.
+
+To keep only some records, filter them with `jq` rather than a flag: the output file is also the
+state `--resume` reads, so it must hold every record. For example, the rows answered with
+`is_urgent` at 0.6 or more:
+
+```bash
+jq -c 'select(.status == "ok" and .answers.is_urgent.noul >= 0.6)' results.jsonl
+```
+
 `jev schema batch-record` prints the schema of a record. The end-of-run summary goes to stderr,
 and to `--summary-json`: rows, failures, tokens, estimated cost, wall time, retries and why the
 run stopped.

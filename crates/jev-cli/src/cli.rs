@@ -447,6 +447,10 @@ pub(crate) struct BatchRunArgs {
     #[arg(long, help_heading = "Results")]
     pub(crate) ordered: bool,
 
+    /// Add each input row to its record as `row`, whole, so the records need no join by id
+    #[arg(long, conflicts_with = "dry_run", help_heading = "Results")]
+    pub(crate) merge: bool,
+
     /// Also write the end-of-run summary to this file, as one JSON object
     #[arg(long, value_name = "PATH", help_heading = "Results")]
     pub(crate) summary_json: Option<String>,

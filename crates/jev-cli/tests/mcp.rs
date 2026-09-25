@@ -1269,3 +1269,41 @@ async fn a_run_reads_a_json_array_of_rows_as_jev_batch_run_does() {
         "nothing is sent for the refused input"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn merge_adds_each_input_row_to_its_record() {
+    let base = sandbox("merge");
+    let server = api(json!({ "is_urgent": { "type": "noul", "noul": 0.9 } })).await;
+    let arguments = |out: &str, merge: bool| {
+        json!({ "questions_file": "questions.json", "input": "rows.jsonl", "out": out,
+                "state_field": "body", "id_field": "id", "ordered": true, "merge": merge })
+    };
+
+    let run = run(
+        serve(Some(&server), &[&allow(&base), "--model", "jev-1.13.0"]),
+        &[
+            initialize(),
+            call(1, "batch_run", &arguments("merged.jsonl", true)),
+            call(2, "batch_run", &arguments("plain.jsonl", false)),
+        ],
+    )
+    .await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(!run.tool(1).1 && !run.tool(2).1, "{}", run.stdout);
+    let rows: Vec<Value> = std::fs::read_to_string(base.join("allowed/rows.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let merged = records(&base.join("allowed/merged.jsonl"));
+    assert_eq!(
+        merged
+            .iter()
+            .map(|record| &record["row"])
+            .collect::<Vec<_>>(),
+        rows.iter().collect::<Vec<_>>()
+    );
+    let plain = records(&base.join("allowed/plain.jsonl"));
+    assert!(plain.iter().all(|record| record.get("row").is_none()));
+}

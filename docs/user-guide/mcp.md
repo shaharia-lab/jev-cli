@@ -113,6 +113,7 @@ touches no file at all.
 
 The input is a JSONL or CSV file, or a JSON array (`input_format: "json"`, at most 50 MB), with
 the same format detection as `jev batch run --input`.
+`merge: true` adds each input row to its record as `row`, as `jev batch run --merge` does.
 
 ## The agent skill
 

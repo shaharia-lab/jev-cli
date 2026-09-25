@@ -24,7 +24,7 @@ use crate::evaluate::{self, Evaluation, PrepareOptions, Prepared};
 const ORDERED_WINDOW_PER_WORKER: u64 = 4;
 
 /// Everything a run needs besides its rows, its transport and where its records go.
-// Four independent switches of a run, each of them a yes or a no.
+// Five independent switches of a run, each of them a yes or a no.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug)]
 pub(crate) struct Job<'a> {
@@ -49,6 +49,8 @@ pub(crate) struct Job<'a> {
     pub(crate) limit: Option<u64>,
     /// Write the records in the order of the input rather than as rows finish.
     pub(crate) ordered: bool,
+    /// Add each input row to its record, as `row`.
+    pub(crate) merge: bool,
     /// The ids an earlier run already answered (`--resume`): their rows are not sent again.
     pub(crate) done: Option<&'a Ids>,
     /// Once the run is interrupted, how long the rows in flight have to finish. Those that do not
@@ -165,10 +167,10 @@ pub(crate) async fn run<T: Transport + 'static>(
                 break;
             }
             Some(joined) = tasks.join_next(), if !tasks.is_empty() => {
-                let (seq, id, result) = joined.unwrap_or_else(|error| {
-                    (u64::MAX, Value::Null, Err(CliError::internal(format!("a batch worker failed: {error}"))))
+                let (seq, settled, result) = joined.unwrap_or_else(|error| {
+                    (u64::MAX, Settled::default(), Err(CliError::internal(format!("a batch worker failed: {error}"))))
                 });
-                record(job, &mut summary, &mut records, seq, &id, result)?;
+                record(job, &mut summary, &mut records, seq, &settled, result)?;
                 observe(progress(&summary));
             }
             received = row_receiver.recv(), if can_take => {
@@ -178,19 +180,19 @@ pub(crate) async fn run<T: Transport + 'static>(
                 };
                 read += 1;
                 match admit(job, &mut ids, row) {
-                    Admitted::Send(id, prepared) => {
+                    Admitted::Send(settled, prepared) => {
                         let seq = records.next_seq();
                         let transport = Arc::clone(&transport);
                         let price = job.usd_per_mtok;
                         tasks.spawn(async move {
                             let result = evaluate::send(&transport, &prepared, price).await;
-                            (seq, id, result)
+                            (seq, settled, result)
                         });
                     }
                     // Nothing was sent for it: the row is recorded as failed, and cost nothing.
-                    Admitted::Refused(id, error) => {
+                    Admitted::Refused(settled, error) => {
                         let seq = records.next_seq();
-                        record(job, &mut summary, &mut records, seq, &id, Err(error))?;
+                        record(job, &mut summary, &mut records, seq, &settled, Err(error))?;
                         observe(progress(&summary));
                     }
                     Admitted::AlreadyOk => {
@@ -297,12 +299,19 @@ fn read_rows(
     receiver
 }
 
+/// What a row's record is written about: its id, and with `--merge` the row itself.
+#[derive(Default)]
+struct Settled {
+    id: Value,
+    row: Option<Value>,
+}
+
 /// What becomes of a row that was read.
 enum Admitted {
     /// Send it.
-    Send(Value, Prepared),
+    Send(Settled, Prepared),
     /// Its request fails validation: record the failure without sending anything.
-    Refused(Value, CliError),
+    Refused(Settled, CliError),
     /// An earlier run answered it.
     AlreadyOk,
     /// It cannot be used at all, and sending stops there.
@@ -310,8 +319,13 @@ enum Admitted {
 }
 
 fn admit(job: &Job<'_>, ids: &mut Option<Ids>, row: Result<Row, RowProblem>) -> Admitted {
+    // Kept only with `--merge`: the mapping consumes the row, and a copy costs a clone.
+    let mut kept = None;
     let keyed = row.and_then(|row| {
         let line = row.line;
+        if job.merge {
+            kept = Some(row.value.clone());
+        }
         let keyed = job.mapping.key(row)?;
         if let Some(ids) = ids {
             ids.insert(&keyed.id, line)?;
@@ -338,9 +352,10 @@ fn admit(job: &Job<'_>, ids: &mut Option<Ids>, row: Result<Row, RowProblem>) -> 
         strict: job.strict,
         skip_size_check: job.skip_size_check,
     };
+    let settled = Settled { id, row: kept };
     match evaluate::prepare(job.questions.clone(), job.settings, &options) {
-        Ok(prepared) => Admitted::Send(id, prepared),
-        Err(error) => Admitted::Refused(id, error),
+        Ok(prepared) => Admitted::Send(settled, prepared),
+        Err(error) => Admitted::Refused(settled, error),
     }
 }
 
@@ -350,17 +365,18 @@ fn record(
     summary: &mut Summary,
     records: &mut Records<'_>,
     seq: u64,
-    id: &Value,
+    settled: &Settled,
     result: Result<Evaluation, CliError>,
 ) -> Result<(), CliError> {
-    let record = settle(summary, id, result);
+    let record = settle(summary, settled, result);
     records.put(seq, record, summary)?;
     stop_after_failure(job, summary);
     Ok(())
 }
 
 /// Counts a finished row and builds its record.
-fn settle(summary: &mut Summary, id: &Value, result: Result<Evaluation, CliError>) -> Value {
+fn settle(summary: &mut Summary, settled: &Settled, result: Result<Evaluation, CliError>) -> Value {
+    let (id, row) = (&settled.id, settled.row.as_ref());
     match result {
         Ok(evaluation) => {
             let envelope = evaluation.envelope;
@@ -376,12 +392,12 @@ fn settle(summary: &mut Summary, id: &Value, result: Result<Evaluation, CliError
             if !summary.models.contains(&envelope.model) {
                 summary.models.push(envelope.model.clone());
             }
-            encode(&Record::ok(id, &envelope))
+            encode(&Record::ok(id, row, &envelope))
         }
         Err(error) => {
             summary.failed += 1;
             summary.retries += u64::from(error.attempts.saturating_sub(1));
-            encode(&Record::failed(id, &error))
+            encode(&Record::failed(id, row, &error))
         }
     }
 }
@@ -557,6 +573,7 @@ mod tests {
             check_ids: true,
             limit: None,
             ordered: false,
+            merge: false,
             done: None,
             grace: Duration::from_secs(10),
         };
@@ -622,6 +639,7 @@ mod tests {
             check_ids: false,
             limit: None,
             ordered: false,
+            merge: false,
             done: None,
             grace: Duration::from_secs(10),
         };
@@ -676,6 +694,7 @@ mod tests {
             check_ids: false,
             limit: None,
             ordered: false,
+            merge: false,
             done: None,
             grace: Duration::from_secs(10),
         };
@@ -722,6 +741,7 @@ mod tests {
             check_ids: true,
             limit: None,
             ordered: false,
+            merge: false,
             done: None,
             grace: Duration::from_secs(10),
         };
@@ -766,6 +786,7 @@ mod tests {
             check_ids: false,
             limit: None,
             ordered: false,
+            merge: false,
             done: None,
             grace: Duration::from_secs(10),
         }
@@ -978,6 +999,7 @@ mod tests {
             check_ids: false,
             limit: None,
             ordered: false,
+            merge: false,
             done: None,
             grace: Duration::from_secs(10),
         };
@@ -995,5 +1017,62 @@ mod tests {
         assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
         assert_eq!(outcome.summary.stopped_by, Some(StopReason::OutputClosed));
         assert_eq!(outcome.summary.skipped, 19);
+    }
+
+    #[test]
+    fn with_merge_every_record_carries_its_row_even_one_refused_before_sending() {
+        let (questions, settings) = (questions(), settings());
+        let mapping = Mapping {
+            state: StateMapping::WholeRow,
+            id_field: None,
+        };
+        let transport = Arc::new(Counting::default());
+        let merged = Job {
+            ordered: true,
+            merge: true,
+            ..job(&questions, &settings, &mapping)
+        };
+        let plain = Job {
+            ordered: true,
+            ..job(&questions, &settings, &mapping)
+        };
+        // A number cannot be a state: that row is refused without a request.
+        let input = "{\"text\": \"fine\"}\n42\n{\"text\": \"FAIL\"}\n";
+        let (mut with_rows, mut without) = (Vec::new(), Vec::new());
+
+        for (job, sink) in [(&merged, &mut with_rows), (&plain, &mut without)] {
+            block_on(run(
+                job,
+                rows(input.to_owned()),
+                Arc::clone(&transport),
+                sink,
+                std::future::pending(),
+                &mut |_| {},
+            ))
+            .unwrap();
+        }
+
+        let with_rows = records(&with_rows);
+        assert_eq!(
+            with_rows
+                .iter()
+                .map(|record| (&record["status"], &record["row"]))
+                .collect::<Vec<_>>(),
+            [
+                (&json!("ok"), &json!({ "text": "fine" })),
+                (&json!("error"), &json!(42)),
+                (&json!("error"), &json!({ "text": "FAIL" })),
+            ]
+        );
+        assert_eq!(
+            transport.calls.load(Ordering::SeqCst),
+            4,
+            "2 rows sent per run"
+        );
+        assert!(
+            records(&without)
+                .iter()
+                .all(|record| record.get("row").is_none())
+        );
     }
 }

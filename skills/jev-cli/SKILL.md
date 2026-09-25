@@ -233,6 +233,9 @@ jev batch run -f triage.yaml --input tickets.jsonl --state-field body --model je
 - Each record has `status` `ok` (with `answers`) or `error` (with `error`), and
   `jev schema batch-record` is its schema.
   `jq -r 'select(.status == "error") | .id' results.jsonl` lists the failed rows.
+- `--merge` adds the whole input row to every record as `row`, so the records need no join back
+  to the input by id. Filter them with `jq`, e.g.
+  `jq -c 'select(.status == "ok" and .answers.is_urgent.noul >= 0.6)' results.jsonl`.
 - After exit 7 (some rows failed) or 130 (interrupted), fix the cause and rerun the same command
   with `--resume`: rows already recorded `ok` are not sent again.
 - Leave `--concurrency` at its default unless you know the key's limits; shared keys get rate

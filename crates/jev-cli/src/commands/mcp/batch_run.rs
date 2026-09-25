@@ -70,6 +70,9 @@ pub(super) struct Arguments {
     /// Write the records in input order instead of as rows finish.
     #[serde(default)]
     ordered: bool,
+    /// Add each input row to its record, whole, as `row`.
+    #[serde(default)]
+    merge: bool,
     /// Stop sending once N rows have failed; rows in flight still finish.
     #[schemars(range(min = 1))]
     max_errors: Option<u64>,
@@ -150,6 +153,7 @@ pub(super) fn call<T: Transport + 'static>(
         check_ids: false,
         limit: arguments.limit,
         ordered: arguments.ordered,
+        merge: arguments.merge,
         done: None,
         grace: Duration::ZERO,
     };

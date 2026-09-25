@@ -23,10 +23,11 @@ pub(crate) enum Record<'a> {
 }
 
 impl<'a> Record<'a> {
-    /// The record of a row that was evaluated.
-    pub(crate) fn ok(id: &'a Value, envelope: &'a ResultEnvelope) -> Self {
+    /// The record of a row that was evaluated. `row` is the input row, with `--merge`.
+    pub(crate) fn ok(id: &'a Value, row: Option<&'a Value>, envelope: &'a ResultEnvelope) -> Self {
         Self::Ok(Evaluated {
             id,
+            row,
             status: OkStatus::Ok,
             model: &envelope.model,
             answers: &envelope.answers,
@@ -37,10 +38,11 @@ impl<'a> Record<'a> {
         })
     }
 
-    /// The record of a row that failed.
-    pub(crate) fn failed(id: &'a Value, error: &'a CliError) -> Self {
+    /// The record of a row that failed. `row` is the input row, with `--merge`.
+    pub(crate) fn failed(id: &'a Value, row: Option<&'a Value>, error: &'a CliError) -> Self {
         Self::Failed(Failed {
             id,
+            row,
             status: FailedStatus::Error,
             error: ErrorBody::from(error),
         })
@@ -57,6 +59,13 @@ pub(crate) struct Evaluated<'a> {
     /// The row's id: the value of --id-field (a string or a number), else its 1-based line number.
     #[schemars(schema_with = "id_schema")]
     id: &'a Value,
+    /// The input row as it was read: a JSON value for JSONL or a JSON array, an object of strings
+    /// for CSV. Present only with `--merge`.
+    #[schemars(
+        description = "The input row as it was read: a JSON value for JSONL or a JSON array, an object of strings for CSV. Present only with `--merge`."
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    row: Option<&'a Value>,
     /// Always `ok`.
     status: OkStatus,
     /// The versioned id of the model that answered, such as `jev-1.13.0`.
@@ -80,6 +89,13 @@ pub(crate) struct Failed<'a> {
     /// The row's id, as in an `ok` record; `null` only if jev itself failed while handling it.
     #[schemars(schema_with = "failed_id_schema")]
     id: &'a Value,
+    /// The input row as it was read: a JSON value for JSONL or a JSON array, an object of strings
+    /// for CSV. Present only with `--merge`.
+    #[schemars(
+        description = "The input row as it was read: a JSON value for JSONL or a JSON array, an object of strings for CSV. Present only with `--merge`."
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    row: Option<&'a Value>,
     /// Always `error`.
     status: FailedStatus,
     /// What went wrong: the same object as a JSON error on stderr (see `jev schema error`).
@@ -104,4 +120,28 @@ fn id_schema(_: &mut SchemaGenerator) -> Schema {
 
 fn failed_id_schema(_: &mut SchemaGenerator) -> Schema {
     json_schema!({ "type": ["string", "number", "null"] })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::Record;
+    use crate::error::CliError;
+
+    #[test]
+    fn a_row_follows_the_id_only_when_there_is_one() {
+        let (id, row) = (json!(3), json!({ "body": "Please", "n": 3 }));
+        let error = CliError::usage("the state is not valid");
+
+        let merged = serde_json::to_value(Record::failed(&id, Some(&row), &error)).unwrap();
+        let plain = serde_json::to_value(Record::failed(&id, None, &error)).unwrap();
+
+        let keys = |record: &serde_json::Value| -> Vec<String> {
+            record.as_object().unwrap().keys().cloned().collect()
+        };
+        assert_eq!(keys(&merged), ["id", "row", "status", "error"]);
+        assert_eq!(merged["row"], row);
+        assert_eq!(keys(&plain), ["id", "status", "error"]);
+    }
 }

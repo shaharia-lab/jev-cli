@@ -1473,3 +1473,154 @@ async fn a_json_array_resumes_without_sending_a_row_recorded_ok() {
     assert_eq!(resent, [2, 4]);
     assert_eq!(lines_of(&fs::read_to_string(&out).unwrap()).len(), 5);
 }
+
+/// The keys of a record, in order.
+fn keys(record: &Value) -> Vec<&str> {
+    record
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn merge_adds_the_whole_row_to_every_record_and_never_logs_it() {
+    let server = mock(true).await;
+    let dir = scratch("merge");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    // `note` is never sent: only the row in a record may carry it.
+    let text: String = rows(4, &[2])
+        .lines()
+        .map(|line| line.replacen('{', "{\"note\": \"row-only-marker\", ", 1) + "\n")
+        .collect();
+    let input = write(&dir, "rows.jsonl", &text);
+    let batch = |merge: bool| {
+        let mut command = jev(Some(&server));
+        command.args(["-vv", "batch", "run", "-f", &questions, "--input", &input]);
+        command.args(["--state-field", "text", "--ordered"]);
+        if merge {
+            command.arg("--merge");
+        }
+        command
+    };
+
+    let merged = run(batch(true)).await;
+    let plain = run(batch(false)).await;
+
+    assert_eq!((merged.code, plain.code), (7, 7), "{}", merged.stderr);
+    let expected: Vec<Value> = text.lines().map(json_of).collect();
+    let records = lines_of(&merged.stdout);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| &record["row"])
+            .collect::<Vec<_>>(),
+        expected.iter().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        keys(&records[0]),
+        [
+            "id",
+            "row",
+            "status",
+            "model",
+            "answers",
+            "usage",
+            "cost_usd",
+            "request_id",
+            "latency_ms"
+        ]
+    );
+    assert_eq!(keys(&records[1]), ["id", "row", "status", "error"]);
+    assert_eq!(records[1]["error"]["http_status"], 400);
+    for record in lines_of(&plain.stdout) {
+        assert!(record.get("row").is_none(), "{record}");
+    }
+    assert!(
+        !merged.stderr.contains("row-only-marker"),
+        "{}",
+        merged.stderr
+    );
+    assert!(
+        sent(&server)
+            .await
+            .iter()
+            .all(|body| !body.to_string().contains("row-only-marker")),
+        "the row is not sent, only its state"
+    );
+
+    // The recipe the documentation gives:
+    // jq -c 'select(.status == "ok" and .answers.urgent.noul >= 0.6)'
+    let selected: Vec<&Value> = records
+        .iter()
+        .filter(|record| {
+            record["status"] == "ok"
+                && record["answers"]["urgent"]["noul"]
+                    .as_f64()
+                    .is_some_and(|noul| noul >= 0.6)
+        })
+        .map(|record| &record["row"]["n"])
+        .collect();
+    assert_eq!(selected, [&json!(1), &json!(3), &json!(4)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn merge_adds_a_csv_row_as_an_object_of_strings() {
+    let server = mock(true).await;
+    let dir = scratch("merge-csv");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(
+        &dir,
+        "tickets.csv",
+        "ticket,subject,body,internal\nT1,Refund,\"Please, now\",7\n",
+    );
+    let mut command = jev(Some(&server));
+    command.args([
+        "batch", "run", "-f", &questions, "--input", &input, "--merge",
+    ]);
+    command.args(["--state-fields", "subject,body", "--id-field", "ticket"]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        lines_of(&run.stdout)[0]["row"],
+        json!({ "ticket": "T1", "subject": "Refund", "body": "Please, now", "internal": "7" })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resume_works_across_runs_with_and_without_merge() {
+    let server = mock(true).await;
+    let dir = scratch("merge-resume");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.jsonl", &rows(4, &[]));
+    let out = dir.join("results.jsonl").to_str().unwrap().to_owned();
+    let batch = |extra: &[&str]| {
+        let mut command = jev(Some(&server));
+        command.args(["batch", "run", "-f", &questions, "--input", &input]);
+        command.args(["--state-field", "text", "--out", &out]);
+        command.args(extra);
+        command
+    };
+
+    let first = run(batch(&["--merge", "--limit", "2"])).await;
+    let second = run(batch(&["--resume", "--limit", "3"])).await;
+    let third = run(batch(&["--resume", "--merge"])).await;
+
+    assert_eq!(
+        (first.code, second.code, third.code),
+        (0, 0, 0),
+        "{}",
+        third.stderr
+    );
+    let mut resent = sent_ids(&server).await;
+    resent.sort_unstable();
+    assert_eq!(resent, [1, 2, 3, 4], "no row was sent twice");
+    let merged: Vec<bool> = lines_of(&fs::read_to_string(&out).unwrap())
+        .iter()
+        .map(|record| record.get("row").is_some())
+        .collect();
+    assert_eq!(merged, [true, true, false, true]);
+}

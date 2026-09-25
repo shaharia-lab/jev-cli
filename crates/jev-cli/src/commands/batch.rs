@@ -85,6 +85,7 @@ pub(crate) fn run(arguments: &BatchRunArgs, context: &mut Context<'_>) -> Result
         check_ids: false,
         limit: arguments.limit,
         ordered: arguments.ordered,
+        merge: arguments.merge,
         done: resumed.as_ref().map(|resumed| &resumed.done),
         grace: INTERRUPT_GRACE,
     };
