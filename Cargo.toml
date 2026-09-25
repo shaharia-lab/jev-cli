@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/jev-client", "crates/jev-cli"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 # Minimum supported Rust version. Policy: latest stable minus two releases, bumped only in
 # minor releases of jev. CI builds the workspace with exactly this toolchain.
@@ -23,7 +23,7 @@ codegen-units = 1
 strip = true
 
 [workspace.dependencies]
-jev-client = { path = "crates/jev-client", version = "0.1.1" }
+jev-client = { path = "crates/jev-client", version = "0.2.0" }
 
 anstyle = "1.0.14"
 clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
