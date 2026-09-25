@@ -10,7 +10,8 @@ of one scale. Two options that mean yes and no are a noul.
 Input:
 QUESTION in plain words, or --instructions-file. The options are repeated --option `name` or
 `name=description` (up to 255), or --criteria-file with a map of name to description; describe
-options that are easy to confuse. The state is --state or --state-file (`-` for stdin), else a pipe.
+options that are easy to confuse. The state is --state (text) or --state-file (a path, or `-` for
+stdin), else a pipe.
 
 Output:
 `choice` (the winning option), `confidence` (how peaked the distribution is, not how likely it is to
@@ -52,7 +53,7 @@ Gating:
 
 State:
       --state <TEXT>
-          The state to evaluate, as text
+          The state to evaluate, as text (`-` is not stdin here: use --state-file -)
 
       --state-file <PATH>
           Read the state from a file, or from stdin with `-`

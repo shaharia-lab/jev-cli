@@ -8,9 +8,9 @@ and `jev batch run` to apply the same questions to many states.
 
 Input:
 A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of question id to
-question, and optionally `state` and `model`. The state is --state or --state-file (`-` for stdin),
-else the file's `state`, else a pipe. The model is --model, else the file's `model`, else
-TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
+question, and optionally `state` and `model`. The state is --state (text) or --state-file (a path,
+or `-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's
+`model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
 
 Output:
 The result envelope: `model` (the versioned id that answered), `requested_model`, `answers` (one per
@@ -40,7 +40,7 @@ Gating:
 
 State:
       --state <TEXT>
-          The state to evaluate, as text
+          The state to evaluate, as text (`-` is not stdin here: use --state-file -)
 
       --state-file <PATH>
           Read the state from a file, or from stdin with `-`

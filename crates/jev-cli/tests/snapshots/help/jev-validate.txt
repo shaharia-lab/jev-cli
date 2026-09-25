@@ -27,7 +27,8 @@ Options:
           [possible values: json, yaml]
 
       --state <TEXT>
-          Check the request with this state, as text, so that its size can be estimated
+          Check the request with this state, as text, so that its size can be estimated (`-` is not
+          stdin here: use --state-file -)
 
       --state-file <PATH>
           Check the request with the state in this file, or on stdin with `-`

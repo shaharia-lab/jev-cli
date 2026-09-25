@@ -503,6 +503,67 @@ async fn ambiguous_or_missing_state_is_a_usage_error_before_anything_is_sent() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn state_dash_is_a_usage_error_naming_state_file_dash() {
+    let server = MockServer::start().await;
+    mount(&server, success()).await;
+
+    for (dry_run, stdin, key) in [
+        (false, None, true),
+        (false, Some("{\"a\":1}"), true),
+        (true, Some("{\"a\":1}"), false),
+        (true, None, false),
+    ] {
+        let mut command = jev(Some(&server));
+        command
+            .arg("eval")
+            .args(["-f", &fixture("questions.yaml"), "--state", "-"]);
+        if dry_run {
+            command.arg("--dry-run");
+        }
+        if !key {
+            command.env_remove("TYPESAFE_API_KEY");
+        }
+        if let Some(stdin) = stdin {
+            command.write_stdin(stdin);
+        }
+        let run = run(command).await;
+
+        let case = (dry_run, stdin, key);
+        assert_eq!((run.code, run.stdout.as_str()), (2, ""), "{case:?}");
+        let error = json_of(&run.stderr);
+        assert_eq!(error["error"]["code"], "usage", "{case:?}");
+        assert!(
+            error["error"]["hint"]
+                .as_str()
+                .unwrap()
+                .contains("--state-file -"),
+            "{}",
+            run.stderr
+        );
+    }
+    assert!(received(&server).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn state_text_that_only_looks_like_a_dash_is_sent_unchanged() {
+    for text in ["-x", " - "] {
+        let mut command = jev(None);
+        command.arg("eval").args([
+            "-f",
+            &fixture("questions.yaml"),
+            &format!("--state={text}"),
+            "--dry-run",
+            "-o",
+            "json",
+        ]);
+        let run = run(command).await;
+
+        assert_eq!(run.code, 0, "{text:?}: {}", run.stderr);
+        assert_eq!(json_of(&run.stdout)["body"]["state"], text);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_request_file_on_stdin_works_when_it_carries_its_own_state() {
     let server = MockServer::start().await;
     mount(&server, success()).await;

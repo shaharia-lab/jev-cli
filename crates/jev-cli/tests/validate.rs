@@ -268,6 +268,36 @@ fn a_state_can_be_supplied_so_that_the_size_is_checked() {
 }
 
 #[test]
+fn state_dash_is_a_usage_error_naming_state_file_dash() {
+    for stdin in [Some("{\"a\":1}"), None] {
+        let mut command = jev();
+        command.args([
+            "validate",
+            "-f",
+            &fixture("questions-only.yaml"),
+            "--state",
+            "-",
+        ]);
+        if let Some(stdin) = stdin {
+            command.write_stdin(stdin);
+        }
+        let run = run(&mut command);
+
+        assert_eq!((run.code, run.stdout.as_str()), (2, ""), "{stdin:?}");
+        let error = json_of(&run.stderr);
+        assert_eq!(error["error"]["code"], "usage");
+        assert!(
+            error["error"]["hint"]
+                .as_str()
+                .unwrap()
+                .contains("--state-file -"),
+            "{}",
+            run.stderr
+        );
+    }
+}
+
+#[test]
 fn a_person_sees_findings_grouped_by_question_with_the_fix() {
     let request = json!({
         "state": 7,

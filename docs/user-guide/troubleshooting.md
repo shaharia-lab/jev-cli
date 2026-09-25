@@ -46,6 +46,8 @@ add `--no-input` and the error will name the flag or variable to use instead.
 `jev` reads stdin only when that is the only possible source of the state. A request file that
 carries its own `state`, or a `--state` or `--state-file`, is always enough. If a command is
 waiting, give it the state explicitly, and use `--state-file -` when you do mean stdin.
+`--state -` is a usage error (exit 2) rather than a way to read stdin: `--state` takes the text
+itself, and `-` is never a real state.
 
 ## "usage or validation error" (exit 2)
 

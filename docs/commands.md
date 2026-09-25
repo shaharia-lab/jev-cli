@@ -112,7 +112,7 @@ jev eval [OPTIONS] --file <FILE>
 
 **When to use.** Use `jev eval` to ask several questions about the same state in one call: the answers come back together, and extra questions cost tokens, not time. Use `jev noul`, `jev choice` or `jev score` for one question written on the command line, `jev validate` to check a request file without sending it, and `jev batch run` to apply the same questions to many states.
 
-**Input.** A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of question id to question, and optionally `state` and `model`. The state is --state or --state-file (`-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
+**Input.** A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of question id to question, and optionally `state` and `model`. The state is --state (text) or --state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
 
 **Output.** The result envelope: `model` (the versioned id that answered), `requested_model`, `answers` (one per question id, exactly as the API returned them), `usage`, `cost_usd` (an estimate), `request_id` and `latency_ms`, plus `gate` when --assert was used. --dry-run prints the request body and a size estimate instead, and sends nothing; --raw prints the API's response body as received.
 
@@ -135,7 +135,7 @@ _State_
 
 | Flag | Value | Default | Environment | Setting | What it does |
 | --- | --- | --- | --- | --- | --- |
-| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text |
+| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
 
@@ -188,7 +188,7 @@ jev noul [OPTIONS] [QUESTION]
 
 **When to use.** Use `jev noul` when the answer is yes or no about one property: does this hold? The probability is absolute: it can be low even when nothing fits better, and several nouls can all be high, so ask one noul per label when several labels can apply at once. Use `jev choice` when exactly one of several options must be picked (which one?), and `jev score` for a position on a described scale (how much?). A value near 0.5 means the model cannot tell, not "medium".
 
-**Input.** QUESTION in plain words, or --instructions-file with structured instructions. --true and --false (or --criteria-file) say what yes and no mean. The state is --state or --state-file (`-` for stdin), else a pipe. Jev reads literally and cannot count, do arithmetic or compare dates: keep those in code.
+**Input.** QUESTION in plain words, or --instructions-file with structured instructions. --true and --false (or --criteria-file) say what yes and no mean. The state is --state (text) or --state-file (a path, or `-` for stdin), else a pipe. Jev reads literally and cannot count, do arithmetic or compare dates: keep those in code.
 
 **Output.** `noul`, the probability of yes from 0 to 1, then `model`, `requested_model`, `usage`, `cost_usd` (an estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was used. `--field noul` prints just the number.
 
@@ -221,7 +221,7 @@ _State_
 
 | Flag | Value | Default | Environment | Setting | What it does |
 | --- | --- | --- | --- | --- | --- |
-| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text |
+| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
 
@@ -274,7 +274,7 @@ jev choice [OPTIONS] [QUESTION]
 
 **When to use.** Use `jev choice` when exactly one of several options is the answer: which one? The probabilities are relative and add up to 1, so always offer a way out such as `other` or `not_stated`: the model cannot pick an option you left out. Use `jev noul` when the answer is yes or no, or when several labels can apply at once (one noul per label), and `jev score` when the options are ordered levels of one scale. Two options that mean yes and no are a noul.
 
-**Input.** QUESTION in plain words, or --instructions-file. The options are repeated --option `name` or `name=description` (up to 255), or --criteria-file with a map of name to description; describe options that are easy to confuse. The state is --state or --state-file (`-` for stdin), else a pipe.
+**Input.** QUESTION in plain words, or --instructions-file. The options are repeated --option `name` or `name=description` (up to 255), or --criteria-file with a map of name to description; describe options that are easy to confuse. The state is --state (text) or --state-file (a path, or `-` for stdin), else a pipe.
 
 **Output.** `choice` (the winning option), `confidence` (how peaked the distribution is, not how likely it is to be right) and `probabilities` per option, then `model`, `requested_model`, `usage`, `cost_usd` (an estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was used. `--field choice` prints just the winner.
 
@@ -306,7 +306,7 @@ _State_
 
 | Flag | Value | Default | Environment | Setting | What it does |
 | --- | --- | --- | --- | --- | --- |
-| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text |
+| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
 
@@ -358,7 +358,7 @@ jev score [OPTIONS] [QUESTION]
 
 **When to use.** Use `jev score` to place the state on one ordered scale: how much, how severe, how good? Each level is judged on its own, so describe a situation per level rather than "worse than the previous one", and rate one dimension per score. Use `jev noul` for yes or no, and `jev choice` for options with no order.
 
-**Input.** QUESTION in plain words, or --instructions-file. The levels are repeated --level, lowest first (2 to 10), or --criteria-file with an ordered list; they are numbered from 0. The state is --state or --state-file (`-` for stdin), else a pipe.
+**Input.** QUESTION in plain words, or --instructions-file. The levels are repeated --level, lowest first (2 to 10), or --criteria-file with an ordered list; they are numbered from 0. The state is --state (text) or --state-file (a path, or `-` for stdin), else a pipe.
 
 **Output.** `score` (the expected level, from 0 to the highest level), `confidence`, `probabilities` and `legend` per level, then `model`, `requested_model`, `usage`, `cost_usd` (an estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was used. `--field score` prints just the number.
 
@@ -390,7 +390,7 @@ _State_
 
 | Flag | Value | Default | Environment | Setting | What it does |
 | --- | --- | --- | --- | --- | --- |
-| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text |
+| `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
 
@@ -452,7 +452,7 @@ _Options_
 | --- | --- | --- | --- | --- | --- |
 | `-f, --file <FILE>` | string, required |  |  |  | Request file, JSON or YAML; `state` and `model` may be left out; `-` reads stdin |
 | `--input-format <FORMAT>` | `json`, `yaml` |  |  |  | Format of the request file |
-| `--state <TEXT>` | string |  |  |  | Check the request with this state, as text, so that its size can be estimated |
+| `--state <TEXT>` | string |  |  |  | Check the request with this state, as text, so that its size can be estimated (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Check the request with the state in this file, or on stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read a state given outside the request file |
 | `--strict` | flag | `false` |  |  | Count warnings as errors, so that any finding makes the request invalid |
