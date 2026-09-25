@@ -35,8 +35,8 @@ come back together, and extra questions cost tokens, not time. Use `jev noul`, `
 without sending it, and `jev batch run` to apply the same questions to many states.",
         input: "A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of \
 question id to question, and optionally `state` and `model`. The state is --state (text) or \
---state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's \
-`model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.",
+--state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. The model is \
+--model, else the file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.",
         output: "The result envelope: `model` (the versioned id that answered), `requested_model`, \
 `answers` (one per question id, exactly as the API returned them), `usage`, `cost_usd` (an \
 estimate), `request_id` and `latency_ms`, plus `gate` when --assert was used. --dry-run prints the \
@@ -82,8 +82,8 @@ exactly one of several options must be picked (which one?), and `jev score` for 
 described scale (how much?). A value near 0.5 means the model cannot tell, not \"medium\".",
         input: "QUESTION in plain words, or --instructions-file with structured instructions. \
 --true and --false (or --criteria-file) say what yes and no mean. The state is --state (text) or \
---state-file (a path, or `-` for stdin), else a pipe. Jev reads literally and cannot count, do arithmetic or \
-compare dates: keep those in code.",
+--state-file (a path, or `-` for stdin), else a pipe. Jev reads literally and cannot count, do \
+arithmetic or compare dates: keep those in code.",
         output: "`noul`, the probability of yes from 0 to 1, then `model`, `requested_model`, \
 `usage`, `cost_usd` (an estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was \
 used. `--field noul` prints just the number.",
