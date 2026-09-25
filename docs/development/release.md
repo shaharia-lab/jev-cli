@@ -51,7 +51,7 @@ publish live in GitHub environments with a deployment rule instead:
 
 | Environment | Holds | Admits |
 | --- | --- | --- |
-| `release` | The minisign signing key and the crates.io token | `v*` tags, with the owner's approval |
+| `release` | The minisign signing key; the only environment crates.io Trusted Publishing accepts | `v*` tags, with the owner's approval |
 | `publish` | The Homebrew tap App credentials | `v*` tags |
 | `release-please` | The release bot App credentials | `main` |
 | `live-smoke` | The API key for the nightly live test | `main` |
@@ -91,8 +91,10 @@ archives. The formula keeps the binary in the keg (`Cellar/jev/<version>/bin/jev
 Homebrew's `INSTALL_RECEIPT.json`), which is how `jev update` recognises a managed install.
 
 **crates.io** gets `jev-client` first, then `jev-cli` once the index has the library, from
-`scripts/release/crates-publish.sh` (the `crates` job: `stable`, `release` environment,
-`CARGO_REGISTRY_TOKEN`). A version already in the index is skipped, because a publish can never
+`scripts/release/crates-publish.sh` (the `crates` job: `stable`, `release` environment). The job
+holds no crates.io secret: `rust-lang/crates-io-auth-action` trades its GitHub OIDC token for a
+crates.io token that lasts ~30 minutes, which crates.io issues only to `release.yml` running in the
+`release` environment (the trusted publisher configured on both crates). A version already in the index is skipped, because a publish can never
 be undone, so re-running after a partial publish is safe. `crates/jev-cli` packages only what
 builds `jev` (its `include` list), and `[package.metadata.binstall]` names the release archives
 and the primary signing key. Every pull request runs `cargo publish --workspace --dry-run`
