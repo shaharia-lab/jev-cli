@@ -51,9 +51,11 @@ impl RowFormat {
     }
 }
 
-/// Whether an input is one JSON array and nothing else, within [`MAX_JSON_INPUT_BYTES`]. It is
-/// parsed without being kept, so the check takes no memory. A JSONL file whose lines are arrays
-/// is not one value, so it stays JSONL.
+/// Whether an input is meant as one JSON array: it starts with `[` and is one JSON value and nothing
+/// else, or ends before that value does. It is parsed without being kept, so the check takes no
+/// memory, and only up to [`MAX_JSON_INPUT_BYTES`]: an array cut short there, or by the end of the
+/// file, is still taken for one, so that reading it says what is wrong. A JSONL file whose lines
+/// are arrays has more after its first value, so it stays JSONL.
 fn holds_an_array(reader: impl Read) -> bool {
     let mut reader = BufReader::new(reader.take(MAX_JSON_INPUT_BYTES + 1));
     let mut start = true;
@@ -81,9 +83,10 @@ fn holds_an_array(reader: impl Read) -> bool {
         }
     }
     let mut parser = serde_json::Deserializer::from_reader(reader);
-    IgnoredAny::deserialize(&mut parser)
-        .and_then(|_| parser.end())
-        .is_ok()
+    match IgnoredAny::deserialize(&mut parser).and_then(|_| parser.end()) {
+        Ok(()) => true,
+        Err(error) => error.is_eof(),
+    }
 }
 
 /// Where the rows come from.
@@ -501,8 +504,18 @@ mod tests {
         // JSONL, as a `.json` file has always been read.
         assert_eq!(of("{\"a\": 1}\n{\"a\": 2}\n"), RowFormat::Jsonl);
         assert_eq!(of("[1, 2]\n[3, 4]\n"), RowFormat::Jsonl);
-        assert_eq!(of("[1, 2"), RowFormat::Jsonl);
+        assert_eq!(of("[1, 2\n[3, 4]\n"), RowFormat::Jsonl);
         assert_eq!(of(""), RowFormat::Jsonl);
+        // Cut short, it is an array, so that reading it reports the end or the limit.
+        assert_eq!(of("[1, 2"), RowFormat::Json);
+        let over = std::io::Read::chain(
+            &b"["[..],
+            std::io::Read::take(std::io::repeat(b' '), super::MAX_JSON_INPUT_BYTES),
+        );
+        assert_eq!(
+            RowFormat::of_path(Path::new("x.json"), || Some(over)),
+            RowFormat::Json
+        );
         assert_eq!(
             RowFormat::of_path(Path::new("x.json"), || None::<&[u8]>),
             RowFormat::Jsonl

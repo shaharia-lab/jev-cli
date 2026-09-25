@@ -1370,15 +1370,27 @@ async fn a_json_input_that_cannot_be_used_fails_before_any_request() {
         .set_len(50 * 1024 * 1024 + 1)
         .unwrap();
     let large = large.to_str().unwrap().to_owned();
+    let large_array = dir.join("large-array.json");
+    // An array too big to read: `[`, then whitespace to one byte over the limit.
+    let mut file = fs::File::create(&large_array).unwrap();
+    std::io::copy(
+        &mut std::io::Read::chain(
+            &b"["[..],
+            std::io::Read::take(std::io::repeat(b' '), 50 * 1024 * 1024),
+        ),
+        &mut file,
+    )
+    .unwrap();
+    let large_array = large_array.to_str().unwrap().to_owned();
 
-    let cases: [(Vec<&str>, &str, &str); 5] = [
+    let cases: [(Vec<&str>, &str, &str); 6] = [
         (
-            vec!["--input", &object],
+            vec!["--input-format", "json", "--input", &object],
             "the input is not a JSON array",
             "--input-format jsonl",
         ),
         (
-            vec!["--input", &malformed],
+            vec!["--input-format", "json", "--input", &malformed],
             "the input is not valid JSON",
             "jq",
         ),
@@ -1388,12 +1400,18 @@ async fn a_json_input_that_cannot_be_used_fails_before_any_request() {
             "--state-field",
         ),
         (
-            vec!["--input", &large],
+            vec!["--input-format", "json", "--input", &large],
             "the input is over the 50 MB limit for a JSON array; nothing was sent",
             "jq -c '.[]' items.json > items.jsonl",
         ),
         (
-            vec!["--input", "-"],
+            // No --input-format: detected by its `.json` name and its `[`, and refused for its size.
+            vec!["--input", &large_array],
+            "the input is over the 50 MB limit for a JSON array; nothing was sent",
+            "jq -c '.[]'",
+        ),
+        (
+            vec!["--input-format", "json", "--input", "-"],
             "rows on stdin must be JSONL; a JSON array is read from a file",
             "--input <file>",
         ),
@@ -1401,7 +1419,7 @@ async fn a_json_input_that_cannot_be_used_fails_before_any_request() {
     for (flags, message, hint) in cases {
         let mut command = jev(Some(&server));
         command
-            .args(["batch", "run", "-f", &questions, "--input-format", "json"])
+            .args(["batch", "run", "-f", &questions])
             .args(&flags)
             .write_stdin(ARRAY);
 
