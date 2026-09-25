@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/shaharia-lab/jev-cli/compare/v0.1.1...v0.2.0) (2026-09-25)
+
+
+### Features
+
+* **batch:** opt-in `--merge` that adds the input row to each record ([#111](https://github.com/shaharia-lab/jev-cli/issues/111)) ([b0d6d3f](https://github.com/shaharia-lab/jev-cli/commit/b0d6d3f47d4fc025065842984aced3c4bc5a4080))
+* **batch:** read a top-level JSON array with `--input-format json` ([#110](https://github.com/shaharia-lab/jev-cli/issues/110)) ([64d7398](https://github.com/shaharia-lab/jev-cli/commit/64d73986e65d69341fd16a7c94176f8262fab9af))
+
+
+### Bug Fixes
+
+* reject `--state -` with a hint to use `--state-file -` ([#109](https://github.com/shaharia-lab/jev-cli/issues/109)) ([f22b8b9](https://github.com/shaharia-lab/jev-cli/commit/f22b8b9672761c7b9f836ff2509b97de37345ab3))
+* **tests:** retry the ETXTBSY race in the background-update secret-leak test ([#103](https://github.com/shaharia-lab/jev-cli/issues/103)) ([8b048a6](https://github.com/shaharia-lab/jev-cli/commit/8b048a6d68092144f72afc57158e50031ba41fd4))
+
 ## [0.1.1](https://github.com/shaharia-lab/jev-cli/compare/v0.1.0...v0.1.1) (2026-09-20)
 
 
