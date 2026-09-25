@@ -34,8 +34,8 @@ come back together, and extra questions cost tokens, not time. Use `jev noul`, `
 `jev score` for one question written on the command line, `jev validate` to check a request file \
 without sending it, and `jev batch run` to apply the same questions to many states.",
         input: "A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of \
-question id to question, and optionally `state` and `model`. The state is --state or --state-file \
-(`-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's \
+question id to question, and optionally `state` and `model`. The state is --state (text) or \
+--state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's \
 `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.",
         output: "The result envelope: `model` (the versioned id that answered), `requested_model`, \
 `answers` (one per question id, exactly as the API returned them), `usage`, `cost_usd` (an \
@@ -81,8 +81,8 @@ high, so ask one noul per label when several labels can apply at once. Use `jev 
 exactly one of several options must be picked (which one?), and `jev score` for a position on a \
 described scale (how much?). A value near 0.5 means the model cannot tell, not \"medium\".",
         input: "QUESTION in plain words, or --instructions-file with structured instructions. \
---true and --false (or --criteria-file) say what yes and no mean. The state is --state or \
---state-file (`-` for stdin), else a pipe. Jev reads literally and cannot count, do arithmetic or \
+--true and --false (or --criteria-file) say what yes and no mean. The state is --state (text) or \
+--state-file (a path, or `-` for stdin), else a pipe. Jev reads literally and cannot count, do arithmetic or \
 compare dates: keep those in code.",
         output: "`noul`, the probability of yes from 0 to 1, then `model`, `requested_model`, \
 `usage`, `cost_usd` (an estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was \
@@ -130,8 +130,8 @@ or no, or when several labels can apply at once (one noul per label), and `jev s
 options are ordered levels of one scale. Two options that mean yes and no are a noul.",
         input: "QUESTION in plain words, or --instructions-file. The options are repeated --option \
 `name` or `name=description` (up to 255), or --criteria-file with a map of name to description; \
-describe options that are easy to confuse. The state is --state or --state-file (`-` for stdin), \
-else a pipe.",
+describe options that are easy to confuse. The state is --state (text) or --state-file (a path, \
+or `-` for stdin), else a pipe.",
         output: "`choice` (the winning option), `confidence` (how peaked the distribution is, not \
 how likely it is to be right) and `probabilities` per option, then `model`, `requested_model`, \
 `usage`, `cost_usd` (an estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was \
@@ -171,7 +171,7 @@ the previous one\", and rate one dimension per score. Use `jev noul` for yes or 
 `jev choice` for options with no order.",
         input: "QUESTION in plain words, or --instructions-file. The levels are repeated --level, \
 lowest first (2 to 10), or --criteria-file with an ordered list; they are numbered from 0. The \
-state is --state or --state-file (`-` for stdin), else a pipe.",
+state is --state (text) or --state-file (a path, or `-` for stdin), else a pipe.",
         output: "`score` (the expected level, from 0 to the highest level), `confidence`, \
 `probabilities` and `legend` per level, then `model`, `requested_model`, `usage`, `cost_usd` (an \
 estimate), `request_id`, `latency_ms`, and `gate` when a gating flag was used. `--field score` \

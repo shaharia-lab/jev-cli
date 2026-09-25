@@ -131,7 +131,7 @@ pub(crate) struct GlobalArgs {
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "State")]
 pub(crate) struct StateArgs {
-    /// The state to evaluate, as text
+    /// The state to evaluate, as text (`-` is not stdin here: use --state-file -)
     #[arg(long, value_name = "TEXT", conflicts_with = "state_file")]
     pub(crate) state: Option<String>,
 
@@ -340,7 +340,7 @@ pub(crate) struct ValidateArgs {
     #[arg(long, value_enum, value_name = "FORMAT")]
     pub(crate) input_format: Option<InputFormat>,
 
-    /// Check the request with this state, as text, so that its size can be estimated
+    /// Check the request with this state, as text, so that its size can be estimated (`-` is not stdin here: use --state-file -)
     #[arg(long, value_name = "TEXT", conflicts_with = "state_file")]
     pub(crate) state: Option<String>,
 

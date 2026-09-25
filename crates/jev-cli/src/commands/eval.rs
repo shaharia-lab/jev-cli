@@ -153,7 +153,7 @@ fn state_source(
             .hint("pass the state with --state or --state-file <path>, or put it in the request")
     };
     if let Some(text) = &arguments.state {
-        return Ok(Some(StateSource::Inline(text.clone())));
+        return StateSource::inline(text).map(Some);
     }
     if let Some(path) = &arguments.state_file {
         return match (path.as_str(), source.file_is_stdin) {

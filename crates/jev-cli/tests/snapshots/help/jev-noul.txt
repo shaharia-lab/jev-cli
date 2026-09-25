@@ -9,9 +9,9 @@ much?). A value near 0.5 means the model cannot tell, not "medium".
 
 Input:
 QUESTION in plain words, or --instructions-file with structured instructions. --true and --false (or
---criteria-file) say what yes and no mean. The state is --state or --state-file (`-` for stdin),
-else a pipe. Jev reads literally and cannot count, do arithmetic or compare dates: keep those in
-code.
+--criteria-file) say what yes and no mean. The state is --state (text) or --state-file (a path, or
+`-` for stdin), else a pipe. Jev reads literally and cannot count, do arithmetic or compare dates:
+keep those in code.
 
 Output:
 `noul`, the probability of yes from 0 to 1, then `model`, `requested_model`, `usage`, `cost_usd` (an
@@ -53,7 +53,7 @@ Gating:
 
 State:
       --state <TEXT>
-          The state to evaluate, as text
+          The state to evaluate, as text (`-` is not stdin here: use --state-file -)
 
       --state-file <PATH>
           Read the state from a file, or from stdin with `-`

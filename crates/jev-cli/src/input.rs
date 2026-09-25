@@ -40,6 +40,25 @@ pub(crate) enum StateSource {
     Stdin,
 }
 
+impl StateSource {
+    /// The state given with `--state <text>`.
+    ///
+    /// # Errors
+    ///
+    /// A usage error when the text is exactly `-`: that is the stdin convention, which only
+    /// `--state-file` follows, and sending the one character as the state would get a confident
+    /// answer about the wrong input.
+    pub(crate) fn inline(text: &str) -> Result<Self, CliError> {
+        if text == "-" {
+            return Err(
+                CliError::usage("--state - would send the text \"-\" as the state")
+                    .hint("use --state-file - to read the state from stdin"),
+            );
+        }
+        Ok(Self::Inline(text.to_owned()))
+    }
+}
+
 /// Reads a request file. `source` is a path, or `-` for standard input.
 ///
 /// The format comes from `format` when given, then from the extension, and for standard input
@@ -332,5 +351,23 @@ mod tests {
             not_json.message
         );
         assert!(not_json.hint.unwrap().contains("--state-format text"));
+    }
+
+    #[test]
+    fn a_lone_dash_is_not_a_state_but_any_other_text_is() {
+        let dash = StateSource::inline("-").unwrap_err();
+
+        assert_eq!(
+            dash.message,
+            "--state - would send the text \"-\" as the state"
+        );
+        assert!(dash.hint.unwrap().contains("--state-file -"));
+        for text in [" - ", "-x", "--", ""] {
+            assert_eq!(
+                StateSource::inline(text).unwrap(),
+                StateSource::Inline(text.to_owned()),
+                "{text:?}"
+            );
+        }
     }
 }

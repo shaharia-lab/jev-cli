@@ -20,7 +20,7 @@ pub(crate) fn run(arguments: &ValidateArgs, context: &mut Context<'_>) -> Result
     // A state is only ever read when it was asked for. Unlike `jev eval`, a pipe is not read
     // implicitly: validating a questions-only file is normal, and must not wait on stdin.
     let state_source = match (&arguments.state, arguments.state_file.as_deref()) {
-        (Some(text), _) => Some(StateSource::Inline(text.clone())),
+        (Some(text), _) => Some(StateSource::inline(text)?),
         (None, Some("-")) if arguments.file == "-" => {
             return Err(CliError::usage("stdin is already being read as the request file (-f -), so it cannot also supply the state")
                 .hint("pass the state with --state or --state-file <path>"));

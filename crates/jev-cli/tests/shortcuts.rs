@@ -649,6 +649,42 @@ async fn help_for_each_shortcut_shows_a_shell_if_and_the_exit_codes() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn state_dash_is_a_usage_error_for_every_shortcut_before_anything_is_sent() {
+    let server = answering(noul(0.9)).await;
+    let shortcuts: [Vec<&str>; 3] = [
+        vec!["noul", "Q?"],
+        vec!["choice", "Q?", "--option", "x", "--option", "other"],
+        vec!["score", "Q?", "--level", "Low", "--level", "High"],
+    ];
+
+    for shortcut in shortcuts {
+        for (dry_run, stdin) in [(true, Some("{\"a\":1}")), (true, None), (false, None)] {
+            let mut command = jev(Some(&server));
+            command.args(&shortcut).args(["--state", "-"]);
+            if dry_run {
+                command.arg("--dry-run").env_remove("TYPESAFE_API_KEY");
+            }
+            if let Some(stdin) = stdin {
+                command.write_stdin(stdin);
+            }
+            let run = run(command).await;
+
+            let case = (&shortcut, dry_run, stdin);
+            assert_eq!((run.code, run.stdout.as_str()), (2, ""), "{case:?}");
+            assert!(
+                json_of(&run.stderr)["error"]["hint"]
+                    .as_str()
+                    .unwrap()
+                    .contains("--state-file -"),
+                "{case:?}: {}",
+                run.stderr
+            );
+        }
+    }
+    assert!(sent(&server).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn bad_options_are_usage_errors() {
     let cases: [(Vec<&str>, &str); 3] = [
         (
