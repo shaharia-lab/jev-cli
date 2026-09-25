@@ -13,6 +13,9 @@
           ],
           "description": "The row's id: the value of --id-field (a string or a number), else its 1-based line number."
         },
+        "row": {
+          "description": "The input row as it was read: a JSON value for JSONL or a JSON array, an object of strings for CSV. Present only with `--merge`."
+        },
         "status": {
           "type": "string",
           "enum": [
@@ -200,6 +203,9 @@
             "null"
           ],
           "description": "The row's id, as in an `ok` record; `null` only if jev itself failed while handling it."
+        },
+        "row": {
+          "description": "The input row as it was read: a JSON value for JSONL or a JSON array, an object of strings for CSV. Present only with `--merge`."
         },
         "status": {
           "type": "string",

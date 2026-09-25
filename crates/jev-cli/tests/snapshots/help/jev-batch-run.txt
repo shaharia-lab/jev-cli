@@ -29,10 +29,13 @@ in input order), whatever --output says. Each record is written whole with its n
 output is valid JSONL even after an interruption. An answered row is `{id, status: "ok", model,
 answers, usage, cost_usd, request_id, latency_ms}`; a failed one is `{id, status: "error", error}`,
 where `error` has the shape of every JSON error (`code`, `exit_code`, `error_type`, `message`,
-`hint`, `request_id`, ...). A failed row does not stop the run unless --fail-fast or --max-errors
-says so. The summary goes to stderr (one `{"summary": ...}` JSON line when the output is for a
-program) and to --summary-json: `rows_total`, `ok`, `failed`, `skipped`, `already_ok` (not sent:
---resume found them answered), `input_tokens`, `cost_usd` (an estimate), `wall_time_ms`,
+`hint`, `request_id`, ...). With --merge, both kinds also carry `row` right after `id`: the whole
+input row as read (for CSV, an object of strings), so the records need no join by id; the output
+grows by about the size of the input. Filter records with `jq`, e.g. `jq -c 'select(.status == "ok"
+and .answers.is_urgent.noul >= 0.6)'`. A failed row does not stop the run unless --fail-fast or
+--max-errors says so. The summary goes to stderr (one `{"summary": ...}` JSON line when the output
+is for a program) and to --summary-json: `rows_total`, `ok`, `failed`, `skipped`, `already_ok` (not
+sent: --resume found them answered), `input_tokens`, `cost_usd` (an estimate), `wall_time_ms`,
 `rows_per_second`, `retries`, `models` and `stopped_by` (`fail_fast`, `max_errors`, `invalid_input`,
 `output_closed`, `interrupted` or null). On a terminal, stderr shows a progress bar; elsewhere it
 gets a line every 5 s once a run has taken that long (`{"progress": ...}` for a program), and
@@ -95,6 +98,9 @@ Results:
 
       --ordered
           Write the records in input order instead of as rows finish; slower when one row is slow
+
+      --merge
+          Add each input row to its record as `row`, whole, so the records need no join by id
 
       --summary-json <PATH>
           Also write the end-of-run summary to this file, as one JSON object
