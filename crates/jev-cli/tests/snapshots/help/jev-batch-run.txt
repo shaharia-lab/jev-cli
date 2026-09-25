@@ -10,16 +10,18 @@ question, and `jev validate` to check the question set without sending anything.
 Input:
 A request file (-f), JSON or YAML, whose `questions` (and `model`, if present) are used for every
 row; any `state` in it is replaced by each row's. The rows are --input, a JSONL file (one JSON value
-per line) or a CSV file with a header row, or JSONL piped on stdin; --limit reads only the first N.
-A row's state is the whole row, one field of it (--state-field) or an object of some fields
-(--state-fields); its id is --id-field, else its line number. Before anything is sent the question
-set is validated and every row of a file is checked: a malformed row, a missing field or a repeated
-id is exit 2. Piped rows can be read only once, so they are checked as they arrive, and such a row
-stops sending there. --resume continues into an existing --out file: rows it records `ok` are not
-sent again, rows it records `error` are, and an incomplete last line left by a crash is removed
-first. A 429 or 529 on any request pauses every worker for the server's `retry-after` and then
-spaces requests out until they succeed again. SIGINT or SIGTERM stops sending, gives the requests in
-flight up to 10 s to finish and be recorded, and exits 130; a second signal exits at once.
+per line), a CSV file with a header row or a JSON file holding one array whose elements are the rows
+(--input-format json, at most 50 MB; a `.json` file holding one array is read so without it), or
+JSONL piped on stdin; --limit reads only the first N. A row's state is the whole row, one field of
+it (--state-field) or an object of some fields (--state-fields); its id is --id-field, else its line
+number (in an array, its 1-based index). Before anything is sent the question set is validated and
+every row of a file is checked: a malformed row, a missing field or a repeated id is exit 2. Piped
+rows can be read only once, so they are checked as they arrive, and such a row stops sending there.
+--resume continues into an existing --out file: rows it records `ok` are not sent again, rows it
+records `error` are, and an incomplete last line left by a crash is removed first. A 429 or 529 on
+any request pauses every worker for the server's `retry-after` and then spaces requests out until
+they succeed again. SIGINT or SIGTERM stops sending, gives the requests in flight up to 10 s to
+finish and be recorded, and exits 130; a second signal exits at once.
 
 Output:
 JSON Lines on stdout, or appended to --out: one record per row, in the order rows finish (--ordered:
@@ -59,15 +61,17 @@ Options:
 
 Rows:
       --input <PATH>
-          Rows to evaluate: a JSONL or CSV file, or `-` for JSONL on stdin [default: stdin when
-          piped]
+          Rows to evaluate: a JSONL, CSV or JSON array file, or `-` for JSONL on stdin [default:
+          stdin when piped]
 
       --input-format <FORMAT>
-          Format of --input [default: csv for a `.csv` file, jsonl otherwise]
+          Format of --input [default: csv for a `.csv` file, json for a `.json` file holding one
+          array, jsonl otherwise]
 
           Possible values:
           - jsonl: One JSON value per line
           - csv:   Comma-separated values with a header row
+          - json:  One JSON array whose elements are the rows (a file of at most 50 MB)
 
       --state-field <NAME>
           Send this one field of each row as its state [default: the whole row]

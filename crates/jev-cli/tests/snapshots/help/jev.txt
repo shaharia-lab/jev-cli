@@ -20,7 +20,7 @@ Commands:
   choice      Pick one option from a set you define
   score       Rate the state on an ordered rubric of 2 to 10 levels
   validate    Check a request file offline; nothing is sent or billed
-  batch       Apply one question set to every row of a JSONL or CSV file
+  batch       Apply one question set to every row of a JSONL, CSV or JSON array file
   models      List the models available to the account
   auth        Store, inspect or remove the API key for a profile
   config      Read and change configuration

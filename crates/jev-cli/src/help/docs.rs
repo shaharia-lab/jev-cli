@@ -248,9 +248,11 @@ state and one question, and `jev validate` to check the question set without sen
 Run it with --dry-run first to see how many requests a run makes and what it should cost.",
         input: "A request file (-f), JSON or YAML, whose `questions` (and `model`, if present) are \
 used for every row; any `state` in it is replaced by each row's. The rows are --input, a JSONL file \
-(one JSON value per line) or a CSV file with a header row, or JSONL piped on stdin; --limit reads \
-only the first N. A row's state is the whole row, one field of it (--state-field) or an object of \
-some fields (--state-fields); its id is --id-field, else its line number. Before anything is sent \
+(one JSON value per line), a CSV file with a header row or a JSON file holding one array whose \
+elements are the rows (--input-format json, at most 50 MB; a `.json` file holding one array is \
+read so without it), or JSONL piped on stdin; --limit reads only the first N. A row's state is the \
+whole row, one field of it (--state-field) or an object of some fields (--state-fields); its id is \
+--id-field, else its line number (in an array, its 1-based index). Before anything is sent \
 the question set is validated and every row of a file is checked: a malformed row, a missing \
 field or a repeated id is exit 2. Piped rows can be read only once, so they are checked as they \
 arrive, and such a row stops sending there. --resume continues into an existing --out file: rows \
@@ -806,8 +808,8 @@ such as Claude Code, Claude Desktop, Cursor or VS Code. From a shell script or C
         input: "The Model Context Protocol on stdin, one JSON-RPC message per line, until the \
 client closes stdin. Tools: evaluate (a state and many questions), noul, choice, score (one \
 question each), validate (offline, needs no key) and list_models. With one or more --allow-dir, \
-also batch_run: `jev batch run` over a JSONL or CSV file, writing its records to a new file; every \
-path must resolve inside an --allow-dir (`..` and symbolic links included), and a run over \
+also batch_run: `jev batch run` over a JSONL, CSV or JSON array file, writing its records to a \
+new file; every path must resolve inside an --allow-dir (`..` and symbolic links included), and a run over \
 --max-batch-rows or --max-batch-cost-usd is refused before anything is sent. Without --allow-dir \
 no tool touches a file. The API key, base URL and model come from the usual places (--profile, \
 the environment, the profile), read once at start-up; the key is never part of a tool's input, \

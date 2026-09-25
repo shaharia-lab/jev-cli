@@ -111,6 +111,9 @@ Inside those directories and nowhere else. Every path is resolved before use, sy
 `--max-batch-cost-usd` is refused before anything is sent. Without `--allow-dir`, the server
 touches no file at all.
 
+The input is a JSONL or CSV file, or a JSON array (`input_format: "json"`, at most 50 MB), with
+the same format detection as `jev batch run --input`.
+
 ## The agent skill
 
 [`skills/jev-cli`](../../skills/jev-cli/SKILL.md) teaches an agent the workflow: discover

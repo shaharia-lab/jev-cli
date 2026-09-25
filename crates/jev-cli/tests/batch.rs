@@ -1246,3 +1246,212 @@ async fn a_pipe_gets_a_progress_line_every_few_seconds_unless_quiet() {
     assert!(progress[0]["progress"]["elapsed_ms"].as_u64().unwrap() >= 5000);
     assert!(!quiet.stderr.contains("progress"), "{}", quiet.stderr);
 }
+
+/// A JSON array of rows `{"key": "k<n>", "author": ..., "text": ..., "internal": ...}`, printed as
+/// most tools write one: across several lines.
+const ARRAY: &str = "[\n  {\"key\": \"k1\", \"author\": \"ann\", \"text\": \"fine 1\", \"internal\": \"SENTINEL-STATE\"},\n  {\"key\": \"k2\", \"author\": \"bob\", \"text\": \"fine 2\", \"internal\": \"SENTINEL-STATE\"}\n]\n";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_json_array_is_read_as_rows_with_or_without_input_format() {
+    let server = mock(true).await;
+    let dir = scratch("json-array");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "items.json", ARRAY);
+
+    for detected in [false, true] {
+        let mut command = jev(Some(&server));
+        command.args(["batch", "run", "-f", &questions, "--input", &input]);
+        if !detected {
+            command.args(["--input-format", "json"]);
+        }
+        command.args(["--state-fields", "author,text", "--id-field", "key"]);
+
+        let run = run(command).await;
+
+        assert_eq!((run.code, detected), (0, detected), "{}", run.stderr);
+        let records = lines_of(&run.stdout);
+        let ids: BTreeSet<&str> = records
+            .iter()
+            .map(|record| record["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, BTreeSet::from(["k1", "k2"]));
+        assert!(
+            records.iter().all(
+                |record| record["status"] == "ok" && record["answers"]["urgent"]["noul"] == 0.9
+            )
+        );
+    }
+    let states: BTreeSet<String> = sent(&server)
+        .await
+        .iter()
+        .map(|body| body["state"].to_string())
+        .collect();
+    assert_eq!(
+        states,
+        BTreeSet::from([
+            r#"{"author":"ann","text":"fine 1"}"#.to_owned(),
+            r#"{"author":"bob","text":"fine 2"}"#.to_owned(),
+        ])
+    );
+
+    // Without --id-field, a row's id is its 1-based index in the array.
+    let planned = run({
+        let mut command = jev(None);
+        command.env_remove("TYPESAFE_API_KEY").args([
+            "batch",
+            "run",
+            "-f",
+            &questions,
+            "--input",
+            &input,
+            "--limit",
+            "1",
+            "--dry-run",
+        ]);
+        command
+    })
+    .await;
+    assert_eq!(planned.code, 0, "{}", planned.stderr);
+    assert_eq!(json_of(&planned.stdout)["rows_total"], 1);
+    let mut command = jev(Some(&server));
+    command.args([
+        "batch",
+        "run",
+        "-f",
+        &questions,
+        "--input",
+        &input,
+        "--ordered",
+    ]);
+    let run = run(command).await;
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let ids: Vec<Value> = lines_of(&run.stdout)
+        .iter()
+        .map(|record| record["id"].clone())
+        .collect();
+    assert_eq!(ids, [json!(1), json!(2)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_json_file_of_json_lines_is_still_read_as_jsonl() {
+    let server = mock(true).await;
+    let dir = scratch("json-lines");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let input = write(&dir, "rows.json", "[1, \"fine a\"]\n[2, \"fine b\"]\n");
+    let mut command = jev(Some(&server));
+    command.args(["batch", "run", "-f", &questions, "--input", &input]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(lines_of(&run.stdout).len(), 2);
+    let states: BTreeSet<String> = sent(&server)
+        .await
+        .iter()
+        .map(|body| body["state"].to_string())
+        .collect();
+    assert_eq!(
+        states,
+        BTreeSet::from([r#"[1,"fine a"]"#.to_owned(), r#"[2,"fine b"]"#.to_owned()])
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_json_input_that_cannot_be_used_fails_before_any_request() {
+    let server = mock(true).await;
+    let dir = scratch("json-refused");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let object = write(&dir, "object.json", "{\"items\": [\"SENTINEL-STATE\"]}");
+    let malformed = write(&dir, "malformed.json", "[{\"text\": SENTINEL-STATE}]");
+    let missing = write(&dir, "missing.json", ARRAY);
+    let large = dir.join("large.json");
+    fs::File::create(&large)
+        .unwrap()
+        .set_len(50 * 1024 * 1024 + 1)
+        .unwrap();
+    let large = large.to_str().unwrap().to_owned();
+
+    let cases: [(Vec<&str>, &str, &str); 5] = [
+        (
+            vec!["--input", &object],
+            "the input is not a JSON array",
+            "--input-format jsonl",
+        ),
+        (
+            vec!["--input", &malformed],
+            "the input is not valid JSON",
+            "jq",
+        ),
+        (
+            vec!["--input", &missing, "--state-field", "body"],
+            "the input has 2 rows that cannot be used; nothing was sent",
+            "--state-field",
+        ),
+        (
+            vec!["--input", &large],
+            "the input is over the 50 MB limit for a JSON array; nothing was sent",
+            "jq -c '.[]' items.json > items.jsonl",
+        ),
+        (
+            vec!["--input", "-"],
+            "rows on stdin must be JSONL; a JSON array is read from a file",
+            "--input <file>",
+        ),
+    ];
+    for (flags, message, hint) in cases {
+        let mut command = jev(Some(&server));
+        command
+            .args(["batch", "run", "-f", &questions, "--input-format", "json"])
+            .args(&flags)
+            .write_stdin(ARRAY);
+
+        let run = run(command).await;
+
+        assert_eq!(
+            (run.code, run.stdout.as_str()),
+            (2, ""),
+            "{flags:?}: {}",
+            run.stderr
+        );
+        let error = &json_of(&run.stderr)["error"];
+        assert!(
+            error["message"].as_str().unwrap().starts_with(message),
+            "{flags:?}: {error}"
+        );
+        assert!(error["hint"].as_str().unwrap().contains(hint), "{error}");
+        assert!(
+            !run.stderr.contains("SENTINEL-STATE"),
+            "a row is never quoted"
+        );
+    }
+    assert!(sent(&server).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_json_array_resumes_without_sending_a_row_recorded_ok() {
+    let server = mock(true).await;
+    let dir = scratch("json-resume");
+    let questions = write(&dir, "questions.yaml", QUESTIONS);
+    let array = (1..=4)
+        .map(|n| format!("{{\"text\": \"fine {n}\"}}"))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    let input = write(&dir, "rows.json", &format!("[\n{array}\n]\n"));
+    let out = write(
+        &dir,
+        "results.jsonl",
+        "{\"id\":1,\"status\":\"ok\"}\n{\"id\":2,\"status\":\"error\",\"error\":{}}\n{\"id\":3,\"status\":\"ok\"}\n",
+    );
+    let mut command = jev(Some(&server));
+    command.args(["batch", "run", "-f", &questions, "--input", &input]);
+    command.args(["--input-format", "json", "--state-field", "text"]);
+    command.args(["--out", &out, "--resume"]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let mut resent = sent_ids(&server).await;
+    resent.sort_unstable();
+    assert_eq!(resent, [2, 4]);
+    assert_eq!(lines_of(&fs::read_to_string(&out).unwrap()).len(), 5);
+}

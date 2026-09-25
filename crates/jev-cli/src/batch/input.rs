@@ -1,4 +1,5 @@
-//! Reading the rows of a batch, one at a time, from a JSONL or CSV stream.
+//! Reading the rows of a batch, one at a time, from a JSONL or CSV stream, or from a file holding
+//! one JSON array.
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
@@ -6,10 +7,18 @@ use std::path::Path;
 
 use clap::ValueEnum;
 use schemars::JsonSchema;
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::error::CliError;
+
+/// The largest JSON array input, in bytes. JSONL and CSV stream, but an array is read whole, so
+/// this bounds the memory it takes.
+pub(crate) const MAX_JSON_INPUT_BYTES: u64 = 50 * 1024 * 1024;
+
+/// The UTF-8 byte order mark, which some editors write at the start of a file.
+const BOM: &[u8] = b"\xEF\xBB\xBF";
 
 /// The format of a batch's input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum, Deserialize, JsonSchema)]
@@ -19,16 +28,62 @@ pub(crate) enum RowFormat {
     Jsonl,
     /// Comma-separated values with a header row
     Csv,
+    /// One JSON array whose elements are the rows (a file of at most 50 MB)
+    Json,
 }
 
 impl RowFormat {
-    /// The format of a file, by its extension: `.csv` is CSV, anything else JSONL.
-    pub(crate) fn of_path(path: &Path) -> Self {
+    /// The format of a file: `.csv` is CSV, a `.json` file holding one JSON array is JSON, and
+    /// anything else is JSONL.
+    ///
+    /// `open` is called only for a `.json` file. One that cannot be opened is taken for JSONL, and
+    /// the error is reported when it is opened to be read.
+    pub(crate) fn of_path<R: Read>(path: &Path, open: impl FnOnce() -> Option<R>) -> Self {
         match path.extension().and_then(|extension| extension.to_str()) {
             Some(extension) if extension.eq_ignore_ascii_case("csv") => Self::Csv,
+            Some(extension)
+                if extension.eq_ignore_ascii_case("json") && open().is_some_and(holds_an_array) =>
+            {
+                Self::Json
+            }
             _ => Self::Jsonl,
         }
     }
+}
+
+/// Whether an input is one JSON array and nothing else, within [`MAX_JSON_INPUT_BYTES`]. It is
+/// parsed without being kept, so the check takes no memory. A JSONL file whose lines are arrays
+/// is not one value, so it stays JSONL.
+fn holds_an_array(reader: impl Read) -> bool {
+    let mut reader = BufReader::new(reader.take(MAX_JSON_INPUT_BYTES + 1));
+    let mut start = true;
+    loop {
+        let Ok(buffer) = reader.fill_buf() else {
+            return false;
+        };
+        let mut bytes = buffer;
+        if start {
+            bytes = bytes.strip_prefix(BOM).unwrap_or(bytes);
+        }
+        let skipped = buffer.len() - bytes.len();
+        match bytes.iter().position(|byte| !byte.is_ascii_whitespace()) {
+            Some(position) if bytes.get(position) == Some(&b'[') => {
+                reader.consume(skipped + position);
+                break;
+            }
+            Some(_) => return false,
+            None if buffer.is_empty() => return false,
+            None => {
+                let length = buffer.len();
+                reader.consume(length);
+                start = false;
+            }
+        }
+    }
+    let mut parser = serde_json::Deserializer::from_reader(reader);
+    IgnoredAny::deserialize(&mut parser)
+        .and_then(|_| parser.end())
+        .is_ok()
 }
 
 /// Where the rows come from.
@@ -65,9 +120,9 @@ impl RowSource {
 /// One row of the input, before it is mapped to an id and a state.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Row {
-    /// The 1-based line the row starts on.
+    /// The 1-based line the row starts on; for a JSON array, the element's 1-based index.
     pub(crate) line: u64,
-    /// The row: any JSON value for JSONL, an object of strings for CSV.
+    /// The row: any JSON value for JSONL and JSON, an object of strings for CSV.
     pub(crate) value: Value,
 }
 
@@ -96,7 +151,8 @@ impl RowProblem {
     }
 }
 
-/// The rows of an input, read lazily: only the row being handed out is in memory.
+/// The rows of an input, read lazily: only the row being handed out is in memory, except for a
+/// JSON array, which is read whole.
 pub(crate) struct Rows {
     inner: Inner,
     /// The CSV header, which says which fields every row has.
@@ -114,6 +170,10 @@ enum Inner {
         reader: csv::Reader<Box<dyn Read + Send>>,
         record: csv::StringRecord,
     },
+    Json {
+        items: std::vec::IntoIter<Value>,
+        index: u64,
+    },
 }
 
 impl Rows {
@@ -122,7 +182,8 @@ impl Rows {
     ///
     /// # Errors
     ///
-    /// A usage error when a CSV header is missing, unreadable or names a column twice.
+    /// A usage error when a CSV header is missing, unreadable or names a column twice, and when
+    /// a JSON input is over [`MAX_JSON_INPUT_BYTES`], unreadable, or not one array.
     pub(crate) fn new(reader: Box<dyn Read + Send>, format: RowFormat) -> Result<Self, CliError> {
         match format {
             RowFormat::Jsonl => Ok(Self {
@@ -163,10 +224,19 @@ impl Rows {
                     finished: false,
                 })
             }
+            RowFormat::Json => Ok(Self {
+                inner: Inner::Json {
+                    items: read_array(reader)?.into_iter(),
+                    index: 0,
+                },
+                columns: None,
+                finished: false,
+            }),
         }
     }
 
-    /// The columns of a CSV input; `None` for JSONL, whose rows each have their own fields.
+    /// The columns of a CSV input; `None` for JSONL and JSON, whose rows each have their own
+    /// fields.
     pub(crate) fn columns(&self) -> Option<&[String]> {
         self.columns.as_deref()
     }
@@ -186,6 +256,13 @@ impl Iterator for Rows {
                 buffer,
             } => next_jsonl(reader, line, buffer),
             Inner::Csv { reader, record } => next_csv(reader, record, self.columns.as_deref()),
+            Inner::Json { items, index } => items.next().map(|value| {
+                *index += 1;
+                Ok(Row {
+                    line: *index,
+                    value,
+                })
+            }),
         };
         // A read error cannot be skipped past: the stream is in an unknown state.
         if matches!(item, None | Some(Err(RowProblem { line: None, .. }))) {
@@ -226,6 +303,35 @@ fn next_jsonl(
                 // serde_json reports a position and a category, never the text itself.
                 .map_err(|error| RowProblem::at(*line, format!("not valid JSON: {error}"))),
         );
+    }
+}
+
+/// Reads a JSON input whole, as the array of its rows.
+fn read_array(reader: Box<dyn Read + Send>) -> Result<Vec<Value>, CliError> {
+    let mut bytes = Vec::new();
+    reader
+        .take(MAX_JSON_INPUT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| CliError::usage(format!("the input cannot be read: {error}")))?;
+    if bytes.len() as u64 > MAX_JSON_INPUT_BYTES {
+        return Err(CliError::usage(format!(
+            "the input is over the {} MB limit for a JSON array; nothing was sent",
+            MAX_JSON_INPUT_BYTES / 1024 / 1024
+        ))
+        .hint("convert it to JSONL, which streams with no limit: jq -c '.[]' items.json > items.jsonl"));
+    }
+    let bytes = bytes.strip_prefix(BOM).unwrap_or(&bytes);
+    match serde_json::from_slice::<Value>(bytes) {
+        Ok(Value::Array(items)) => Ok(items),
+        Ok(_) => Err(CliError::usage(
+            "the input is not a JSON array of rows; nothing was sent",
+        )
+        .hint("pass a file holding `[...]`, or read one JSON value per line with --input-format jsonl")),
+        // serde_json reports a position and a category, never the text itself.
+        Err(error) => Err(CliError::usage(format!(
+            "the input is not valid JSON ({error}); nothing was sent"
+        ))
+        .hint("check the file, e.g. with `jq . <file>`")),
     }
 }
 
@@ -369,8 +475,105 @@ mod tests {
     fn the_format_follows_the_extension() {
         use std::path::Path;
 
-        assert_eq!(RowFormat::of_path(Path::new("x.CSV")), RowFormat::Csv);
-        assert_eq!(RowFormat::of_path(Path::new("x.jsonl")), RowFormat::Jsonl);
-        assert_eq!(RowFormat::of_path(Path::new("x")), RowFormat::Jsonl);
+        let never = || -> Option<&[u8]> { panic!("only a `.json` file is looked into") };
+        assert_eq!(
+            RowFormat::of_path(Path::new("x.CSV"), never),
+            RowFormat::Csv
+        );
+        assert_eq!(
+            RowFormat::of_path(Path::new("x.jsonl"), never),
+            RowFormat::Jsonl
+        );
+        assert_eq!(RowFormat::of_path(Path::new("x"), never), RowFormat::Jsonl);
+    }
+
+    #[test]
+    fn a_json_file_is_an_array_only_when_it_holds_one_array_and_nothing_else() {
+        use std::path::Path;
+
+        let of =
+            |text: &'static str| RowFormat::of_path(Path::new("x.JSON"), || Some(text.as_bytes()));
+        assert_eq!(
+            of("\u{feff} \n [{\"a\": 1},\n {\"a\": 2}]\n"),
+            RowFormat::Json
+        );
+        assert_eq!(of("[]"), RowFormat::Json);
+        // JSONL, as a `.json` file has always been read.
+        assert_eq!(of("{\"a\": 1}\n{\"a\": 2}\n"), RowFormat::Jsonl);
+        assert_eq!(of("[1, 2]\n[3, 4]\n"), RowFormat::Jsonl);
+        assert_eq!(of("[1, 2"), RowFormat::Jsonl);
+        assert_eq!(of(""), RowFormat::Jsonl);
+        assert_eq!(
+            RowFormat::of_path(Path::new("x.json"), || None::<&[u8]>),
+            RowFormat::Jsonl
+        );
+    }
+
+    #[test]
+    fn json_rows_are_the_elements_of_the_array_numbered_from_one() {
+        let rows = read(
+            "\u{feff}[\n  {\"a\": 1},\n  \"text\",\n  [2]\n]",
+            RowFormat::Json,
+        );
+
+        assert_eq!(
+            rows,
+            [
+                Ok(Row {
+                    line: 1,
+                    value: json!({ "a": 1 })
+                }),
+                Ok(Row {
+                    line: 2,
+                    value: json!("text")
+                }),
+                Ok(Row {
+                    line: 3,
+                    value: json!([2])
+                }),
+            ]
+        );
+        assert!(read("[]", RowFormat::Json).is_empty());
+    }
+
+    #[test]
+    fn a_json_input_that_is_not_one_array_is_refused_without_quoting_it() {
+        let error = |text: &'static str| {
+            Rows::new(Box::new(text.as_bytes()), RowFormat::Json)
+                .err()
+                .unwrap()
+        };
+
+        let object = error("{\"secret\": \"SENTINEL\"}");
+        assert!(
+            object.message.starts_with("the input is not a JSON array"),
+            "{object:?}"
+        );
+        for malformed in [
+            error("[{\"secret\": SENTINEL}]"),
+            error("[1] [2]"),
+            error(""),
+        ] {
+            assert!(
+                malformed.message.starts_with("the input is not valid JSON"),
+                "{malformed:?}"
+            );
+            assert!(!format!("{malformed:?}").contains("SENTINEL"));
+        }
+        assert!(!format!("{object:?}").contains("SENTINEL"));
+    }
+
+    #[test]
+    fn a_json_input_over_the_limit_is_refused_before_it_is_parsed() {
+        let limit = usize::try_from(super::MAX_JSON_INPUT_BYTES).unwrap();
+        let exactly = format!("[{}]", " ".repeat(limit - 2));
+        let over = format!("[{}]", " ".repeat(limit - 1));
+
+        assert!(Rows::new(Box::new(std::io::Cursor::new(exactly)), RowFormat::Json).is_ok());
+        let error = Rows::new(Box::new(std::io::Cursor::new(over)), RowFormat::Json)
+            .err()
+            .unwrap();
+        assert!(error.message.contains("50 MB"), "{error:?}");
+        assert!(format!("{error:?}").contains("jq -c '.[]'"));
     }
 }

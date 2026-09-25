@@ -1,7 +1,7 @@
 # Many rows at once
 
-`jev batch run` asks the same questions about every row of a JSONL or CSV file and writes one
-JSON record per row. It is the right tool for labelling tickets, messages, reviews, documents or
+`jev batch run` asks the same questions about every row of a JSONL or CSV file, or of a JSON
+array, and writes one JSON record per row. It is the right tool for labelling tickets, messages, reviews, documents or
 any export you have lying around.
 
 ## The short version
@@ -34,11 +34,23 @@ price.
 | `--state-fields subject,body` | An object of only those fields |
 
 `--id-field ticket_id` keys the records by a field of your own, which is what makes the output
-joinable back to your data. Without it, records are keyed by line number. Ids must be unique,
+joinable back to your data. Without it, records are keyed by line number (for a JSON array, the
+element's 1-based index). Ids must be unique,
 and a repeated one is caught before anything is sent.
 
 CSV files need a header row; `--input-format` is only needed when the extension does not say
 what the file is. Rows can also be piped in as JSONL with `--input -`.
+
+A file holding one JSON array, such as an API dump, is read with `--input-format json`: each
+element is a row, exactly as one JSONL line is. A `.json` file whose content is one array is read
+that way without the flag; any other `.json` file is still read as JSONL. An array is read whole,
+so it must be a file of at most 50 MB and cannot come from stdin. For a bigger array, or one
+nested inside an object, convert it to JSONL first, which streams with no limit:
+
+```bash
+jev batch run -f triage.yaml --input items.json --state-fields author,text --id-field key
+jq -c '.items[]' dump.json > items.jsonl
+```
 
 ## Everything is checked first
 
