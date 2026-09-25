@@ -1199,3 +1199,73 @@ async fn the_batch_limits_need_allow_dir_and_an_allowed_directory_must_exist() {
     assert_eq!((orphan.code, orphan.stdout.as_str()), (2, ""));
     assert!(orphan.stderr.contains("--allow-dir"), "{}", orphan.stderr);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_reads_a_json_array_of_rows_as_jev_batch_run_does() {
+    let base = sandbox("json-array");
+    std::fs::write(
+        base.join("allowed/rows.json"),
+        "[\n  {\"id\": \"t-1\", \"body\": \"Refund please\"},\n  {\"id\": \"t-2\", \"body\": \"Hello\"}\n]\n",
+    )
+    .unwrap();
+    std::fs::write(base.join("allowed/object.json"), "{\"body\": \"Hello\"}").unwrap();
+    let server = api(json!({ "is_urgent": { "type": "noul", "noul": 0.9 } })).await;
+
+    let run = run(
+        serve(Some(&server), &[&allow(&base), "--model", "jev-1.13.0"]),
+        &[
+            initialize(),
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+                "name": "batch_run",
+                "arguments": { "questions_file": "questions.json", "input": "rows.json",
+                               "input_format": "json", "out": "explicit.jsonl",
+                               "state_field": "body", "id_field": "id", "ordered": true }
+            }}),
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
+                "name": "batch_run",
+                "arguments": { "questions_file": "questions.json", "input": "rows.json",
+                               "out": "detected.jsonl", "state_field": "body" }
+            }}),
+            json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {
+                "name": "batch_run",
+                "arguments": { "questions_file": "questions.json", "input": "object.json",
+                               "input_format": "json", "out": "refused.jsonl" }
+            }}),
+        ],
+    )
+    .await;
+
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let (result, failed) = run.tool(1);
+    assert!(!failed, "{result}");
+    assert_eq!(
+        (&result["rows_total"], &result["ok"]),
+        (&json!(2), &json!(2))
+    );
+    let written = records(&base.join("allowed/explicit.jsonl"));
+    assert_eq!(
+        written
+            .iter()
+            .map(|record| &record["id"])
+            .collect::<Vec<_>>(),
+        [&json!("t-1"), &json!("t-2")]
+    );
+    let (result, failed) = run.tool(2);
+    assert!(!failed, "{result}");
+    assert_eq!(result["ok"], 2, "a `.json` array is detected");
+    let (error, failed) = run.tool(3);
+    assert!(failed);
+    assert_eq!(error["error"]["exit_code"], 2);
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("the input is not a JSON array"),
+        "{error}"
+    );
+    assert_eq!(
+        sent(&server).await.len(),
+        4,
+        "nothing is sent for the refused input"
+    );
+}

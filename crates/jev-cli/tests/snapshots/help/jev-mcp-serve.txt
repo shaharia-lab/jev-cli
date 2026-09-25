@@ -9,8 +9,8 @@ Input:
 The Model Context Protocol on stdin, one JSON-RPC message per line, until the client closes stdin.
 Tools: evaluate (a state and many questions), noul, choice, score (one question each), validate
 (offline, needs no key) and list_models. With one or more --allow-dir, also batch_run: `jev batch
-run` over a JSONL or CSV file, writing its records to a new file; every path must resolve inside an
---allow-dir (`..` and symbolic links included), and a run over --max-batch-rows or
+run` over a JSONL, CSV or JSON array file, writing its records to a new file; every path must
+resolve inside an --allow-dir (`..` and symbolic links included), and a run over --max-batch-rows or
 --max-batch-cost-usd is refused before anything is sent. Without --allow-dir no tool touches a file.
 The API key, base URL and model come from the usual places (--profile, the environment, the
 profile), read once at start-up; the key is never part of a tool's input, result or error. Every

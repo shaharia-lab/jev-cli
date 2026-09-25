@@ -219,8 +219,8 @@ fn batch_run<T: Transport + 'static>(request: &Map<String, Value>, roots: &Roots
         name: "batch_run",
         title: "Evaluate every row of a file",
         description: format!(
-            "Apply one set of questions to every row of a JSONL or CSV file, one API call per \
-             row, and write one JSON record per row to a new file, exactly as `jev batch run \
+            "Apply one set of questions to every row of a JSONL, CSV or JSON array file, one \
+             API call per row, and write one JSON record per row to a new file, exactly as `jev batch run \
              --out` does. Use it for many states (tens to thousands); use `evaluate` for one \
              state, and `validate` to check the questions first. Files are read and written \
              only inside {}; a relative path is taken from the first. `out` must not exist \

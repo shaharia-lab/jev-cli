@@ -183,6 +183,10 @@ Warnings are `Notice`s on stderr: text for a person, one JSON line for a program
 - Rows are read lazily on a thread of their own and handed to the pool through a channel with one
   slot per worker, so memory is O(concurrency), never O(rows). Only ids are remembered, as
   16-byte fingerprints.
+- The exception is a JSON array (`RowFormat::Json`): it is one value, so it is parsed whole and
+  then handed out element by element. `MAX_JSON_INPUT_BYTES` (50 MB) bounds that memory, and the
+  error points at JSONL, which streams. Detecting a `.json` array parses it without keeping it
+  (`IgnoredAny`), so a file of JSON lines that start with `[` stays JSONL.
 - A file is read twice: once to check every row (mapping, repeated ids) before anything is sent,
   then to send. Piped rows can be read only once, so they are checked as they arrive.
 - Records are written to stdout as the run goes, one per row, flushed at once, in completion

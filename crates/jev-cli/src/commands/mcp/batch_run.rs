@@ -47,9 +47,12 @@ pub(super) struct Arguments {
     questions_file: Option<String>,
     /// The model; it replaces a `model` in `questions_file`.
     model: Option<String>,
-    /// The rows: a JSONL or CSV file inside an allowed directory, one request per row.
+    /// The rows: a JSONL or CSV file, or a JSON array, inside an allowed directory, one request
+    /// per row.
     input: String,
-    /// The format of `input`. Default: `csv` for a `.csv` file, `jsonl` otherwise.
+    /// The format of `input`: `jsonl`, `csv`, or `json` for one array of rows (at most 50 MB).
+    /// Default: `csv` for a `.csv` file, `json` for a `.json` file holding one array, `jsonl`
+    /// otherwise.
     input_format: Option<RowFormat>,
     /// Where the records go: a file inside an allowed directory that does not exist yet. One JSON
     /// line per row, as `jev batch run --out` writes.
@@ -59,7 +62,7 @@ pub(super) struct Arguments {
     /// Send an object of only these fields of each row as its state.
     state_fields: Option<Vec<String>>,
     /// The field that identifies each row in the records; its values must be unique. Default:
-    /// the line number.
+    /// the line number, or the element's index in a JSON array.
     id_field: Option<String>,
     /// Read only the first N rows of the input.
     #[schemars(range(min = 1))]
@@ -104,9 +107,11 @@ pub(super) fn call<T: Transport + 'static>(
     let mapping = arguments.mapping()?;
     let questions = arguments.question_set(&access.roots)?;
     let input = access.roots.existing_file(&arguments.input, "input")?;
-    let format = arguments
-        .input_format
-        .unwrap_or_else(|| RowFormat::of_path(Path::new(&arguments.input)));
+    let format = arguments.input_format.unwrap_or_else(|| {
+        RowFormat::of_path(Path::new(&arguments.input), || {
+            access.roots.open(&input).ok()
+        })
+    });
     let out = access.roots.new_file(&arguments.out, "out")?;
 
     // The question set is checked once, with a stand-in state, before any row is read.

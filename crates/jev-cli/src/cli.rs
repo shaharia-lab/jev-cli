@@ -399,11 +399,13 @@ pub(crate) struct BatchRunArgs {
     #[arg(short = 'f', long, value_name = "FILE")]
     pub(crate) file: String,
 
-    /// Rows to evaluate: a JSONL or CSV file, or `-` for JSONL on stdin [default: stdin when piped]
+    /// Rows to evaluate: a JSONL, CSV or JSON array file, or `-` for JSONL on stdin [default: stdin
+    /// when piped]
     #[arg(long, value_name = "PATH", help_heading = "Rows")]
     pub(crate) input: Option<String>,
 
-    /// Format of --input [default: csv for a `.csv` file, jsonl otherwise]
+    /// Format of --input [default: csv for a `.csv` file, json for a `.json` file holding one
+    /// array, jsonl otherwise]
     #[arg(long, value_enum, value_name = "FORMAT", help_heading = "Rows")]
     pub(crate) input_format: Option<RowFormat>,
 
@@ -498,7 +500,7 @@ pub(crate) enum Command {
     Score(ScoreArgs),
     /// Check a request file offline; nothing is sent or billed
     Validate(ValidateArgs),
-    /// Apply one question set to every row of a JSONL or CSV file
+    /// Apply one question set to every row of a JSONL, CSV or JSON array file
     #[command(subcommand)]
     Batch(BatchCommand),
     /// List the models available to the account

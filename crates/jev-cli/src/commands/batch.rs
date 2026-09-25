@@ -1,4 +1,4 @@
-//! `jev batch run`: one question set over every row of a JSONL or CSV input.
+//! `jev batch run`: one question set over every row of a JSONL, CSV or JSON array input.
 //!
 //! Unlike every other command it streams its result: one record per row is written as each row
 //! finishes, so that a long run can be followed and a crash loses nothing already answered. The
@@ -278,8 +278,14 @@ fn row_format(arguments: &BatchRunArgs, source: &RowSource) -> Result<RowFormat,
             "rows on stdin must be JSONL; CSV is read from a file",
         )
         .hint("pass the CSV file with --input <file>")),
+        (RowSource::Stdin, Some(RowFormat::Json)) => Err(CliError::usage(
+            "rows on stdin must be JSONL; a JSON array is read from a file",
+        )
+        .hint("pass the file with --input <file>, or pipe `jq -c '.[]'` of it as JSONL")),
         (_, Some(format)) => Ok(format),
-        (RowSource::File(path), None) => Ok(RowFormat::of_path(Path::new(path))),
+        (RowSource::File(path), None) => Ok(RowFormat::of_path(Path::new(path), || {
+            File::open(path).ok()
+        })),
         (RowSource::Stdin, None) => Ok(RowFormat::Jsonl),
     }
 }

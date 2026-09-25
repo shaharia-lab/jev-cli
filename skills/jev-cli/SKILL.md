@@ -211,7 +211,8 @@ The `|| status=$?` keeps `set -e` from ending the script on exit 10.
 
 ## Bulk: `jev batch run`
 
-`jev batch run` applies one question set to every row of a JSONL or CSV file and writes one
+`jev batch run` applies one question set to every row of a JSONL or CSV file, or of a JSON array
+(`--input-format json`, a file of at most 50 MB; a `.json` array is detected), and writes one
 record per row as JSON Lines, in the order rows finish:
 
 ```bash
@@ -228,7 +229,7 @@ jev batch run -f triage.yaml --input tickets.jsonl --state-field body --model je
   small sample with `--limit` and read it before the full file.
 - `--state-field` sends one field as the state, `--state-fields subject,body` an object of
   several; the default is the whole row. `--id-field` keys the records; the default is the line
-  number.
+  number (in a JSON array, the element's 1-based index).
 - Each record has `status` `ok` (with `answers`) or `error` (with `error`), and
   `jev schema batch-record` is its schema.
   `jq -r 'select(.status == "error") | .id' results.jsonl` lists the failed rows.

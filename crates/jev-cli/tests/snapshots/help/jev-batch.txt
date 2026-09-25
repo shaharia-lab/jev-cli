@@ -1,4 +1,4 @@
-Apply one question set to every row of a JSONL or CSV file
+Apply one question set to every row of a JSONL, CSV or JSON array file
 
 Usage: jev batch [OPTIONS] <COMMAND>
 
