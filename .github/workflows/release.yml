@@ -204,7 +204,7 @@ jobs:
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     # The owner approves every release here; the environment also only admits `v*` tags. It holds
-    # the signing key, which no other job is given (`crates` takes only the crates.io token).
+    # the signing key, which no other job is given (`crates` holds no secret, only an OIDC token).
     environment: release
     permissions:
       contents: write
@@ -459,8 +459,10 @@ jobs:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
 
   # Publishes jev-client, then jev-cli, to crates.io, whose `cargo binstall` metadata points at this
-  # release's archives. Stable releases only (`needs: stable`), after the assets were verified. The
-  # crates.io token is a secret of the `release` environment, so the owner approves this job too.
+  # release's archives. Stable releases only (`needs: stable`), after the assets were verified.
+  # There is no stored crates.io token: crates.io Trusted Publishing trades this job's GitHub OIDC
+  # token for one that lasts ~30 minutes, and it is configured on both crates to accept only
+  # `release.yml` running in the `release` environment, so the owner approves this job too.
   # A published crate version is permanent; re-running skips what is already there, see
   # scripts/release/crates-publish.sh.
   crates:
@@ -470,6 +472,7 @@ jobs:
     environment: release
     permissions:
       contents: read
+      id-token: write
     env:
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
@@ -477,6 +480,8 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        id: crates-auth
       - run: scripts/release/crates-publish.sh "$VERSION"
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}

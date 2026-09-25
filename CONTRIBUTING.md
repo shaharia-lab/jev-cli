@@ -109,7 +109,8 @@ release.
 4. A stable release then goes to the Homebrew tap, using the tap App's credentials from the
    `publish` environment, which admits `v*` tags only, and to crates.io: `jev-client` first, then
    `jev-cli` once the index has `jev-client`, through `scripts/release/crates-publish.sh` with the
-   `CARGO_REGISTRY_TOKEN` of the `release` environment (so the owner approves that job as well).
+   short-lived token crates.io Trusted Publishing issues to the `release` environment (so the
+   owner approves that job as well; no crates.io token is stored anywhere).
    A crates.io version can never be replaced, so the script skips a crate whose version is
    already there, and re-running the job after a partial publish is safe.
    `[package.metadata.binstall]` in `crates/jev-cli/Cargo.toml` points `cargo binstall` at the

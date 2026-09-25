@@ -81,8 +81,8 @@ crates.io skips a version already in the index.
 
 ## 5. Approve the `release` environment
 
-The run pauses before signing, because the signing key and the crates.io token live in that
-environment. The owner approves in the GitHub UI, or by API:
+The run pauses before signing, because the signing key lives in that environment and crates.io
+trusts only that environment to publish. The owner approves in the GitHub UI, or by API:
 
 ```bash
 gh api /repos/shaharia-lab/jev-cli/actions/runs/<run-id>/pending_deployments
