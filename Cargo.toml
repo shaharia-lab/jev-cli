@@ -64,7 +64,7 @@ zip = { version = "8.6", default-features = false, features = ["deflate-flate2"]
 
 # Test-only.
 assert_cmd = "2.2.2"
-jsonschema = { version = "0.56", default-features = false }
+jsonschema = { version = "0.58", default-features = false }
 # Signs fake releases for the updater's tests.
 minisign = "0.10.0"
 predicates = "3.1.4"
