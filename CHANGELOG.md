@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/shaharia-lab/jev-cli/compare/v0.2.0...v0.2.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** move off the yanked yoke-derive 0.8.3 ([#121](https://github.com/shaharia-lab/jev-cli/issues/121)) ([213b76b](https://github.com/shaharia-lab/jev-cli/commit/213b76bba86a2d0f844fc144f7993faa37f35332))
+
 ## [0.2.0](https://github.com/shaharia-lab/jev-cli/compare/v0.1.1...v0.2.0) (2026-09-25)
 
 
