@@ -60,7 +60,7 @@ unicode-width = "0.2.2"
 url = "2.5.8"
 zeroize = { version = "1.9", features = ["derive"] }
 # Windows release archives. Reading deflate is all the updater needs.
-zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.0", default-features = false, features = ["deflate-flate2"] }
 
 # Test-only.
 assert_cmd = "2.2.2"
