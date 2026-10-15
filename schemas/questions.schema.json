@@ -150,12 +150,77 @@
             ],
             "description": "Rate along an ordered rubric, answered with a probability per level.",
             "unevaluatedProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "instructions": {
+                "description": "What to find, and in which image. It need not be a question.",
+                "type": [
+                  "string",
+                  "object",
+                  "array",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "box"
+              }
+            },
+            "description": "Locate something in an image, answered with the four edges of a box.",
+            "required": [
+              "type",
+              "instructions"
+            ],
+            "unevaluatedProperties": false
           }
         ],
-        "description": "One typed question. The `type` field selects the kind: `noul`, `choice` or `score`. The question id is never sent to the model, so put the full meaning in `instructions`."
+        "description": "One typed question. The `type` field selects the kind: `noul`, `choice`, `score` or `box`. The question id is never sent to the model, so put the full meaning in `instructions`."
       },
       "description": "The questions, keyed by an id the caller chooses. Answers come back under the same ids.\n\nQuestions keep the order they were written in. Ids are never sent to the model. A repeated\nid is a parse error when reading JSON or YAML text directly (a parser that has already\ncollapsed the document into a generic value keeps only the last one).",
       "minProperties": 1
+    },
+    "assets": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The kind of asset. Only `image` exists; the API treats an absent `type` as `image`."
+          },
+          "data_base64": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The file, standard base64 with `=` padding, no line breaks and no `data:` prefix."
+          },
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`png`, `jpg` or `jpeg`. Required with `data_base64`."
+          },
+          "part": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name of a multipart file part holding the image. This crate sends JSON bodies only,\nso validation refuses it; it is kept so that a request is parsed as written."
+          }
+        },
+        "description": "One image, keyed by a reference string. Write that reference in the state, in a question's instructions or in its criteria, and the model sees the image there. `data_base64` is the file, base64 encoded, with `format` saying which kind."
+      },
+      "description": "Images the request carries, keyed by the reference string written where each image belongs: in `state`, or in a question's `instructions` or `criteria`. Needs `jev-preview`."
     }
   },
   "required": [

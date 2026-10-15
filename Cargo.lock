@@ -1062,6 +1062,7 @@ version = "0.2.0"
 dependencies = [
  "anstyle",
  "assert_cmd",
+ "base64 0.22.1",
  "clap",
  "clap_complete",
  "clap_mangen",
@@ -1099,6 +1100,7 @@ dependencies = [
 name = "jev-client"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "fastrand",
  "httpdate",
  "indexmap",

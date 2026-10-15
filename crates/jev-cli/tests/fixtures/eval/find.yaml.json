@@ -1,0 +1,7 @@
+{
+  "model": "jev-preview",
+  "questions": {
+    "square": { "type": "box", "instructions": "the red square in `photo`" },
+    "present": { "type": "noul", "instructions": "Is there a red square in `photo`?" }
+  }
+}

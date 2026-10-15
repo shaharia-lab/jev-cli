@@ -197,6 +197,19 @@ fn write_answer(text: &mut String, id: &str, answer: &Answer, ui: Ui) {
             }));
             text.push_str(&distribution(rows, ui));
         }
+        Answer::Box(answer) => {
+            let edges = &answer.edges;
+            let _ = writeln!(
+                text,
+                "{id}  {}  {}  {}",
+                ui.dim("box"),
+                ui.bold(&format!(
+                    "top {:.2}  bottom {:.2}  left {:.2}  right {:.2}",
+                    edges.top, edges.bottom, edges.left, edges.right
+                )),
+                ui.dim(&format!("(confidence {:.2})", answer.confidence))
+            );
+        }
         other => {
             let kind = other.type_name().unwrap_or("unknown");
             let raw = serde_json::to_string(other).unwrap_or_default();

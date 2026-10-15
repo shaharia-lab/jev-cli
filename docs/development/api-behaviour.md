@@ -29,6 +29,7 @@ identifies the call to TypeSafe support, so `jev` surfaces it on success and on 
 | `noul` | optional `{"true": …, "false": …}` | `noul`: P(yes), 0 to 1. **No `confidence`.** |
 | `choice` | required map of option to description or `null`, at most 255 options | `choice`, `probabilities`, `confidence` |
 | `score` | required ordered array of 2–10 levels; the index is the level | `score` (probability-weighted mean), `legend`, `probabilities`, `confidence` |
+| `box` | none | `box` (`top`, `bottom`, `left`, `right`, each 0 to 1), `confidence` |
 
 Question ids are never shown to the model, so the meaning has to be in `instructions`. `instructions`
 and every criteria value accept a string, an object or an array, and `null`, except for a Score
@@ -72,6 +73,31 @@ an instruction with a backticked path such as `` `ticket.messages[0].text` ``.
 - `GET /v1/models` returns `name`, `description` and an RFC 3339 `release_date` with microseconds,
   and lists only the aliases (`jev-latest`, `jev-preview`). A versioned id that is not listed is
   still accepted by `--model`.
+
+## Images and the `box` question (observed 2026-10-14 against `jev-1.14.0`)
+
+- A request opts in to images with the header `TypeSafe-Danger-Zone-Images: true`. Without it,
+  a request carrying `assets` or a `box` question gets
+  `400 {"detail": {"error_type": "api_usage_error", "message": "Images are experimental. Send the header TypeSafe-Danger-Zone-Images: true to use them."}}`.
+  `HttpTransport` adds the header exactly when the request needs it.
+- Images travel in a top-level `assets` map keyed by a reference string, as
+  `{"type": "image", "data_base64": "...", "format": "png"}`; `format` is `png`, `jpg` or
+  `jpeg`. The API replaces the reference wherever it appears as text in `state`, `instructions`
+  or criteria, so `jev` writes it as the value of the `--image` name in an object state, and the
+  question says `` `name` ``. An asset referenced nowhere is a 400. Multipart upload (`part`)
+  exists too; `jev` sends JSON bodies only, and validation says so.
+- `box` is answered only by Jev 1.14 (`jev-preview` on 2026-10-14). On `jev-1.13.0` the request
+  gets the uninformative `400 Invalid request.`, the same as an unknown question type.
+- A `box` question **always returns four edges**, even with no image in the request at all
+  (200, confidence 0.01 for a text state), which is why validation warns about a box without
+  `assets` instead of refusing it.
+- A box's `criteria` are ignored silently, like any unknown field inside a question.
+- Image tokens are billed as input tokens and show in `usage.input_tokens` (a 400x300 PNG with
+  two questions cost 637). TypeSafe gives no way to estimate them, so `jev`'s size estimate
+  covers the text only.
+- Limits as documented: PNG or JPEG, 256 to 1568 px a side, 78,400 to 2,458,624 px in all,
+  16 MiB per image, 32 MiB per request body, and one bad image fails the whole request. Not
+  re-measured; validation reads the size from the PNG or JPEG header and applies them offline.
 
 ## Model facts and limits
 

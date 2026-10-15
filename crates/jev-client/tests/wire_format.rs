@@ -34,8 +34,8 @@ fn every_api_reference_request_round_trips() {
     let fixtures = common::load("api-reference", "request-");
     assert_eq!(
         fixtures.len(),
-        4,
-        "one plain Noul, one Noul with criteria, a Choice and a Score"
+        5,
+        "one plain Noul, one Noul with criteria, a Choice, a Score and a Box with its image"
     );
 
     for fixture in fixtures {
@@ -47,7 +47,7 @@ fn every_api_reference_request_round_trips() {
 #[test]
 fn every_api_reference_response_round_trips_into_a_known_answer() {
     let fixtures = common::load("api-reference", "response-");
-    assert_eq!(fixtures.len(), 3, "one response per answer type");
+    assert_eq!(fixtures.len(), 4, "one response per answer type");
 
     for fixture in fixtures {
         let again = round_trip::<Response>(&fixture.name, &fixture.json);
