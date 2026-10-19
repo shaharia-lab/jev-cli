@@ -34,14 +34,14 @@
               {
                 "type": "object",
                 "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "noul"
+                  },
                   "noul": {
                     "type": "number",
                     "format": "double",
                     "description": "The probability of yes, from 0 (no) to 1 (yes)."
-                  },
-                  "type": {
-                    "type": "string",
-                    "const": "noul"
                   }
                 },
                 "required": [
@@ -53,6 +53,10 @@
               {
                 "type": "object",
                 "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "choice"
+                  },
                   "choice": {
                     "type": "string",
                     "description": "The highest-probability option."
@@ -69,10 +73,6 @@
                     "type": "number",
                     "format": "double",
                     "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
-                  },
-                  "type": {
-                    "type": "string",
-                    "const": "choice"
                   }
                 },
                 "required": [
@@ -86,6 +86,10 @@
               {
                 "type": "object",
                 "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "score"
+                  },
                   "score": {
                     "type": "number",
                     "format": "double",
@@ -116,10 +120,6 @@
                     "type": "number",
                     "format": "double",
                     "description": "How certain the model is, from 0 to 1, derived from `probabilities`."
-                  },
-                  "type": {
-                    "type": "string",
-                    "const": "score"
                   }
                 },
                 "required": [

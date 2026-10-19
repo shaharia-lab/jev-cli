@@ -23,6 +23,10 @@
           {
             "type": "object",
             "properties": {
+              "type": {
+                "type": "string",
+                "const": "noul"
+              },
               "instructions": {
                 "description": "The yes/no question to evaluate.\n\nThe API reference marks this as required. In practice the server also accepts a Noul that\nhas only `criteria`, so it is optional here and offline validation decides.",
                 "type": [
@@ -59,10 +63,6 @@
                 },
                 "description": "Optional descriptions of what a yes and a no mean.",
                 "additionalProperties": false
-              },
-              "type": {
-                "type": "string",
-                "const": "noul"
               }
             },
             "description": "A yes/no question, answered with the probability of yes.",
@@ -75,6 +75,10 @@
           {
             "type": "object",
             "properties": {
+              "type": {
+                "type": "string",
+                "const": "choice"
+              },
               "instructions": {
                 "description": "What the model should decide.\n\nMarked required by the API reference, although the server accepts a Choice without it.",
                 "type": [
@@ -98,10 +102,6 @@
                 "description": "Each option mapped to its description, or to `null` when the name says enough.\n\nOptions keep the order they were written in. The API allows up to 255 of them. A repeated\noption is a parse error when reading JSON or YAML text directly.",
                 "minProperties": 1,
                 "maxProperties": 255
-              },
-              "type": {
-                "type": "string",
-                "const": "choice"
               }
             },
             "required": [
@@ -115,6 +115,10 @@
           {
             "type": "object",
             "properties": {
+              "type": {
+                "type": "string",
+                "const": "score"
+              },
               "instructions": {
                 "description": "What the model should rate.\n\nMarked required by the API reference, although the server accepts a Score without it.",
                 "type": [
@@ -137,10 +141,6 @@
                 "minItems": 2,
                 "maxItems": 10,
                 "description": "Level descriptions in order, from level 0 upwards. The API allows 2 to 10 levels.\n\nUnlike a choice option, a level cannot be `null`: the server rejects it with a 422."
-              },
-              "type": {
-                "type": "string",
-                "const": "score"
               }
             },
             "required": [
