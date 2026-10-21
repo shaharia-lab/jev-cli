@@ -396,7 +396,8 @@ async fn a_repeated_id_or_a_missing_field_fails_before_any_request() {
             "a row is never quoted"
         );
     }
-    assert!(sent(&server).await.is_empty());
+    let requests = sent(&server).await;
+    assert!(requests.is_empty(), "{requests:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -536,7 +537,8 @@ async fn nothing_is_sent_for_a_bad_question_set_a_used_output_file_or_a_missing_
     assert_eq!(no_key.code, 3, "{}", no_key.stderr);
     assert!(!fresh.exists(), "no output file is left behind");
     assert_eq!(field.code, 2);
-    assert!(sent(&server).await.is_empty());
+    let requests = sent(&server).await;
+    assert!(requests.is_empty(), "{requests:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -833,7 +835,7 @@ async fn sigint_finishes_the_rows_in_flight_prints_the_summary_and_exits_130() {
         .unwrap();
 
     assert_eq!(output.status.code(), Some(130));
-    assert!(output.stdout.is_empty());
+    assert!(output.stdout.is_empty(), "{:?}", output.stdout);
     let records = lines_of(&fs::read_to_string(&out).unwrap());
     assert!(
         records.len() >= 2 && records.len() < 40,
@@ -1442,7 +1444,8 @@ async fn a_json_input_that_cannot_be_used_fails_before_any_request() {
             "a row is never quoted"
         );
     }
-    assert!(sent(&server).await.is_empty());
+    let requests = sent(&server).await;
+    assert!(requests.is_empty(), "{requests:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

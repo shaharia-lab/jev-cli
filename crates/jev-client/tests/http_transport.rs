@@ -144,7 +144,8 @@ async fn a_successful_evaluation_sends_the_request_as_written_and_returns_metada
     );
     assert_eq!(reply.meta.request_id.as_deref(), Some("req_ok"));
     assert_eq!(reply.meta.attempts, 1);
-    assert!(clock.sleeps().is_empty());
+    let sleeps = clock.sleeps();
+    assert!(sleeps.is_empty(), "{sleeps:?}");
     let raw: Value = serde_json::from_str(reply.raw_body.as_deref().unwrap()).unwrap();
     assert_eq!(
         raw["answers"]["is_urgent"]["noul"], 0.92,
@@ -321,7 +322,8 @@ async fn a_401_and_a_422_are_not_retried_and_keep_the_api_error_type() {
             1,
             "{status} must not be retried"
         );
-        assert!(clock.sleeps().is_empty());
+        let sleeps = clock.sleeps();
+        assert!(sleeps.is_empty(), "{sleeps:?}");
     }
 }
 
@@ -362,7 +364,8 @@ async fn retrying_can_be_switched_off() {
 
     assert_eq!(error.attempts(), 1);
     assert_eq!(requests_received(&server).await, 1);
-    assert!(clock.sleeps().is_empty());
+    let sleeps = clock.sleeps();
+    assert!(sleeps.is_empty(), "{sleeps:?}");
 }
 
 #[tokio::test]

@@ -353,7 +353,7 @@ fn every_rule_fires_where_it_should_with_a_message_and_a_fix() {
             .find(|finding| finding.rule == rule && finding.path == path)
             .unwrap_or_else(|| panic!("no `{}` at {path:?} in {:#?}", rule.id(), report.findings));
         assert_eq!(finding.severity, severity, "{}", rule.id());
-        assert!(!finding.message.is_empty());
+        assert_ne!(finding.message, "");
         assert!(
             finding
                 .suggestion

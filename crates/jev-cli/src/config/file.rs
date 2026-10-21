@@ -468,7 +468,7 @@ concurrency = 8
             Value::Duration(Duration::from_millis(500))
         );
         assert_eq!(file.profiles["staging"][&Key::MaxRetries], Value::Count(0));
-        assert!(file.warnings.is_empty());
+        assert!(file.warnings.is_empty(), "{:?}", file.warnings);
     }
 
     #[test]

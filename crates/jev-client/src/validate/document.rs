@@ -305,7 +305,8 @@ mod tests {
             serde_json::to_string(&document).unwrap(),
             r#"{"z":1,"a":[true,null,2.5,"s"],"m":{"k":-3}}"#
         );
-        assert!(document.duplicate_keys().is_empty());
+        let duplicates = document.duplicate_keys();
+        assert!(duplicates.is_empty(), "{duplicates:?}");
     }
 
     #[test]
@@ -361,7 +362,8 @@ mod tests {
 
         let document = Document::from(&request);
 
-        assert!(document.duplicate_keys().is_empty());
+        let duplicates = document.duplicate_keys();
+        assert!(duplicates.is_empty(), "{duplicates:?}");
         assert_eq!(document.clone().into_request().unwrap(), request);
         assert!(
             Document::from_value(json!({ "state": "s" }))
