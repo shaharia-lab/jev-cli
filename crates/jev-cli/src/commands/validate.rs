@@ -10,6 +10,7 @@ use serde_json::Value;
 use super::Context;
 use crate::cli::ValidateArgs;
 use crate::error::CliError;
+use crate::images;
 use crate::input::{self, StateSource};
 use crate::output::{Render, Ui, printable};
 
@@ -29,11 +30,12 @@ pub(crate) fn run(arguments: &ValidateArgs, context: &mut Context<'_>) -> Result
         (None, Some(path)) => Some(StateSource::File(path.to_owned())),
         (None, None) => None,
     };
-    if let Some(source) = state_source {
-        let state = input::read_state(&source, arguments.state_format, context.stdin)?;
-        if let Value::Object(root) = document.value_mut() {
-            root.insert("state".to_owned(), state);
-        }
+    let mut state = state_source
+        .map(|source| input::read_state(&source, arguments.state_format, context.stdin))
+        .transpose()?;
+    images::attach(&arguments.images, &mut document, &mut state)?;
+    if let (Some(state), Value::Object(root)) = (state, document.value_mut()) {
+        root.insert("state".to_owned(), state);
     }
 
     // A request file may leave the model and the state to whoever evaluates it.

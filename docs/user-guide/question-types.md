@@ -1,6 +1,6 @@
-# The three question types
+# The four question types
 
-Jev answers three kinds of question. Picking the right one is most of the work, because the
+Jev answers four kinds of question. Picking the right one is most of the work, because the
 answer's shape decides what your code can do with it.
 
 | Type | Ask it when | You get back |
@@ -8,9 +8,11 @@ answer's shape decides what your code can do with it.
 | `noul` | A property either holds or it does not | The probability of yes, from 0 to 1 |
 | `choice` | Exactly one of up to 255 options must win | The winner, its confidence, and a probability per option |
 | `score` | A described scale of 2 to 10 levels | A position on the scale, and a confidence |
+| `box` | Something has to be located in an image | The box's four edges, and a confidence |
 
-Each has a shortcut command for one question (`jev noul`, `jev choice`, `jev score`) and can be
-one of many questions in a request file run with `jev eval`.
+The first three have a shortcut command for one question (`jev noul`, `jev choice`,
+`jev score`); any of them can be one of many questions in a request file run with `jev eval`,
+which is also where a `box` question goes.
 
 ## noul: does this hold?
 
@@ -69,6 +71,58 @@ Levels are counted from 0, so those three give a score between 0 and 2. Two rule
 - **One dimension per score.** "How urgent and how angry" is two questions.
 
 Gate on it with `--fail-under`, `--fail-over` and `--min-confidence`.
+
+## box: where is this in the image?
+
+```yaml
+# find-mug.yaml
+questions:
+  mug:
+    type: box
+    instructions: the coffee mug in `photo`
+  present:
+    type: noul
+    instructions: Is there a coffee mug in `photo`?
+```
+
+```bash
+jev eval -f find-mug.yaml --image photo=desk.jpg --model jev-preview -o json
+```
+
+`--image NAME=PATH` attaches a PNG or JPEG and puts it under `NAME` in the state, so questions
+refer to it as `` `NAME` `` like any other part of the state; repeat the flag for several images.
+The answer is `box` with `top`, `bottom`, `left` and `right` as fractions of the image's height
+and width (0 is the top left corner, 1 the bottom right), plus a `confidence`. Three things to
+know:
+
+- **It needs Jev 1.14.** Pass `--model jev-preview` (or a versioned id from 1.14 up); older
+  models reject the request. Images and boxes are experimental on the API side, so the shape can
+  change between releases.
+- **There is no "not found".** A box question always answers with four edges, even when the
+  thing is not in the picture. Pair it with a noul, as above, and ignore the box when the noul
+  is low.
+- **One target per question.** To find several things, ask one box question for each. Small
+  things in a large picture can be missed; crop to the region first.
+
+The API accepts PNG and JPEG only, each side 256 to 1568 pixels and 78,400 to 2,458,624
+pixels in all, and rejects the whole request over one bad image rather than resizing it. `jev`
+reads the size from the file's header and refuses it offline, before anything is sent.
+
+Gate on it with `--assert "mug.confidence >= 0.8"`, and read the edges with
+`--field answers.mug.box`. The size estimate counts the text only; image tokens are billed on
+top, and `usage.input_tokens` in the result shows the real figure.
+
+A request file can also carry the image itself, base64 encoded, under `assets`, keyed by the
+reference string written where the image belongs:
+
+```yaml
+state:
+  photo: img-7c2f9a
+questions:
+  mug: { type: box, instructions: "the coffee mug in `photo`" }
+assets:
+  img-7c2f9a: { type: image, data_base64: iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV, format: png }
+```
 
 ## Reading the answer
 

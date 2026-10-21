@@ -7,8 +7,8 @@ also see the exact request body that would be sent.
 
 Input:
 A request file (-f), JSON or YAML; `-` reads stdin. `state` and `model` may be left out. --state or
---state-file adds a state, so that the size of the request can be estimated. Nothing is read from a
-pipe unless asked for with `-`.
+--state-file adds a state, so that the size of the request can be estimated, and --image NAME=PATH
+attaches an image the way `jev eval` would. Nothing is read from a pipe unless asked for with `-`.
 
 Output:
 `file`, `valid`, `strict`, `summary` (counts of `errors` and `warnings`), `findings` (each with
@@ -42,6 +42,10 @@ Options:
           - json: Parse the content as JSON and send the object or array
 
           [default: auto]
+
+      --image <NAME=PATH>
+          Check the request with a PNG or JPEG attached under NAME in an object state, as `jev eval
+          --image` would send it; repeat for each image
 
       --strict
           Count warnings as errors, so that any finding makes the request invalid

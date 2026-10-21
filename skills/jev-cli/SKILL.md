@@ -2,8 +2,9 @@
 name: jev-cli
 description: >
   Use the `jev` command-line tool (an unofficial, open-source CLI for TypeSafe AI's Jev model) to
-  get calibrated probabilities for typed questions about text or JSON: yes/no (noul), one of
-  several options (choice) or a position on a rubric (score). Covers discovering the CLI with
+  get calibrated probabilities for typed questions about text, JSON or an image: yes/no (noul),
+  one of several options (choice), a position on a rubric (score) or where something is in a
+  picture (box). Covers discovering the CLI with
   `jev spec`, authoring request files from `jev schema`, checking them offline with
   `jev validate`, running them with JSON output, branching on exit codes, gating shell scripts
   and CI on an answer, labelling many records with `jev batch run`, and choosing between the CLI
@@ -26,6 +27,9 @@ Jev never writes text. It reads a **state** (a string, or a JSON object or array
 - **choice**: which one of these options? Probabilities over your options (up to 255) that add
   up to 1, the winner, and a confidence.
 - **score**: where on this ordered rubric of 2 to 10 levels? The expected level, counted from 0.
+- **box**: where is this in the image? Four edges as fractions of the picture, and a confidence.
+  Needs an image attached with `--image name=path` and `--model jev-preview`; there is no
+  "not found" answer, so pair it with a noul.
 
 ## The rule that matters most: ask the binary, not this file
 

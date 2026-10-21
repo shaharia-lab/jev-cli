@@ -194,6 +194,14 @@ impl Condition {
                 "compare with an option (`{} == <option>`), or use `{}.confidence`",
                 self.id, self.id
             ))),
+            (Question::Box(_), _, false) => Err(mismatch(format!(
+                "`{}` is a box, whose answer is four edges, not one number",
+                self.id
+            ))
+            .hint(format!(
+                "gate on `{}.confidence`, and read the edges with --field answers.{}.box",
+                self.id, self.id
+            ))),
             (
                 Question::Noul(_) | Question::Score(_),
                 Expected::Option(..) | Expected::AnyOf(_),

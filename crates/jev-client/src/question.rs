@@ -1,4 +1,4 @@
-//! Typed questions: [`Noul`], [`Choice`] and [`Score`].
+//! Typed questions: [`Noul`], [`Choice`], [`Score`] and [`BoxQuestion`].
 
 use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
@@ -31,7 +31,7 @@ use crate::validate::{MAX_CHOICE_OPTIONS, MAX_SCORE_LEVELS, MIN_SCORE_LEVELS};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "lowercase")]
 #[schemars(
-    description = "One typed question. The `type` field selects the kind: `noul`, `choice` or `score`. The question id is never sent to the model, so put the full meaning in `instructions`."
+    description = "One typed question. The `type` field selects the kind: `noul`, `choice`, `score` or `box`. The question id is never sent to the model, so put the full meaning in `instructions`."
 )]
 #[non_exhaustive]
 pub enum Question {
@@ -44,16 +44,20 @@ pub enum Question {
     /// Rate along an ordered rubric, answered with a probability per level.
     #[schemars(extend("unevaluatedProperties" = false))]
     Score(Score),
+    /// Locate something in an image, answered with the four edges of a box.
+    #[schemars(extend("unevaluatedProperties" = false))]
+    Box(BoxQuestion),
 }
 
 impl Question {
-    /// The wire name of the question type: `noul`, `choice` or `score`.
+    /// The wire name of the question type: `noul`, `choice`, `score` or `box`.
     #[must_use]
     pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Noul(_) => "noul",
             Self::Choice(_) => "choice",
             Self::Score(_) => "score",
+            Self::Box(_) => "box",
         }
     }
 
@@ -64,6 +68,7 @@ impl Question {
             Self::Noul(question) => question.instructions.as_ref(),
             Self::Choice(question) => question.instructions.as_ref(),
             Self::Score(question) => question.instructions.as_ref(),
+            Self::Box(question) => question.instructions.as_ref(),
         }
     }
 
@@ -77,6 +82,7 @@ impl Question {
             Self::Noul(question) => &question.extra,
             Self::Choice(question) => &question.extra,
             Self::Score(question) => &question.extra,
+            Self::Box(question) => &question.extra,
         }
     }
 }
@@ -96,6 +102,12 @@ impl From<Choice> for Question {
 impl From<Score> for Question {
     fn from(question: Score) -> Self {
         Self::Score(question)
+    }
+}
+
+impl From<BoxQuestion> for Question {
+    fn from(question: BoxQuestion) -> Self {
+        Self::Box(question)
     }
 }
 
@@ -286,6 +298,46 @@ impl Score {
     pub fn level(mut self, description: impl Into<Content>) -> Self {
         self.criteria.push(description.into());
         self
+    }
+}
+
+/// Locates something in an image. The answer is a box: four edges as fractions of the image's
+/// width and height, and a confidence.
+///
+/// The image is an [`Asset`](crate::Asset) of the request, named in `instructions` the way state
+/// is referenced: `` the coffee mug in `photo` ``. There is no "not found" answer, so pair it
+/// with a [`Noul`] when the thing may be absent. Needs Jev 1.14 (`jev-preview`), and the API
+/// calls it experimental.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[schemars(
+    description = "Locates one thing in an image: `instructions` says what to find and in which image, such as \"the coffee mug in `photo`\". Takes no `criteria`. The answer is the box's four edges as fractions of the image, and a confidence; there is no not-found answer.",
+    extend("required" = ["instructions"])
+)]
+#[non_exhaustive]
+pub struct BoxQuestion {
+    /// What to find, and in which image. It need not be a question.
+    #[serde(
+        default,
+        deserialize_with = "de::present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub instructions: Option<Content>,
+
+    /// Fields this version of the crate does not know, sent to the API unchanged. A box takes
+    /// no `criteria`; validation reports one.
+    #[serde(flatten)]
+    #[schemars(skip)]
+    pub extra: IndexMap<String, Value>,
+}
+
+impl BoxQuestion {
+    /// A box question with the given instructions.
+    #[must_use]
+    pub fn new(instructions: impl Into<Content>) -> Self {
+        Self {
+            instructions: Some(instructions.into()),
+            ..Self::default()
+        }
     }
 }
 

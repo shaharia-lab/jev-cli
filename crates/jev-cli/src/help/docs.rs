@@ -34,9 +34,11 @@ come back together, and extra questions cost tokens, not time. Use `jev noul`, `
 `jev score` for one question written on the command line, `jev validate` to check a request file \
 without sending it, and `jev batch run` to apply the same questions to many states.",
         input: "A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of \
-question id to question, and optionally `state` and `model`. The state is --state (text) or \
---state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. The model is \
---model, else the file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.",
+question id to question, and optionally `state`, `model` and `assets`. The state is --state (text) \
+or --state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. --image NAME=PATH \
+attaches a PNG or JPEG under NAME in an object state, so a question can say `NAME`; a `box` \
+question locates something in it and needs --model jev-preview. The model is --model, else the \
+file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.",
         output: "The result envelope: `model` (the versioned id that answered), `requested_model`, \
 `answers` (one per question id, exactly as the API returned them), `usage`, `cost_usd` (an \
 estimate), `request_id` and `latency_ms`, plus `gate` when --assert was used. --dry-run prints the \
@@ -60,16 +62,16 @@ as received.",
                 command: "jev eval -f triage.yaml --state-file ticket.txt",
             },
             Example {
-                description: "Only one answer's probability, for a script",
-                command: "jev eval -f triage.yaml --state-file ticket.txt --field answers.is_urgent.noul",
-            },
-            Example {
                 description: "Gate a CI step: exit 10 unless the change is confidently low risk",
                 command: "jev eval -f review.yaml --state-file diff.txt \\\n    --assert \"risk == low\" --assert \"risk.confidence >= 0.8\"",
             },
             Example {
                 description: "Check the request and see its size, without sending it or needing a key",
                 command: "jev eval -f triage.yaml --state-file ticket.txt --dry-run -o json",
+            },
+            Example {
+                description: "Find something in an image with a `box` question, and whether it is there at all",
+                command: "jev eval -f find-mug.yaml --image photo=desk.jpg --model jev-preview",
             },
         ],
     },
@@ -209,8 +211,9 @@ an error)",
 runs every check `jev eval` runs before sending, offline, with no API key and no cost. Use \
 `jev eval --dry-run` to also see the exact request body that would be sent.",
         input: "A request file (-f), JSON or YAML; `-` reads stdin. `state` and `model` may be \
-left out. --state or --state-file adds a state, so that the size of the request can be estimated. \
-Nothing is read from a pipe unless asked for with `-`.",
+left out. --state or --state-file adds a state, so that the size of the request can be estimated, \
+and --image NAME=PATH attaches an image the way `jev eval` would. Nothing is read from a pipe \
+unless asked for with `-`.",
         output: "`file`, `valid`, `strict`, `summary` (counts of `errors` and `warnings`), \
 `findings` (each with `severity`, `rule`, `question`, `path` as a JSON Pointer, `message` and \
 `suggestion`) and `size`, the estimated input tokens when there is a state.",

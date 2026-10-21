@@ -1,4 +1,4 @@
-//! Typed answers: [`NoulAnswer`], [`ChoiceAnswer`] and [`ScoreAnswer`].
+//! Typed answers: [`NoulAnswer`], [`ChoiceAnswer`], [`ScoreAnswer`] and [`BoxAnswer`].
 
 use indexmap::IndexMap;
 use schemars::JsonSchema;
@@ -36,6 +36,8 @@ pub enum Answer {
     Choice(ChoiceAnswer),
     /// The probability-weighted level and the probability of every level.
     Score(ScoreAnswer),
+    /// The four edges of a box in an image, and a confidence.
+    Box(BoxAnswer),
     /// An answer this version of the crate does not understand, kept as the raw JSON received.
     #[serde(untagged)]
     Unknown(Value),
@@ -52,6 +54,7 @@ impl Answer {
             Self::Noul(_) => Some("noul"),
             Self::Choice(_) => Some("choice"),
             Self::Score(_) => Some("score"),
+            Self::Box(_) => Some("box"),
             Self::Unknown(raw) => raw.get("type").and_then(Value::as_str),
         }
     }
@@ -82,6 +85,15 @@ impl Answer {
             _ => None,
         }
     }
+
+    /// The answer as a [`BoxAnswer`], when it is one.
+    #[must_use]
+    pub const fn as_box(&self) -> Option<&BoxAnswer> {
+        match self {
+            Self::Box(answer) => Some(answer),
+            _ => None,
+        }
+    }
 }
 
 impl From<NoulAnswer> for Answer {
@@ -99,6 +111,12 @@ impl From<ChoiceAnswer> for Answer {
 impl From<ScoreAnswer> for Answer {
     fn from(answer: ScoreAnswer) -> Self {
         Self::Score(answer)
+    }
+}
+
+impl From<BoxAnswer> for Answer {
+    fn from(answer: BoxAnswer) -> Self {
+        Self::Box(answer)
     }
 }
 
@@ -189,6 +207,59 @@ impl ScoreAnswer {
             legend,
             probabilities,
             confidence,
+        }
+    }
+}
+
+/// The answer to a [`BoxQuestion`](crate::BoxQuestion).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[schemars(description = "The answer to a box: where the thing is in the image, and a confidence.")]
+#[non_exhaustive]
+pub struct BoxAnswer {
+    /// The edges of the box.
+    #[serde(rename = "box")]
+    pub edges: BoxEdges,
+
+    /// How certain the model is, from 0 to 1. The box is always returned, even when the thing
+    /// is not in the image; a confidence near 0 is the sign.
+    pub confidence: f64,
+}
+
+impl BoxAnswer {
+    /// A box answer.
+    #[must_use]
+    pub const fn new(edges: BoxEdges, confidence: f64) -> Self {
+        Self { edges, confidence }
+    }
+}
+
+/// The four edges of a box, each a fraction of the image's width or height from 0 to 1.
+/// `left` is less than `right`, and `top` less than `bottom`; the origin is the top left.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[schemars(
+    description = "The four edges of a box as fractions of the image's width (`left`, `right`) and height (`top`, `bottom`), from 0 at the top left to 1."
+)]
+#[non_exhaustive]
+pub struct BoxEdges {
+    /// The top edge, as a fraction of the image's height.
+    pub top: f64,
+    /// The bottom edge, as a fraction of the image's height.
+    pub bottom: f64,
+    /// The left edge, as a fraction of the image's width.
+    pub left: f64,
+    /// The right edge, as a fraction of the image's width.
+    pub right: f64,
+}
+
+impl BoxEdges {
+    /// Edges given as `top`, `bottom`, `left`, `right`.
+    #[must_use]
+    pub const fn new(top: f64, bottom: f64, left: f64, right: f64) -> Self {
+        Self {
+            top,
+            bottom,
+            left,
+            right,
         }
     }
 }

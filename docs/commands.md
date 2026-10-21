@@ -112,7 +112,7 @@ jev eval [OPTIONS] --file <FILE>
 
 **When to use.** Use `jev eval` to ask several questions about the same state in one call: the answers come back together, and extra questions cost tokens, not time. Use `jev noul`, `jev choice` or `jev score` for one question written on the command line, `jev validate` to check a request file without sending it, and `jev batch run` to apply the same questions to many states.
 
-**Input.** A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of question id to question, and optionally `state` and `model`. The state is --state (text) or --state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
+**Input.** A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of question id to question, and optionally `state`, `model` and `assets`. The state is --state (text) or --state-file (a path, or `-` for stdin), else the file's `state`, else a pipe. --image NAME=PATH attaches a PNG or JPEG under NAME in an object state, so a question can say `NAME`; a `box` question locates something in it and needs --model jev-preview. The model is --model, else the file's `model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
 
 **Output.** The result envelope: `model` (the versioned id that answered), `requested_model`, `answers` (one per question id, exactly as the API returned them), `usage`, `cost_usd` (an estimate), `request_id` and `latency_ms`, plus `gate` when --assert was used. --dry-run prints the request body and a size estimate instead, and sends nothing; --raw prints the API's response body as received.
 
@@ -138,6 +138,7 @@ _State_
 | `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
+| `--image <NAME=PATH>` | string, repeatable |  |  |  | Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat for each image (needs `jev-preview`) |
 
 _Sending_
 
@@ -167,15 +168,15 @@ _Sending_
 # Several questions about one ticket, in a single call
 jev eval -f triage.yaml --state-file ticket.txt
 
-# Only one answer's probability, for a script
-jev eval -f triage.yaml --state-file ticket.txt --field answers.is_urgent.noul
-
 # Gate a CI step: exit 10 unless the change is confidently low risk
 jev eval -f review.yaml --state-file diff.txt \
     --assert "risk == low" --assert "risk.confidence >= 0.8"
 
 # Check the request and see its size, without sending it or needing a key
 jev eval -f triage.yaml --state-file ticket.txt --dry-run -o json
+
+# Find something in an image with a `box` question, and whether it is there at all
+jev eval -f find-mug.yaml --image photo=desk.jpg --model jev-preview
 ```
 
 ### jev noul
@@ -224,6 +225,7 @@ _State_
 | `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
+| `--image <NAME=PATH>` | string, repeatable |  |  |  | Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat for each image (needs `jev-preview`) |
 
 _Sending_
 
@@ -309,6 +311,7 @@ _State_
 | `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
+| `--image <NAME=PATH>` | string, repeatable |  |  |  | Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat for each image (needs `jev-preview`) |
 
 _Sending_
 
@@ -393,6 +396,7 @@ _State_
 | `--state <TEXT>` | string |  |  |  | The state to evaluate, as text (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Read the state from a file, or from stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read the state: `json` sends an object or array, `text` one string |
+| `--image <NAME=PATH>` | string, repeatable |  |  |  | Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat for each image (needs `jev-preview`) |
 
 _Sending_
 
@@ -440,7 +444,7 @@ jev validate [OPTIONS] --file <FILE>
 
 **When to use.** Use `jev validate` while writing a request file, in CI, or before a large batch: it runs every check `jev eval` runs before sending, offline, with no API key and no cost. Use `jev eval --dry-run` to also see the exact request body that would be sent.
 
-**Input.** A request file (-f), JSON or YAML; `-` reads stdin. `state` and `model` may be left out. --state or --state-file adds a state, so that the size of the request can be estimated. Nothing is read from a pipe unless asked for with `-`.
+**Input.** A request file (-f), JSON or YAML; `-` reads stdin. `state` and `model` may be left out. --state or --state-file adds a state, so that the size of the request can be estimated, and --image NAME=PATH attaches an image the way `jev eval` would. Nothing is read from a pipe unless asked for with `-`.
 
 **Output.** `file`, `valid`, `strict`, `summary` (counts of `errors` and `warnings`), `findings` (each with `severity`, `rule`, `question`, `path` as a JSON Pointer, `message` and `suggestion`) and `size`, the estimated input tokens when there is a state.
 
@@ -455,6 +459,7 @@ _Options_
 | `--state <TEXT>` | string |  |  |  | Check the request with this state, as text, so that its size can be estimated (`-` is not stdin here: use --state-file -) |
 | `--state-file <PATH>` | string |  |  |  | Check the request with the state in this file, or on stdin with `-` |
 | `--state-format <FORMAT>` | `auto`, `text`, `json` | `auto` |  |  | How to read a state given outside the request file |
+| `--image <NAME=PATH>` | string, repeatable |  |  |  | Check the request with a PNG or JPEG attached under NAME in an object state, as `jev eval --image` would send it; repeat for each image |
 | `--strict` | flag | `false` |  |  | Count warnings as errors, so that any finding makes the request invalid |
 | `--skip-size-check` | flag | `false` |  |  | Skip the offline estimate of the request's size |
 

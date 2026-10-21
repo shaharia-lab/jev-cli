@@ -320,7 +320,8 @@ fn every_request_file_in_the_documentation_is_valid() {
     for (index, (name, body)) in files.into_iter().enumerate() {
         let file = directory.join(format!("request-{index}"));
         std::fs::write(&file, &body).unwrap();
-        let output = jev(None, &directory)
+        let mut command = jev(None, &directory);
+        command
             .args([
                 "validate",
                 "--strict",
@@ -330,13 +331,29 @@ fn every_request_file_in_the_documentation_is_valid() {
                 "json",
                 "-f",
             ])
-            .arg(&file)
-            .args([
+            .arg(&file);
+        // A box question is checked with the image it would be sent with, as `--image` attaches
+        // it: under `photo` in an object state. A file that carries its own state keeps it, and
+        // the others get the text state they are about.
+        let has_state = body.contains("state:");
+        if body.contains("type: box") && !has_state {
+            let image = repository().join("crates/jev-cli/tests/fixtures/eval/square.png");
+            command
+                .args([
+                    "--state-format",
+                    "json",
+                    "--state",
+                    r#"{"caption": "a desk"}"#,
+                ])
+                .arg("--image")
+                .arg(format!("photo={}", image.display()));
+        } else if !has_state {
+            command.args([
                 "--state",
                 "Payouts have failed since Monday and we lose money every hour.",
-            ])
-            .output()
-            .unwrap();
+            ]);
+        }
+        let output = command.output().unwrap();
         assert_eq!(
             output.status.code(),
             Some(0),

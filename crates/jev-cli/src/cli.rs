@@ -142,6 +142,11 @@ pub(crate) struct StateArgs {
     /// How to read the state: `json` sends an object or array, `text` one string
     #[arg(long, value_enum, default_value_t, value_name = "FORMAT")]
     pub(crate) state_format: StateFormat,
+
+    /// Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat
+    /// for each image (needs `jev-preview`)
+    #[arg(long = "image", value_name = "NAME=PATH")]
+    pub(crate) images: Vec<String>,
 }
 
 /// How the request is checked and sent. Shared by every evaluating command.
@@ -352,6 +357,11 @@ pub(crate) struct ValidateArgs {
     /// How to read a state given outside the request file
     #[arg(long, value_enum, default_value_t, value_name = "FORMAT")]
     pub(crate) state_format: StateFormat,
+
+    /// Check the request with a PNG or JPEG attached under NAME in an object state, as `jev eval
+    /// --image` would send it; repeat for each image
+    #[arg(long = "image", value_name = "NAME=PATH")]
+    pub(crate) images: Vec<String>,
 
     /// Count warnings as errors, so that any finding makes the request invalid
     #[arg(long)]

@@ -1,8 +1,8 @@
 //! Unofficial Rust client for [TypeSafe AI](https://typesafe.ai)'s **Jev** model.
 //!
 //! Jev is a "System One" model: it never generates text. A request carries a `state` plus a map
-//! of typed questions (`noul`, `choice`, `score`) and the response carries calibrated
-//! probabilities over answers the caller defined.
+//! of typed questions (`noul`, `choice`, `score`, `box`) and the response carries calibrated
+//! probabilities over answers the caller defined, or the edges of a box in an image.
 //!
 //! This crate is the library half of the [`jev` command-line tool]. It owns the typed request and
 //! answer model, offline validation, the HTTP transport with retries, and typed errors. It
@@ -11,8 +11,9 @@
 //!
 //! # The typed model
 //!
-//! [`Request`] holds a `state` and a map of [`Question`]s ([`Noul`], [`Choice`], [`Score`]);
-//! [`Response`] holds one [`Answer`] per question plus [`Usage`]. `state`, `instructions` and
+//! [`Request`] holds a `state`, a map of [`Question`]s ([`Noul`], [`Choice`], [`Score`],
+//! [`BoxQuestion`]) and optionally the images they refer to ([`Asset`]); [`Response`] holds one
+//! [`Answer`] per question plus [`Usage`]. `state`, `instructions` and
 //! criteria values are free-form [`Content`]. [`ModelList`] is the body of `GET /v1/models`, and
 //! [`pricing`] turns usage into an estimated cost.
 //!
@@ -78,6 +79,7 @@
 #![forbid(unsafe_code)]
 
 mod answer;
+mod asset;
 mod base_url;
 mod clock;
 mod content;
@@ -87,6 +89,7 @@ mod error;
 #[doc(hidden)]
 pub mod fuzz;
 mod http;
+mod image;
 mod models;
 pub mod pricing;
 mod question;
@@ -98,14 +101,16 @@ mod throttle;
 mod transport;
 pub mod validate;
 
-pub use answer::{Answer, ChoiceAnswer, NoulAnswer, ScoreAnswer};
+pub use answer::{Answer, BoxAnswer, BoxEdges, ChoiceAnswer, NoulAnswer, ScoreAnswer};
+pub use asset::{Asset, IMAGE_FORMATS};
 pub use base_url::{BaseUrl, InvalidBaseUrl};
 pub use clock::{Clock, SystemClock};
 pub use content::Content;
 pub use error::{Error, ErrorKind};
 pub use http::{HttpTransport, HttpTransportBuilder};
+pub use image::{ImageInfo, MAX_IMAGE_PIXELS, MAX_IMAGE_SIDE, MIN_IMAGE_PIXELS, MIN_IMAGE_SIDE};
 pub use models::{ModelCard, ModelList};
-pub use question::{Choice, Noul, NoulCriteria, Question, Score};
+pub use question::{BoxQuestion, Choice, Noul, NoulCriteria, Question, Score};
 pub use request::Request;
 pub use response::{Response, Usage};
 pub use retry::RetryPolicy;
