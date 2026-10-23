@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/shaharia-lab/jev-cli/compare/v0.2.0...v0.2.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **deps:** bump rustls to 0.23.46 and zip to 9 for security advisories ([#136](https://github.com/shaharia-lab/jev-cli/issues/136)) ([3570fa6](https://github.com/shaharia-lab/jev-cli/commit/3570fa66a924dc38714c394642ed5346905eee90))
+* **deps:** move off the yanked yoke-derive 0.8.3 ([#121](https://github.com/shaharia-lab/jev-cli/issues/121)) ([213b76b](https://github.com/shaharia-lab/jev-cli/commit/213b76bba86a2d0f844fc144f7993faa37f35332))
+
 ## [0.2.0](https://github.com/shaharia-lab/jev-cli/compare/v0.1.1...v0.2.0) (2026-09-25)
 
 
