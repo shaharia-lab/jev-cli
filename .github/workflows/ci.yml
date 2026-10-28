@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # Clippy runs on every OS so platform-specific code is linted too.
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       # The configuration that ships: default features, so without the internal test hooks.
@@ -88,7 +88,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: release
       - run: cargo test --release --locked -p jev-cli --test performance --test batch -- --ignored --nocapture --test-threads=1
@@ -110,7 +110,7 @@ jobs:
       - run: rustup toolchain install "$MSRV" --profile minimal
         env:
           MSRV: ${{ steps.msrv.outputs.version }}
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: msrv
       - run: cargo +"$MSRV" check --workspace --all-targets --all-features --locked
@@ -127,7 +127,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo doc --workspace --no-deps --all-features --locked
 
   # `cargo publish --dry-run` for both crates (DIST-4): each is packed as crates.io would receive
@@ -141,7 +141,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo publish --workspace --dry-run --locked
 
   supply-chain:
