@@ -132,6 +132,58 @@
                 "description": "The probability-weighted level and the probability of every level."
               },
               {
+                "type": "object",
+                "properties": {
+                  "box": {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "The top edge, as a fraction of the image's height."
+                      },
+                      "bottom": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "The bottom edge, as a fraction of the image's height."
+                      },
+                      "left": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "The left edge, as a fraction of the image's width."
+                      },
+                      "right": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "The right edge, as a fraction of the image's width."
+                      }
+                    },
+                    "required": [
+                      "top",
+                      "bottom",
+                      "left",
+                      "right"
+                    ],
+                    "description": "The edges of the box."
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "How certain the model is, from 0 to 1. The box is always returned, even when the thing\nis not in the image; a confidence near 0 is the sign."
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "box"
+                  }
+                },
+                "required": [
+                  "type",
+                  "box",
+                  "confidence"
+                ],
+                "description": "The four edges of a box in an image, and a confidence."
+              },
+              {
                 "description": "An answer this version of the crate does not understand, kept as the raw JSON received."
               }
             ],
