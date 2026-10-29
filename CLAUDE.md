@@ -41,6 +41,13 @@ belong in this file, the docs or a code comment, never in a new planning documen
   the title becomes the commit on `main` and feeds the changelog, which release-please owns.
   Never edit a version or `CHANGELOG.md` by hand.
 - Say in the body what the change does to the user-visible contract, if anything.
+- **New features need community review first.** An outside contributor's feature request (a new
+  command, flag, option, integration, setting, output format or behaviour) is labelled
+  `needs-community-review` and stays open for at least 14 days. It then gets `ready-for-pr` only
+  if at least three people other than the author back it, with a 👍/❤️/🚀/🎉 reaction or a comment
+  describing their own use case. The maintainer may apply `ready-for-pr` at any time. A pull
+  request for a feature whose issue lacks `ready-for-pr` is not reviewed: it gets one short "on
+  hold" comment and stays open. Bugs, docs, dependency and security fixes are not features.
 
 ### 3. Signed commits and hooks are mandatory
 

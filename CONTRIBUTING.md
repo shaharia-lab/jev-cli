@@ -79,6 +79,22 @@ toolchain:
   the title becomes the commit on `main` and feeds the changelog.
 - Reference the issue (`Closes #123`) in the description.
 
+## New features need community review first
+
+A feature is anything that adds surface area: a new command, flag, option, integration, setting,
+output format or behaviour. Bug fixes, documentation, dependency and security work are not
+features and follow the usual rules above.
+
+1. Open an issue for the feature and **do not open a pull request yet**.
+2. The issue is labelled `needs-community-review` and stays open for at least 14 days, so other
+   users can say whether they want it.
+3. After that it gets `ready-for-pr` only if at least three people other than the author back it,
+   with a 👍, ❤️, 🚀 or 🎉 reaction or a comment describing their own use case. The maintainer may
+   apply `ready-for-pr` at any time.
+4. Open the pull request once the issue has `ready-for-pr`. A pull request for a feature whose
+   issue does not have it yet is not reviewed: it is marked on hold and left open until the issue
+   gets the label.
+
 ## Releases
 
 Releases are cut by [release-please](https://github.com/googleapis/release-please); nobody edits
