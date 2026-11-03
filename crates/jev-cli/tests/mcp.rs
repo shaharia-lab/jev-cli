@@ -854,7 +854,7 @@ async fn with_allow_dir_batch_run_is_listed_and_says_where_it_may_read_and_write
         schema["properties"]["questions"]["additionalProperties"]["oneOf"]
             .as_array()
             .map(Vec::len),
-        Some(3),
+        Some(4),
         "the questions are typed as a request's are: {}",
         schema["properties"]["questions"]
     );

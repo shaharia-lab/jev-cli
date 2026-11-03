@@ -53,7 +53,7 @@ pub enum Rule {
     QuestionShape,
     /// A question has no `type`.
     TypeMissing,
-    /// A question's `type` is not `noul`, `choice` or `score`.
+    /// A question's `type` is not `noul`, `choice`, `score` or `box`.
     TypeUnknown,
     /// A question has no `instructions`, or they are `null` or empty.
     InstructionsMissing,
@@ -79,6 +79,22 @@ pub enum Rule {
     ScoreTooFewLevels,
     /// A score has more than 10 levels. The API fails with a server error.
     ScoreTooManyLevels,
+    /// A box has `criteria`. A box takes none; the API ignores them without saying so.
+    BoxCriteria,
+    /// `assets` is not an object keyed by reference.
+    AssetsType,
+    /// An asset is not an object.
+    AssetShape,
+    /// An asset's `type` is not `image`, the only kind there is.
+    AssetType,
+    /// An asset has no `data_base64`. A multipart `part` is not something this client sends.
+    AssetData,
+    /// An asset's `format` is missing, or not `png`, `jpg` or `jpeg`.
+    AssetFormat,
+    /// An asset's `data_base64` is not base64, not a PNG or JPEG, or outside the size limits.
+    AssetImage,
+    /// An asset's reference appears nowhere in the state or the questions, which the API refuses.
+    AssetUnreferenced,
     /// The whole request is estimated to be near, or beyond, the 64k-token budget.
     SizeTotal,
     /// The state plus the longest question is estimated to be near, or beyond, the 32k-token budget.
@@ -94,11 +110,14 @@ pub enum Rule {
     DuplicateDescription,
     /// Lint: a key is repeated inside `state` or structured content; only the last value is sent.
     DuplicateKey,
+    /// Lint: a box question in a request that carries no image. The API still answers, with a
+    /// confidence near 0.
+    BoxNoImage,
 }
 
 impl Rule {
     /// Every rule, in the order they are documented.
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 42] = [
         Self::RequestShape,
         Self::UnknownField,
         Self::StateMissing,
@@ -125,6 +144,14 @@ impl Rule {
         Self::DuplicateOption,
         Self::ScoreTooFewLevels,
         Self::ScoreTooManyLevels,
+        Self::BoxCriteria,
+        Self::AssetsType,
+        Self::AssetShape,
+        Self::AssetType,
+        Self::AssetData,
+        Self::AssetFormat,
+        Self::AssetImage,
+        Self::AssetUnreferenced,
         Self::SizeTotal,
         Self::SizeQuestion,
         Self::ChoiceNoEscapeOption,
@@ -132,6 +159,7 @@ impl Rule {
         Self::PathIndexLongArray,
         Self::DuplicateDescription,
         Self::DuplicateKey,
+        Self::BoxNoImage,
     ];
 
     /// The stable identifier of the rule, such as `score-too-many-levels`. It is the same text the
@@ -165,6 +193,14 @@ impl Rule {
             Self::DuplicateOption => "duplicate-option",
             Self::ScoreTooFewLevels => "score-too-few-levels",
             Self::ScoreTooManyLevels => "score-too-many-levels",
+            Self::BoxCriteria => "box-criteria",
+            Self::AssetsType => "assets-type",
+            Self::AssetShape => "asset-shape",
+            Self::AssetType => "asset-type",
+            Self::AssetData => "asset-data",
+            Self::AssetFormat => "asset-format",
+            Self::AssetImage => "asset-image",
+            Self::AssetUnreferenced => "asset-unreferenced",
             Self::SizeTotal => "size-total",
             Self::SizeQuestion => "size-question",
             Self::ChoiceNoEscapeOption => "choice-no-escape-option",
@@ -172,6 +208,7 @@ impl Rule {
             Self::PathIndexLongArray => "path-index-long-array",
             Self::DuplicateDescription => "duplicate-description",
             Self::DuplicateKey => "duplicate-key",
+            Self::BoxNoImage => "box-no-image",
         }
     }
 }

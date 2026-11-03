@@ -14,6 +14,7 @@ categories = ["api-bindings"]
 readme = "README.md"
 
 [dependencies]
+base64.workspace = true
 fastrand.workspace = true
 httpdate.workspace = true
 indexmap.workspace = true

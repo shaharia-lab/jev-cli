@@ -68,6 +68,10 @@ State:
 
           [default: auto]
 
+      --image <NAME=PATH>
+          Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat
+          for each image (needs `jev-preview`)
+
 Sending:
       --dry-run
           Validate, print the exact request body and a size estimate, and send nothing

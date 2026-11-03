@@ -5,6 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::asset::Asset;
 use crate::content::{Content, non_null_schema};
 use crate::de;
 use crate::question::Question;
@@ -52,6 +53,17 @@ pub struct Request {
     #[schemars(extend("minProperties" = 1))]
     pub questions: IndexMap<String, Question>,
 
+    /// Images the request carries, keyed by the reference string written where each image
+    /// belongs. Absent when the request has none.
+    ///
+    /// The API must be told that a request carries images (see [`Asset`]); the transport does
+    /// that whenever this is present or a question is a [`BoxQuestion`](crate::BoxQuestion).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(
+        description = "Images the request carries, keyed by the reference string written where each image belongs: in `state`, or in a question's `instructions` or `criteria`. Needs `jev-preview`."
+    )]
+    pub assets: Option<IndexMap<String, Asset>>,
+
     /// Top-level fields this version of the crate does not know, sent to the API unchanged.
     ///
     /// The API currently rejects any unknown top-level field with an uninformative
@@ -69,8 +81,30 @@ impl Request {
             state: state.into(),
             model: model.into(),
             questions: IndexMap::new(),
+            assets: None,
             extra: IndexMap::new(),
         }
+    }
+
+    /// Attaches an image under `reference`, replacing any asset already using that reference.
+    /// Write the reference in the state or in a question wherever the image belongs.
+    #[must_use]
+    pub fn asset(mut self, reference: impl Into<String>, asset: Asset) -> Self {
+        self.assets
+            .get_or_insert_with(IndexMap::new)
+            .insert(reference.into(), asset);
+        self
+    }
+
+    /// Whether the API has to be told that this request uses images: it carries `assets`, or
+    /// asks a `box` question.
+    #[must_use]
+    pub fn uses_images(&self) -> bool {
+        self.assets.is_some()
+            || self
+                .questions
+                .values()
+                .any(|question| matches!(question, Question::Box(_)))
     }
 
     /// Adds a question under `id`, replacing any question already using that id.

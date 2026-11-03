@@ -308,8 +308,8 @@ struct Settled {
 
 /// What becomes of a row that was read.
 enum Admitted {
-    /// Send it.
-    Send(Settled, Prepared),
+    /// Send it. Boxed: a prepared request is the largest thing a row becomes.
+    Send(Settled, Box<Prepared>),
     /// Its request fails validation: record the failure without sending anything.
     Refused(Settled, CliError),
     /// An earlier run answered it.
@@ -354,7 +354,7 @@ fn admit(job: &Job<'_>, ids: &mut Option<Ids>, row: Result<Row, RowProblem>) -> 
     };
     let settled = Settled { id, row: kept };
     match evaluate::prepare(job.questions.clone(), job.settings, &options) {
-        Ok(prepared) => Admitted::Send(settled, prepared),
+        Ok(prepared) => Admitted::Send(settled, Box::new(prepared)),
         Err(error) => Admitted::Refused(settled, error),
     }
 }

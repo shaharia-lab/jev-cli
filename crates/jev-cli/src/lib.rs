@@ -20,6 +20,7 @@ mod exit;
 pub mod fuzz;
 mod gate;
 mod help;
+mod images;
 mod input;
 mod interaction;
 mod interrupt;

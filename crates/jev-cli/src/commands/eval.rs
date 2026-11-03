@@ -13,6 +13,7 @@ use crate::error::CliError;
 use crate::evaluate::{self, Evaluation, PrepareOptions, Prepared};
 use crate::exit::Exit;
 use crate::gate::{self, Condition};
+use crate::images;
 use crate::input::{self, StateSource};
 use crate::output::{Render, Ui, printable};
 
@@ -90,16 +91,18 @@ pub(crate) fn evaluate_plan(
         plan.source,
         context.interaction.stdin_is_terminal(),
     )?;
-    let state = state_source
+    let mut state = state_source
         .map(|source| input::read_state(&source, plan.state.state_format, context.stdin))
         .transpose()?;
+    let mut document = plan.document;
+    images::attach(&plan.state.images, &mut document, &mut state)?;
 
     let options = PrepareOptions {
         state,
         strict: plan.send.strict,
         skip_size_check: plan.send.skip_size_check,
     };
-    let prepared = evaluate::prepare(plan.document, &settings, &options)?;
+    let prepared = evaluate::prepare(document, &settings, &options)?;
     for condition in plan.conditions {
         condition.check_request(&prepared.request)?;
     }
@@ -162,7 +165,9 @@ fn state_source(
             _ => Ok(Some(StateSource::File(path.clone()))),
         };
     }
-    if source.file_has_state {
+    // An image is a state of its own: with nothing else given, the state is the images, so a pipe
+    // left open by the caller must not be read.
+    if source.file_has_state || !arguments.images.is_empty() {
         return Ok(None);
     }
     if source.file_is_stdin {

@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 use jev_client::{
-    Answer, ApiKey, BaseUrl, Clock, ErrorKind, HttpTransport, HttpTransportBuilder, Noul, Request,
-    RetryPolicy, Throttle, Transport,
+    Answer, ApiKey, Asset, BaseUrl, BoxQuestion, Clock, ErrorKind, HttpTransport,
+    HttpTransportBuilder, Noul, Request, RetryPolicy, Throttle, Transport,
 };
 use serde_json::{Value, json};
 use wiremock::matchers::{header, method, path};
@@ -163,6 +163,54 @@ async fn a_successful_evaluation_sends_the_request_as_written_and_returns_metada
     assert_eq!(
         agent,
         format!("jev/9.9.9 jev-client/{}", jev_client::VERSION)
+    );
+}
+
+#[tokio::test]
+async fn the_images_header_is_sent_only_with_an_asset_or_a_box_question() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .and(header("typesafe-danger-zone-images", "true"))
+        .respond_with(success())
+        .expect(2)
+        .mount(&server)
+        .await;
+    let clock = FakeClock::new();
+    let transport = builder(&server, &clock).build().unwrap();
+
+    let with_asset = request().asset(
+        "img",
+        Asset::image_base64("iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "png"),
+    );
+    transport.evaluate(&with_asset).await.unwrap();
+    let with_box = Request::new("s", "jev-preview").question("q", BoxQuestion::new("the mug"));
+    transport.evaluate(&with_box).await.unwrap();
+
+    let received = server.received_requests().await.unwrap();
+    assert_eq!(received.len(), 2);
+    let sent: Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(
+        sent["assets"]["img"],
+        serde_json::json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png" })
+    );
+
+    server.reset().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .respond_with(success())
+        .mount(&server)
+        .await;
+    transport.evaluate(&request()).await.unwrap();
+    let plain = &server.received_requests().await.unwrap()[0];
+    assert!(
+        plain.headers.get("typesafe-danger-zone-images").is_none(),
+        "a request without images must not opt in to them"
+    );
+    let sent: Value = serde_json::from_slice(&plain.body).unwrap();
+    assert!(
+        sent.get("assets").is_none(),
+        "no `assets` key when there are none"
     );
 }
 

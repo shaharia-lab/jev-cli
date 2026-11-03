@@ -6,11 +6,17 @@ use super::document::{Document, child_pointer};
 use super::finding::{Finding, Rule};
 use super::size::SizeEstimate;
 use super::{MAX_CHOICE_OPTIONS, MAX_SCORE_LEVELS, MIN_SCORE_LEVELS, Options};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 
-const REQUEST_FIELDS: [&str; 3] = ["state", "model", "questions"];
+use crate::asset::IMAGE_FORMATS;
+use crate::image::ImageInfo;
+
+const REQUEST_FIELDS: [&str; 4] = ["state", "model", "questions", "assets"];
 const QUESTION_FIELDS: [&str; 3] = ["type", "instructions", "criteria"];
-const QUESTION_TYPES: [&str; 3] = ["noul", "choice", "score"];
+const QUESTION_TYPES: [&str; 4] = ["noul", "choice", "score", "box"];
 const NOUL_CRITERIA_KEYS: [&str; 2] = ["true", "false"];
+const ASSET_FIELDS: [&str; 4] = ["type", "data_base64", "format", "part"];
 
 /// The estimate is reported from this fraction of a budget upwards...
 const NEAR_BUDGET_PERCENT: u64 = 90;
@@ -24,6 +30,8 @@ pub(super) struct RequestView<'a> {
     /// `None` when `state` is missing or has the wrong type, which has already been reported.
     pub(super) state: Option<&'a Value>,
     pub(super) questions: Vec<QuestionView<'a>>,
+    /// Whether the request carries at least one asset, well formed or not.
+    pub(super) has_assets: bool,
 }
 
 /// One question that is at least a JSON object.
@@ -67,9 +75,9 @@ pub(super) fn check_shape<'a>(
         );
         finding = match closest(key, &REQUEST_FIELDS) {
             Some(known) => finding.suggest(format!("did you mean `{known}`?")),
-            None => {
-                finding.suggest("remove it; a request has only `state`, `model` and `questions`")
-            }
+            None => finding.suggest(
+                "remove it; a request has only `state`, `model`, `questions` and `assets`",
+            ),
         };
         findings.push(finding);
     }
@@ -78,8 +86,206 @@ pub(super) fn check_shape<'a>(
     check_model(root, options, findings);
     let questions = check_questions(root, findings);
     check_duplicates(document, &questions, findings);
+    let has_assets = check_assets(root, findings);
 
-    Some(RequestView { state, questions })
+    Some(RequestView {
+        state,
+        questions,
+        has_assets,
+    })
+}
+
+/// Checks `assets`: each one an image given as base64, referenced somewhere the model reads.
+/// Returns whether there is at least one.
+fn check_assets(root: &Map<String, Value>, findings: &mut Vec<Finding>) -> bool {
+    let assets = match root.get("assets") {
+        None => return false,
+        Some(Value::Object(assets)) => assets,
+        Some(other) => {
+            findings.push(
+                Finding::error(
+                    Rule::AssetsType,
+                    "/assets",
+                    format!(
+                        "`assets` must be an object keyed by reference, not {}",
+                        describe(other)
+                    ),
+                )
+                .suggest(r#"write {"<reference>": {"type": "image", "data_base64": "...", "format": "png"}}"#),
+            );
+            return true;
+        }
+    };
+    let readable: Vec<&Value> = ["state", "questions"]
+        .iter()
+        .filter_map(|field| root.get(*field))
+        .collect();
+    for (reference, value) in assets {
+        let pointer = child_pointer("/assets", reference);
+        let Value::Object(fields) = value else {
+            findings.push(
+                Finding::error(
+                    Rule::AssetShape,
+                    pointer,
+                    format!(
+                        "asset `{reference}` must be an object, not {}",
+                        describe(value)
+                    ),
+                )
+                .suggest(r#"write {"type": "image", "data_base64": "...", "format": "png"}"#),
+            );
+            continue;
+        };
+        check_asset(reference, &pointer, fields, findings);
+        if !readable.iter().any(|value| mentions(value, reference)) {
+            findings.push(
+                Finding::error(
+                    Rule::AssetUnreferenced,
+                    pointer,
+                    format!("asset `{reference}` is referenced nowhere, and the API refuses a request with an unused image"),
+                )
+                .suggest("write the reference where the image belongs: in `state`, or in a question's `instructions` or `criteria`"),
+            );
+        }
+    }
+    true
+}
+
+/// Checks one asset's fields: an image, given as base64, in a format the API accepts.
+fn check_asset(
+    reference: &str,
+    pointer: &str,
+    fields: &Map<String, Value>,
+    findings: &mut Vec<Finding>,
+) {
+    for key in fields
+        .keys()
+        .filter(|key| !ASSET_FIELDS.contains(&key.as_str()))
+    {
+        findings.push(
+            Finding::warning(
+                Rule::UnknownField,
+                child_pointer(pointer, key),
+                format!("`{key}` is not an asset field"),
+            )
+            .suggest("remove it; an asset has `type`, `data_base64` and `format`"),
+        );
+    }
+    match fields.get("type") {
+        None => {}
+        Some(Value::String(kind)) if kind == "image" => {}
+        Some(other) => findings.push(
+            Finding::error(
+                Rule::AssetType,
+                child_pointer(pointer, "type"),
+                format!(
+                    "asset `{reference}` has type {}; only `image` exists",
+                    shown(other)
+                ),
+            )
+            .suggest(r#"write "type": "image", or leave it out"#),
+        ),
+    }
+    match fields.get("data_base64") {
+        Some(Value::String(data)) if !data.trim().is_empty() => {
+            check_image_data(reference, pointer, data, findings);
+        }
+        _ => {
+            let mut finding = Finding::error(
+                Rule::AssetData,
+                pointer,
+                format!("asset `{reference}` has no `data_base64`"),
+            );
+            finding = if fields.contains_key("part") {
+                finding.suggest("`part` names a multipart upload, which jev does not send; give the file base64 encoded as `data_base64`, or attach it with --image")
+            } else {
+                finding.suggest("give the file base64 encoded as `data_base64` (no `data:` prefix, no line breaks), or attach it with --image")
+            };
+            findings.push(finding);
+        }
+    }
+    match fields.get("format") {
+        Some(Value::String(format)) if IMAGE_FORMATS.contains(&format.as_str()) => {}
+        Some(other) => findings.push(
+            Finding::error(
+                Rule::AssetFormat,
+                child_pointer(pointer, "format"),
+                format!(
+                    "asset `{reference}` has format {}; the API accepts `png`, `jpg` and `jpeg`",
+                    shown(other)
+                ),
+            )
+            .suggest("convert the image to PNG or JPEG and name that format, in lowercase"),
+        ),
+        None => findings.push(
+            Finding::error(
+                Rule::AssetFormat,
+                pointer,
+                format!("asset `{reference}` has no `format`"),
+            )
+            .suggest(r#"add "format": "png", "jpg" or "jpeg""#),
+        ),
+    }
+}
+
+/// Checks what the server would check about the image itself: that `data_base64` decodes, is a
+/// PNG or JPEG, and is within the size limits. One bad image fails the whole request.
+fn check_image_data(reference: &str, pointer: &str, data: &str, findings: &mut Vec<Finding>) {
+    let pointer = child_pointer(pointer, "data_base64");
+    let Ok(bytes) = STANDARD.decode(data) else {
+        findings.push(
+            Finding::error(
+                Rule::AssetImage,
+                pointer,
+                format!("asset `{reference}`: `data_base64` is not standard base64"),
+            )
+            .suggest(
+                "encode the file as base64 with `=` padding, no line breaks and no `data:` prefix",
+            ),
+        );
+        return;
+    };
+    let Some(info) = ImageInfo::read(&bytes) else {
+        findings.push(
+            Finding::error(
+                Rule::AssetImage,
+                pointer,
+                format!("asset `{reference}` does not start like a PNG or JPEG file"),
+            )
+            .suggest(
+                "the API accepts still PNG and JPEG images only; convert GIF, WebP or HEIC first",
+            ),
+        );
+        return;
+    };
+    if let Some(problem) = info.size_problem() {
+        findings.push(
+            Finding::error(
+                Rule::AssetImage,
+                pointer,
+                format!("asset `{reference}` is {problem}"),
+            )
+            .suggest("resize the image before sending it; the API rejects it rather than resizing"),
+        );
+    }
+}
+
+/// Whether `needle` occurs in any string inside `value`. Object keys do not count: the API does
+/// not replace them.
+fn mentions(value: &Value, needle: &str) -> bool {
+    match value {
+        Value::String(text) => text.contains(needle),
+        Value::Array(items) => items.iter().any(|item| mentions(item, needle)),
+        Value::Object(map) => map.values().any(|item| mentions(item, needle)),
+        _ => false,
+    }
+}
+
+/// A value for a message: a string in backticks, anything else by its type.
+fn shown(value: &Value) -> String {
+    value
+        .as_str()
+        .map_or_else(|| describe(value).to_owned(), |text| format!("`{text}`"))
 }
 
 fn check_state<'a>(
@@ -247,20 +453,18 @@ fn check_question<'a>(
                     format!("question `{id}` has no `type`"),
                 )
                 .in_question(id)
-                .suggest(r#"add "type": "noul", "choice" or "score""#),
+                .suggest(r#"add "type": "noul", "choice", "score" or "box""#),
             );
             return None;
         }
         Some(Value::String(kind)) if QUESTION_TYPES.contains(&kind.as_str()) => kind.as_str(),
         Some(other) => {
-            let shown = other
-                .as_str()
-                .map_or_else(|| describe(other).to_owned(), |text| format!("`{text}`"));
             let mut finding = Finding::error(
                 Rule::TypeUnknown,
                 child_pointer(pointer, "type"),
                 format!(
-                    "question `{id}` has type {shown}, which is not `noul`, `choice` or `score`"
+                    "question `{id}` has type {}, which is not `noul`, `choice`, `score` or `box`",
+                    shown(other)
                 ),
             )
             .in_question(id);
@@ -269,8 +473,9 @@ fn check_question<'a>(
                 .and_then(|text| closest(&text.to_lowercase(), &QUESTION_TYPES))
             {
                 Some(known) => finding.suggest(format!("did you mean `{known}`?")),
-                None => finding
-                    .suggest("use `noul` for yes/no, `choice` to pick one option, `score` to rate"),
+                None => finding.suggest(
+                    "use `noul` for yes/no, `choice` to pick one option, `score` to rate, `box` to locate something in an image",
+                ),
             };
             findings.push(finding);
             return None;
@@ -281,9 +486,31 @@ fn check_question<'a>(
     match kind {
         "noul" => check_noul_criteria(id, &criteria_pointer, fields.get("criteria"), findings),
         "choice" => check_choice_criteria(id, &criteria_pointer, fields.get("criteria"), findings),
-        _ => check_score_criteria(id, &criteria_pointer, fields.get("criteria"), findings),
+        "score" => check_score_criteria(id, &criteria_pointer, fields.get("criteria"), findings),
+        _ => check_box_criteria(id, &criteria_pointer, fields.get("criteria"), findings),
     }
     Some(kind)
+}
+
+fn check_box_criteria(
+    id: &str,
+    pointer: &str,
+    criteria: Option<&Value>,
+    findings: &mut Vec<Finding>,
+) {
+    if let Some(criteria) = criteria
+        && !criteria.is_null()
+    {
+        findings.push(
+            Finding::error(
+                Rule::BoxCriteria,
+                pointer,
+                format!("box `{id}` has `criteria`, which a box does not take; the API ignores them without saying so"),
+            )
+            .in_question(id)
+            .suggest("say what to find in `instructions`, and remove `criteria`"),
+        );
+    }
 }
 
 fn check_instructions(

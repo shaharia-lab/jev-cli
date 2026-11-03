@@ -330,6 +330,18 @@ fn rule_cases() -> Vec<(Rule, Severity, &'static str, String)> {
         (Rule::DuplicateOption, Severity::Error, "/questions/q/criteria/a", r#"{"state":"s","model":"m","questions":{"q":{"type":"choice","instructions":"?","criteria":{"a":"x","other":null,"a":"y"}}}}"#.into()),
         (Rule::ScoreTooFewLevels, Severity::Error, "/questions/q/criteria", question(score_with_levels(1))),
         (Rule::ScoreTooManyLevels, Severity::Error, "/questions/q/criteria", question(score_with_levels(11))),
+        (Rule::BoxCriteria, Severity::Error, "/questions/q/criteria", with_image(&json!({ "type": "box", "instructions": "the mug in `photo`", "criteria": { "mug": null } }), &json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png" })).to_string()),
+        (Rule::AssetsType, Severity::Error, "/assets", json!({ "state": "s", "model": "m", "questions": { "q": noul }, "assets": ["img"] }).to_string()),
+        (Rule::AssetShape, Severity::Error, "/assets/img", with_image(&box_question(), &json!("iVBOR")).to_string()),
+        (Rule::AssetType, Severity::Error, "/assets/img/type", with_image(&box_question(), &json!({ "type": "audio", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png" })).to_string()),
+        (Rule::AssetData, Severity::Error, "/assets/img", with_image(&box_question(), &json!({ "type": "image", "part": "photo", "format": "png" })).to_string()),
+        (Rule::AssetFormat, Severity::Error, "/assets/img/format", with_image(&box_question(), &json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "gif" })).to_string()),
+        (Rule::AssetFormat, Severity::Error, "/assets/img", with_image(&box_question(), &json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV" })).to_string()),
+        (Rule::AssetImage, Severity::Error, "/assets/img/data_base64", with_image(&box_question(), &json!({ "type": "image", "data_base64": "not base64!", "format": "png" })).to_string()),
+        (Rule::AssetImage, Severity::Error, "/assets/img/data_base64", with_image(&box_question(), &json!({ "type": "image", "data_base64": "R0lGODlh", "format": "png" })).to_string()),
+        (Rule::AssetImage, Severity::Error, "/assets/img/data_base64", with_image(&box_question(), &json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAID", "format": "png" })).to_string()),
+        (Rule::AssetUnreferenced, Severity::Error, "/assets/img", json!({ "state": "no reference here", "model": "m", "questions": { "q": box_question() }, "assets": { "img": { "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png" } } }).to_string()),
+        (Rule::UnknownField, Severity::Warning, "/assets/img/width", with_image(&box_question(), &json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png", "width": 640 })).to_string()),
         (Rule::SizeTotal, Severity::Error, "", json!({ "state": huge, "model": "m", "questions": { "q": noul } }).to_string()),
         (Rule::SizeQuestion, Severity::Error, "/state", json!({ "state": huge, "model": "m", "questions": { "q": noul } }).to_string()),
         (Rule::ChoiceNoEscapeOption, Severity::Warning, "/questions/q/criteria", question(json!({ "type": "choice", "instructions": "?", "criteria": { "a": "x", "b": "y", "c": "z" } }))),
@@ -339,7 +351,17 @@ fn rule_cases() -> Vec<(Rule, Severity, &'static str, String)> {
         (Rule::DuplicateDescription, Severity::Warning, "/questions/q/criteria/b", question(json!({ "type": "choice", "instructions": "?", "criteria": { "a": "Same text", "b": " same TEXT ", "other": null } }))),
         (Rule::DuplicateDescription, Severity::Warning, "/questions/q/criteria/2", question(json!({ "type": "score", "instructions": "?", "criteria": ["Low", "High", "Low"] }))),
         (Rule::DuplicateKey, Severity::Warning, "/state/plan", r#"{"state":{"plan":"free","plan":"pro"},"model":"m","questions":{"q":{"type":"noul","instructions":"?"}}}"#.into()),
+        (Rule::BoxNoImage, Severity::Warning, "/questions/q", question(box_question())),
     ]
+}
+
+/// A request holding one image `img`, referenced from `photo` in the state, and the question `q`.
+fn with_image(question: &Value, asset: &Value) -> Value {
+    json!({ "state": { "photo": "img" }, "model": "jev-preview", "questions": { "q": question }, "assets": { "img": asset } })
+}
+
+fn box_question() -> Value {
+    json!({ "type": "box", "instructions": "the mug in `photo`" })
 }
 
 #[test]
@@ -371,6 +393,17 @@ fn every_rule_fires_where_it_should_with_a_message_and_a_fix() {
         );
         assert_eq!(report.is_valid(), report.errors().next().is_none());
     }
+}
+
+#[test]
+fn a_box_question_with_its_image_is_valid_and_clean() {
+    let report = check_value(&with_image(
+        &box_question(),
+        &json!({ "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png" }),
+    ));
+
+    assert!(report.is_valid(), "{:#?}", report.findings);
+    assert!(report.findings.is_empty(), "{:#?}", report.findings);
 }
 
 #[test]
