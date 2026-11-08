@@ -120,7 +120,7 @@ mod tests {
 
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(json["client_version"], jev_client::VERSION);
-        assert!(!json["commit"].as_str().unwrap().is_empty());
+        assert_ne!(json["commit"].as_str().unwrap(), "");
         assert!(
             json["target"].as_str().unwrap().contains('-'),
             "a target triple: {}",

@@ -264,7 +264,7 @@ async fn a_client_can_initialise_list_the_tools_and_ping() {
         ]
     );
     for tool in tools.as_array().unwrap() {
-        assert!(!tool["description"].as_str().unwrap().is_empty());
+        assert_ne!(tool["description"].as_str().unwrap(), "");
         assert_eq!(tool["inputSchema"]["type"], "object");
     }
     let ping = run
@@ -1050,7 +1050,8 @@ async fn a_path_outside_the_allowed_directories_is_refused_before_anything_is_wr
         before,
         "nothing was written inside"
     );
-    assert!(sent(&server).await.is_empty());
+    let requests = sent(&server).await;
+    assert!(requests.is_empty(), "{requests:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1134,7 +1135,8 @@ async fn a_run_over_a_cap_is_refused_with_zero_requests_and_no_output_file() {
         files(&base.join("allowed")),
         ["questions.json", "rows.jsonl"]
     );
-    assert!(sent(&server).await.is_empty());
+    let requests = sent(&server).await;
+    assert!(requests.is_empty(), "{requests:?}");
     assert_no_key(&rows);
     assert_no_key(&cost);
 }

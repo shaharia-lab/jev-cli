@@ -546,7 +546,8 @@ mod tests {
                 }),
             ]
         );
-        assert!(read("[]", RowFormat::Json).is_empty());
+        let rows = read("[]", RowFormat::Json);
+        assert!(rows.is_empty(), "{rows:?}");
     }
 
     #[test]
