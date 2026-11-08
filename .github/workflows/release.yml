@@ -376,6 +376,8 @@ jobs:
       - name: Write the formulas into a local tap
         run: |
           brew tap-new --no-git jev-cli/check
+          # Newer Homebrew refuses to load a formula from an untrusted tap, this local one included.
+          if brew commands --quiet | grep -qx trust; then brew trust jev-cli/check; fi
           echo "FORMULAS=$(brew --repository jev-cli/check)/Formula" >> "$GITHUB_ENV"
       - name: brew style and brew audit --strict
         run: |
