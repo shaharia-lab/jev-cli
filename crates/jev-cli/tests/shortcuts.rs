@@ -681,7 +681,8 @@ async fn state_dash_is_a_usage_error_for_every_shortcut_before_anything_is_sent(
             );
         }
     }
-    assert!(sent(&server).await.is_empty());
+    let requests = sent(&server).await;
+    assert!(requests.is_empty(), "{requests:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

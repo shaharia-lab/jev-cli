@@ -164,7 +164,8 @@ mod tests {
             }
         });
 
-        assert!(clock.take_sleeps().is_empty());
+        let sleeps = clock.take_sleeps();
+        assert!(sleeps.is_empty(), "{sleeps:?}");
         assert_eq!(throttle.spacing(), Duration::ZERO);
     }
 

@@ -75,6 +75,6 @@ mod tests {
     fn an_empty_body_is_an_empty_list() {
         let list: ModelList = serde_json::from_value(json!({})).unwrap();
 
-        assert!(list.models.is_empty());
+        assert!(list.models.is_empty(), "{:?}", list.models);
     }
 }
