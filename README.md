@@ -177,19 +177,20 @@ Piped or redirected, the same command prints JSON instead of a table, and `--fie
 
 ---
 
-## ❓ The three kinds of question
+## ❓ The four kinds of question
 
 | Type | Command | You get back | Ask it when |
 | --- | --- | --- | --- |
 | **noul** | `jev noul` | The probability of yes, 0 to 1 | A property either holds or it does not |
 | **choice** | `jev choice` | The winning option, its confidence, and a probability for each | Exactly one of up to 255 options must win |
 | **score** | `jev score` | A position on your scale, and a confidence | A described scale of 2 to 10 levels |
+| **box** | `jev eval` with `--image` | The four edges of a box in the image, and a confidence | Something has to be located in a picture |
 
 A probability near 0.5 means the model cannot tell, not "medium". `--abstain-band 0.4,0.6` turns
 that into its own exit code, so those cases can go to a person. Jev reads literally: it cannot
 count, do arithmetic or compare dates, so keep that in your code.
 
-Details and worked examples: [the three question types](docs/user-guide/question-types.md).
+Details and worked examples: [the four question types](docs/user-guide/question-types.md).
 
 ---
 
@@ -319,7 +320,7 @@ report a vulnerability privately. Please do not open a public issue for one.
 
 - [Installation](docs/user-guide/installation.md)
 - [Quick start](docs/user-guide/quick-start.md)
-- [The three question types](docs/user-guide/question-types.md)
+- [The four question types](docs/user-guide/question-types.md)
 - [Writing good questions](docs/user-guide/writing-questions.md)
 - [Scripting and CI](docs/user-guide/scripting-and-ci.md)
 - [Exit codes and JSON contract](docs/user-guide/exit-codes.md)

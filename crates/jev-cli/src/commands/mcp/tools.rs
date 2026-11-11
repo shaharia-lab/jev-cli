@@ -91,8 +91,9 @@ fn evaluate<T: Transport>(request: &Map<String, Value>) -> Tool<T> {
         title: "Evaluate a state against several questions",
         description: format!(
             "Evaluate one `state` against several typed questions in a single call: `noul` \
-             (yes/no), `choice` (one of a set of options) and `score` (a rubric of 2 to 10 \
-             levels), keyed by ids you choose. Prefer this over `noul`, `choice` and `score` \
+             (yes/no), `choice` (one of a set of options), `score` (a rubric of 2 to 10 \
+             levels) and `box` (where something is in an image given under `assets`; needs \
+             model `jev-preview`), keyed by ids you choose. Prefer this over `noul`, `choice` and `score` \
              whenever there is more than one question about the same state, including \
              speculative ones: questions are answered in parallel, and one call is far \
              cheaper and faster than several. {RESULT} `answers` holds one answer per \

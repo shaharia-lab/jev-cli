@@ -1,0 +1,13 @@
+{
+  "state": { "photo": "img-7c2f9a" },
+  "model": "jev-preview",
+  "questions": {
+    "mug": {
+      "type": "box",
+      "instructions": "the coffee mug in `photo`"
+    }
+  },
+  "assets": {
+    "img-7c2f9a": { "type": "image", "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAZAAAAEsCAIAAABi1XKV", "format": "png" }
+  }
+}

@@ -127,6 +127,17 @@ pub(super) fn check(request: &RequestView<'_>, findings: &mut Vec<Finding>) {
             }
             _ => {}
         }
+        if question.kind == Some("box") && !request.has_assets {
+            findings.push(
+                Finding::warning(
+                    Rule::BoxNoImage,
+                    question.pointer.clone(),
+                    format!("box `{}` has no image to look in: the request carries no `assets`", question.id),
+                )
+                .in_question(question.id)
+                .suggest("attach the image with --image <name>=<path>, or add it under `assets` and name it in the instructions; without one the API answers with a confidence near 0"),
+            );
+        }
         if let Some(state) = request.state {
             check_indexed_paths(question, state, findings);
         }

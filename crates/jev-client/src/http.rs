@@ -24,6 +24,10 @@ use crate::transport::{Reply, ReplyMeta, Transport};
 /// The response header carrying the id of a request.
 const REQUEST_ID_HEADER: &str = "x-typesafe-request-id";
 
+/// The request header that lets a request carry images or ask a `box` question. Without it the
+/// API answers `400 Images are experimental`; it is sent only when the request needs it.
+const IMAGES_HEADER: &str = "typesafe-danger-zone-images";
+
 /// The largest response body that is read. A real response is a few kilobytes; the cap stops a
 /// misbehaving server or proxy from exhausting memory.
 const MAX_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
@@ -114,6 +118,7 @@ impl HttpTransport {
         method: Method,
         path: &str,
         body: Option<Vec<u8>>,
+        images: bool,
     ) -> Result<Reply<T>, Error> {
         let url = self.base_url.endpoint(path).map_err(|error| {
             Error::new(ErrorKind::InvalidRequest, error.to_string()).with_source(error)
@@ -130,7 +135,7 @@ impl HttpTransport {
                 throttle.wait(self.clock.as_ref()).await;
             }
             let outcome = self
-                .attempt::<T>(&method, &url, body.as_deref(), attempt)
+                .attempt::<T>(&method, &url, body.as_deref(), images, attempt)
                 .await;
 
             let failure = match outcome {
@@ -188,6 +193,7 @@ impl HttpTransport {
         method: &Method,
         url: &Url,
         body: Option<&[u8]>,
+        images: bool,
         attempt: u32,
     ) -> Result<(T, Option<String>, String), Error> {
         tracing::debug!(%method, %url, attempt, "sending request");
@@ -205,6 +211,9 @@ impl HttpTransport {
             builder = builder
                 .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
                 .body(body.to_vec());
+        }
+        if images {
+            builder = builder.header(IMAGES_HEADER, HeaderValue::from_static("true"));
         }
 
         let sent = self.clock.now();
@@ -295,11 +304,17 @@ impl Transport for HttpTransport {
             )
             .with_source(error)
         })?;
-        self.call(Method::POST, "v1/systemone", Some(body)).await
+        self.call(
+            Method::POST,
+            "v1/systemone",
+            Some(body),
+            request.uses_images(),
+        )
+        .await
     }
 
     async fn list_models(&self) -> Result<Reply<ModelList>, Error> {
-        self.call(Method::GET, "v1/models", None).await
+        self.call(Method::GET, "v1/models", None, false).await
     }
 }
 

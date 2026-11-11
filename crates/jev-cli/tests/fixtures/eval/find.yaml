@@ -1,0 +1,9 @@
+# One image, a box question to locate something in it, and a noul to say whether it is there.
+model: jev-preview
+questions:
+  square:
+    type: box
+    instructions: the red square in `photo`
+  present:
+    type: noul
+    instructions: Is there a red square in `photo`?

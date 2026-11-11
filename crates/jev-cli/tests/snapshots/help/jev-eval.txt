@@ -8,9 +8,11 @@ and `jev batch run` to apply the same questions to many states.
 
 Input:
 A request file (-f), JSON or YAML, shaped like the API body: `questions`, a map of question id to
-question, and optionally `state` and `model`. The state is --state (text) or --state-file (a path,
-or `-` for stdin), else the file's `state`, else a pipe. The model is --model, else the file's
-`model`, else TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
+question, and optionally `state`, `model` and `assets`. The state is --state (text) or --state-file
+(a path, or `-` for stdin), else the file's `state`, else a pipe. --image NAME=PATH attaches a PNG
+or JPEG under NAME in an object state, so a question can say `NAME`; a `box` question locates
+something in it and needs --model jev-preview. The model is --model, else the file's `model`, else
+TYPESAFE_DEFAULT_MODEL, else the profile, else `jev-latest`.
 
 Output:
 The result envelope: `model` (the versioned id that answered), `requested_model`, `answers` (one per
@@ -54,6 +56,10 @@ State:
           - json: Parse the content as JSON and send the object or array
 
           [default: auto]
+
+      --image <NAME=PATH>
+          Attach a PNG or JPEG under NAME in an object state, so a question can say `NAME`; repeat
+          for each image (needs `jev-preview`)
 
 Sending:
       --dry-run
@@ -136,12 +142,12 @@ Examples:
   # Several questions about one ticket, in a single call
   jev eval -f triage.yaml --state-file ticket.txt
 
-  # Only one answer's probability, for a script
-  jev eval -f triage.yaml --state-file ticket.txt --field answers.is_urgent.noul
-
   # Gate a CI step: exit 10 unless the change is confidently low risk
   jev eval -f review.yaml --state-file diff.txt \
       --assert "risk == low" --assert "risk.confidence >= 0.8"
 
   # Check the request and see its size, without sending it or needing a key
   jev eval -f triage.yaml --state-file ticket.txt --dry-run -o json
+
+  # Find something in an image with a `box` question, and whether it is there at all
+  jev eval -f find-mug.yaml --image photo=desk.jpg --model jev-preview

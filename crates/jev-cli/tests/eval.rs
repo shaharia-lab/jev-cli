@@ -248,6 +248,93 @@ async fn the_human_result_shows_the_alias_the_resolved_model_and_the_cost() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn an_image_is_sent_as_an_asset_with_the_images_header_and_the_box_answer_is_shown() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/systemone"))
+        .and(header("typesafe-danger-zone-images", "true"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-typesafe-request-id", "req_box")
+                .set_body_json(fixture_json("response-box.json")),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut command = jev(Some(&server));
+    command.args([
+        "eval",
+        "-f",
+        &fixture("find.yaml"),
+        "--image",
+        &format!("photo={}", fixture("square.png")),
+        "--assert",
+        "square.confidence >= 0.5",
+        "-o",
+        "table",
+        "--ascii",
+    ]);
+
+    let run = run(command).await;
+
+    assert_eq!((run.code, run.stderr.as_str()), (0, ""), "{}", run.stdout);
+    for expected in [
+        "square  box  top 0.25  bottom 0.82  left 0.44  right 0.84  (confidence 0.92)",
+        "present  noul  yes  0.64",
+        "gate passed: square.confidence >= 0.5 (holds, got 0.92)",
+        "model jev-1.14.0 (requested jev-preview)",
+    ] {
+        assert!(
+            run.stdout.contains(expected),
+            "missing {expected:?} in:\n{}",
+            run.stdout
+        );
+    }
+
+    let sent: Value = serde_json::from_slice(&received(&server).await[0].body).unwrap();
+    assert_eq!(
+        sent["state"],
+        json!({ "photo": "jev-image:photo" }),
+        "the image is named in the state so that `photo` resolves"
+    );
+    let asset = &sent["assets"]["jev-image:photo"];
+    assert_eq!(asset["type"], "image");
+    assert_eq!(asset["format"], "png");
+    let bytes = std::fs::read(fixture("square.png")).unwrap();
+    assert_eq!(
+        asset["data_base64"].as_str().map(str::len),
+        Some(bytes.len().div_ceil(3) * 4),
+        "the file is sent base64 encoded, with padding"
+    );
+    assert_eq!(
+        sent["questions"],
+        fixture_json("find.yaml.json")["questions"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_image_needs_an_object_state_and_a_text_state_sends_nothing() {
+    let server = MockServer::start().await;
+    mount(&server, success()).await;
+    let mut command = jev(Some(&server));
+    command.args([
+        "eval",
+        "-f",
+        &fixture("find.yaml"),
+        "--image",
+        &format!("photo={}", fixture("square.png")),
+        "--state",
+        "a desk",
+    ]);
+
+    let run = run(command).await;
+
+    assert_eq!(run.code, 2, "{}", run.stderr);
+    assert!(run.stderr.contains("the state is text"), "{}", run.stderr);
+    assert!(received(&server).await.is_empty(), "nothing was sent");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn api_failures_exit_with_their_documented_codes() {
     let cases = [
         (
