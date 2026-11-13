@@ -1,23 +1,27 @@
-# Weekly dependency updates. Commit prefixes follow Conventional Commits so release tooling and
-# the changelog treat them correctly.
+# Dependency updates twice a month, on the 1st and the 15th: Dependabot has no 14-day interval.
+# Security updates ignore this schedule. Commit prefixes follow Conventional Commits so release
+# tooling and the changelog treat them correctly.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: cron
+      cronjob: "0 6 1,15 * *"
     commit-message:
       prefix: "chore(deps)"
     groups:
       cargo-minor-and-patch:
         update-types: [minor, patch]
+      # Breaking bumps (including 0.x minors) land together, apart from the safe ones.
+      cargo-major:
+        update-types: [major]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: cron
+      cronjob: "0 6 1,15 * *"
     commit-message:
       prefix: "chore(ci)"
     groups:
@@ -27,17 +31,20 @@ updates:
   - package-ecosystem: pre-commit
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: cron
+      cronjob: "0 6 1,15 * *"
     commit-message:
       prefix: "chore(hooks)"
+    groups:
+      pre-commit:
+        patterns: ["*"]
 
   # Keeps the pinned development toolchain in rust-toolchain.toml current. The minimum supported
   # version (`rust-version` in Cargo.toml) is a deliberate decision and is never bumped automatically.
   - package-ecosystem: rust-toolchain
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: cron
+      cronjob: "0 6 1,15 * *"
     commit-message:
       prefix: "chore(toolchain)"
