@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/shaharia-lab/jev-cli/compare/v0.2.1...v0.2.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** bump rustix to 1.1.6 for RUSTSEC-2026-0486 ([#156](https://github.com/shaharia-lab/jev-cli/issues/156)) ([de41a03](https://github.com/shaharia-lab/jev-cli/commit/de41a03897c70bc655a78efd65beb36cb4623753))
+
 ## [0.2.1](https://github.com/shaharia-lab/jev-cli/compare/v0.2.0...v0.2.1) (2026-10-28)
 
 
